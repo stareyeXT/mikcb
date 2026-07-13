@@ -386,6 +386,45 @@
   "importMethodSpreadsheetTitle": "Spreadsheet Import",
   "importMethodSpreadsheetSubtitle": "Fill in the mikcb template in Excel/WPS and import without exporting .ics first.",
   "importMethodSpreadsheetFooter": "Supports .csv and .xlsx. Download the template, fill it in, then pick a file.",
+  "importMethodHtmlTitle": "Import from URL",
+  "importMethodHtmlSubtitle": "Enter a timetable page URL and read course info from the HTML.",
+  "importMethodHtmlFooter": "For school academic systems that provide a timetable page.",
+  "htmlInputUrlLabel": "Enter timetable URL",
+  "htmlScenarioIntro": "For school academic systems that provide a timetable page. Enter the URL to read course info directly.",
+  "htmlStep1Subtitle": "Open your school's academic system timetable page in a browser.",
+  "htmlStep2Subtitle": "Copy the full URL of the timetable page.",
+  "htmlStep3Subtitle": "Paste the URL below and tap Fetch & Import to automatically grab one week of courses.",
+  "htmlSupportedFilesSuffix": "Supports parsing standard HTML timetable pages.",
+  "htmlFetchImportLabel": "Fetch & Import",
+  "htmlFetchingLabel": "Fetching...",
+  "htmlFetchingDayLabel": "Fetching {dayLabel} courses...",
+  "@htmlFetchingDayLabel": {
+    "placeholders": {
+      "dayLabel": {"type": "String"}
+    }
+  },
+  "htmlErrorEmptyUrl": "Please enter the timetable page URL",
+  "htmlErrorNoCourses": "Could not detect any course info from the page",
+  "htmlErrorFetchFailed": "Failed to fetch page. Check the URL and network: {details}",
+  "@htmlErrorFetchFailed": {
+    "placeholders": {
+      "details": {"type": "String"}
+    }
+  },
+  "htmlCoursesDetected": "Detected {count} courses (one week)",
+  "@htmlCoursesDetected": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "htmlImportConfirmTitle": "Import Courses",
+  "htmlImportConfirmMessage": "Detected {count} courses (one week) from the URL. Import them?",
+  "@htmlImportConfirmMessage": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "htmlImportSemesterMappingSubtitle": "Confirm semester start date and week mapping",
   "spreadsheetImportTitle": "Spreadsheet Import",
   "spreadsheetScenarioIntro": "The mikcb template maps columns by header: required fields are course name, weekday, sections, and weeks; others are optional. Download the full template or keep only required columns. WakeUp 7-column layout is also supported.",
   "spreadsheetStep1Subtitle": "Download the full template, or keep only required columns plus 上课周 (or 开始周+结束周) for minimal import.",

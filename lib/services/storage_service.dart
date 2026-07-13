@@ -27,6 +27,9 @@ class StorageService {
   static const String _hidePrefixDefaultMigrationKey =
       'did_migrate_live_hide_prefix_default';
   static const String _partnerTimetableBindingKey = 'partner_timetable_binding';
+  static const String _htmlImportBaseUrlKey = 'html_import_base_url';
+  static const String _htmlImportWeekFetchTimesKey =
+      'html_import_week_fetch_times';
 
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
@@ -829,6 +832,67 @@ class StorageService {
     await _prefs?.setString(
       _partnerTimetableBindingKey,
       jsonEncode(binding.toJson()),
+    );
+  }
+
+  String _profileScopedKey(String key, String profileId) {
+    return '${profileId}_$key';
+  }
+
+  Future<String?> getHtmlImportBaseUrl(String profileId) async {
+    if (_prefs == null) await init();
+    return _prefs?.getString(_profileScopedKey(_htmlImportBaseUrlKey, profileId));
+  }
+
+  Future<void> saveHtmlImportBaseUrl(String profileId, String url) async {
+    if (_prefs == null) await init();
+    await _prefs?.setString(
+      _profileScopedKey(_htmlImportBaseUrlKey, profileId),
+      url,
+    );
+  }
+
+  Future<void> clearHtmlImportBaseUrl(String profileId) async {
+    if (_prefs == null) await init();
+    await _prefs?.remove(
+      _profileScopedKey(_htmlImportBaseUrlKey, profileId),
+    );
+  }
+
+  Future<Map<int, DateTime>> getHtmlImportWeekFetchTimes(
+    String profileId,
+  ) async {
+    if (_prefs == null) await init();
+    final raw = _prefs?.getString(
+      _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
+    );
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return decoded.map((k, v) => MapEntry(int.parse(k), DateTime.parse(v as String)));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> saveHtmlImportWeekFetchTimes(
+    String profileId,
+    Map<int, DateTime> fetchTimes,
+  ) async {
+    if (_prefs == null) await init();
+    final encoded = jsonEncode(
+      fetchTimes.map((k, v) => MapEntry(k.toString(), v.toIso8601String())),
+    );
+    await _prefs?.setString(
+      _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
+      encoded,
+    );
+  }
+
+  Future<void> clearHtmlImportWeekFetchTimes(String profileId) async {
+    if (_prefs == null) await init();
+    await _prefs?.remove(
+      _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
     );
   }
 }

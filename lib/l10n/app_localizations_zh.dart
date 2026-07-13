@@ -804,6 +804,71 @@ class AppLocalizationsZh extends AppLocalizations {
       '支持 .csv 与 .xlsx，可下载官方模板填写后选择文件导入。';
 
   @override
+  String get importMethodHtmlTitle => '从网址导入';
+
+  @override
+  String get importMethodHtmlSubtitle => '输入课表页面网址，读取 HTML 中的课程信息。';
+
+  @override
+  String get importMethodHtmlFooter => '适用于学校教务系统提供课表页面的场景。';
+
+  @override
+  String get htmlInputUrlLabel => '输入课表网址';
+
+  @override
+  String get htmlScenarioIntro => '适用于学校教务系统提供课表页面的场景，直接输入课表页面网址即可读取课程信息。';
+
+  @override
+  String get htmlStep1Subtitle => '在浏览器中打开学校教务系统的课表页面。';
+
+  @override
+  String get htmlStep2Subtitle => '复制课表页面的完整网址。';
+
+  @override
+  String get htmlStep3Subtitle => '将网址粘贴到下方输入框，点击获取并导入，将自动获取一周课程。';
+
+  @override
+  String get htmlSupportedFilesSuffix => '支持从标准 HTML 课表页面解析。';
+
+  @override
+  String get htmlFetchImportLabel => '获取并导入';
+
+  @override
+  String get htmlFetchingLabel => '获取中...';
+
+  @override
+  String htmlFetchingDayLabel(String dayLabel) {
+    return '正在获取$dayLabel课程...';
+  }
+
+  @override
+  String get htmlErrorEmptyUrl => '请输入课表页面网址';
+
+  @override
+  String get htmlErrorNoCourses => '未能从页面中识别到课程信息';
+
+  @override
+  String htmlErrorFetchFailed(String details) {
+    return '获取页面内容失败，请检查网址和网络连接：$details';
+  }
+
+  @override
+  String htmlCoursesDetected(int count) {
+    return '已识别 $count 门课程（一周）';
+  }
+
+  @override
+  String get htmlImportConfirmTitle => '导入课程';
+
+  @override
+  String htmlImportConfirmMessage(int count) {
+    return '已从网址识别到 $count 门课程（一周），是否导入？';
+  }
+
+  @override
+  String get htmlImportSemesterMappingSubtitle => '确认学期起始日期与周次对应关系';
+
+  @override
   String get spreadsheetImportTitle => '表格导入';
 
   @override

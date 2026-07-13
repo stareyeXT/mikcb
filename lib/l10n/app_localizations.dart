@@ -1586,6 +1586,120 @@ abstract class AppLocalizations {
   /// **'支持 .csv 与 .xlsx，可下载官方模板填写后选择文件导入。'**
   String get importMethodSpreadsheetFooter;
 
+  /// No description provided for @importMethodHtmlTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'从网址导入'**
+  String get importMethodHtmlTitle;
+
+  /// No description provided for @importMethodHtmlSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入课表页面网址，读取 HTML 中的课程信息。'**
+  String get importMethodHtmlSubtitle;
+
+  /// No description provided for @importMethodHtmlFooter.
+  ///
+  /// In zh, this message translates to:
+  /// **'适用于学校教务系统提供课表页面的场景。'**
+  String get importMethodHtmlFooter;
+
+  /// No description provided for @htmlInputUrlLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入课表网址'**
+  String get htmlInputUrlLabel;
+
+  /// No description provided for @htmlScenarioIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'适用于学校教务系统提供课表页面的场景，直接输入课表页面网址即可读取课程信息。'**
+  String get htmlScenarioIntro;
+
+  /// No description provided for @htmlStep1Subtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'在浏览器中打开学校教务系统的课表页面。'**
+  String get htmlStep1Subtitle;
+
+  /// No description provided for @htmlStep2Subtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制课表页面的完整网址。'**
+  String get htmlStep2Subtitle;
+
+  /// No description provided for @htmlStep3Subtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'将网址粘贴到下方输入框，点击获取并导入，将自动获取一周课程。'**
+  String get htmlStep3Subtitle;
+
+  /// No description provided for @htmlSupportedFilesSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **'支持从标准 HTML 课表页面解析。'**
+  String get htmlSupportedFilesSuffix;
+
+  /// No description provided for @htmlFetchImportLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取并导入'**
+  String get htmlFetchImportLabel;
+
+  /// No description provided for @htmlFetchingLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取中...'**
+  String get htmlFetchingLabel;
+
+  /// No description provided for @htmlFetchingDayLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在获取{dayLabel}课程...'**
+  String htmlFetchingDayLabel(String dayLabel);
+
+  /// No description provided for @htmlErrorEmptyUrl.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入课表页面网址'**
+  String get htmlErrorEmptyUrl;
+
+  /// No description provided for @htmlErrorNoCourses.
+  ///
+  /// In zh, this message translates to:
+  /// **'未能从页面中识别到课程信息'**
+  String get htmlErrorNoCourses;
+
+  /// No description provided for @htmlErrorFetchFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取页面内容失败，请检查网址和网络连接：{details}'**
+  String htmlErrorFetchFailed(String details);
+
+  /// No description provided for @htmlCoursesDetected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已识别 {count} 门课程（一周）'**
+  String htmlCoursesDetected(int count);
+
+  /// No description provided for @htmlImportConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入课程'**
+  String get htmlImportConfirmTitle;
+
+  /// No description provided for @htmlImportConfirmMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'已从网址识别到 {count} 门课程（一周），是否导入？'**
+  String htmlImportConfirmMessage(int count);
+
+  /// No description provided for @htmlImportSemesterMappingSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认学期起始日期与周次对应关系'**
+  String get htmlImportSemesterMappingSubtitle;
+
   /// No description provided for @spreadsheetImportTitle.
   ///
   /// In zh, this message translates to:

@@ -12,6 +12,7 @@ import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'logging/app_log_messages.dart';
 import 'models/timetable_settings.dart';
@@ -27,6 +28,8 @@ import 'services/bundled_assets.dart';
 import 'services/lan_edit_foreground_service.dart';
 import 'services/app_migration_service.dart';
 import 'services/storage_service.dart';
+import 'services/app_log_observers.dart';
+import 'services/background_html_refresh_service.dart';
 import 'services/user_data_sync_hooks.dart';
 import 'services/webdav_sync_coordinator.dart';
 import 'services/android_animation_scale_service.dart';
@@ -280,6 +283,8 @@ Future<void> main() async {
     () {
       WidgetsFlutterBinding.ensureInitialized();
       unawaited(AppLogService.instance.initialize());
+      Workmanager().initialize(backgroundHtmlRefreshCallback);
+      WidgetsBinding.instance.addObserver(AppLifecycleLogObserver());
       WidgetsBinding.instance.addObserver(_AppLifecycleLogObserver());
 
       FlutterError.onError = (details) {
@@ -550,6 +555,9 @@ class _AppEntryScreenState extends State<AppEntryScreen>
           ),
         );
         unawaited(_maybeShowDeferredMigrationGuide());
+        if (provider.hasHtmlImportSource) {
+          unawaited(provider.refreshHtmlImportForWeek(provider.currentWeek));
+        }
         await _revealMainContent();
         return;
       }
@@ -638,6 +646,9 @@ class _AppEntryScreenState extends State<AppEntryScreen>
           AppLogMessages.startupFlowCompletedAfterGuide,
         ),
       );
+      if (provider.hasHtmlImportSource) {
+        unawaited(provider.refreshHtmlImportForWeek(provider.currentWeek));
+      }
       await _revealMainContent();
     } catch (e, stackTrace) {
       // 初始化失败时降级进入主界面，避免白屏 hang

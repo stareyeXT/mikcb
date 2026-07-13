@@ -386,6 +386,45 @@
   "importMethodSpreadsheetTitle": "表格导入",
   "importMethodSpreadsheetSubtitle": "适合用 Excel/WPS 填写轻屿课表模板后导入，无需先导出 .ics。",
   "importMethodSpreadsheetFooter": "支持 .csv 与 .xlsx，可下载官方模板填写后选择文件导入。",
+  "importMethodHtmlTitle": "从网址导入",
+  "importMethodHtmlSubtitle": "输入课表页面网址，读取 HTML 中的课程信息。",
+  "importMethodHtmlFooter": "适用于学校教务系统提供课表页面的场景。",
+  "htmlInputUrlLabel": "输入课表网址",
+  "htmlScenarioIntro": "适用于学校教务系统提供课表页面的场景，直接输入课表页面网址即可读取课程信息。",
+  "htmlStep1Subtitle": "在浏览器中打开学校教务系统的课表页面。",
+  "htmlStep2Subtitle": "复制课表页面的完整网址。",
+  "htmlStep3Subtitle": "将网址粘贴到下方输入框，点击获取并导入，将自动获取一周课程。",
+  "htmlSupportedFilesSuffix": "支持从标准 HTML 课表页面解析。",
+  "htmlFetchImportLabel": "获取并导入",
+  "htmlFetchingLabel": "获取中...",
+  "htmlFetchingDayLabel": "正在获取{dayLabel}课程...",
+  "@htmlFetchingDayLabel": {
+    "placeholders": {
+      "dayLabel": {"type": "String"}
+    }
+  },
+  "htmlErrorEmptyUrl": "请输入课表页面网址",
+  "htmlErrorNoCourses": "未能从页面中识别到课程信息",
+  "htmlErrorFetchFailed": "获取页面内容失败，请检查网址和网络连接：{details}",
+  "@htmlErrorFetchFailed": {
+    "placeholders": {
+      "details": {"type": "String"}
+    }
+  },
+  "htmlCoursesDetected": "已识别 {count} 门课程（一周）",
+  "@htmlCoursesDetected": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "htmlImportConfirmTitle": "导入课程",
+  "htmlImportConfirmMessage": "已从网址识别到 {count} 门课程（一周），是否导入？",
+  "@htmlImportConfirmMessage": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "htmlImportSemesterMappingSubtitle": "确认学期起始日期与周次对应关系",
   "spreadsheetImportTitle": "表格导入",
   "spreadsheetScenarioIntro": "轻屿模板按表头识别列：必填列为课程名、星期、开始节、结束节及周次；其余列为可选。可下载完整模板，也可只保留必要列。也兼容 WakeUp 7 列格式。",
   "spreadsheetStep1Subtitle": "下载完整模板填写，或只保留必填列与上课周（或开始周+结束周）做最小导入。",

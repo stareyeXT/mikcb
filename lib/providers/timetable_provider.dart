@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:workmanager/workmanager.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import '../l10n/service_message_localizer.dart';
 import '../models/course.dart';
@@ -28,6 +29,7 @@ import '../services/partner_timetable_service.dart';
 import '../services/storage_service.dart';
 import '../services/user_data_sync_hooks.dart';
 import '../services/ics_import_service.dart';
+import '../services/html_import_service.dart';
 import '../services/miui_live_activities_service.dart';
 import '../utils/home_page_background.dart';
 import 'timetable/time_scheme_logic.dart';
@@ -140,6 +142,9 @@ class TimetableProvider with ChangeNotifier {
   List<String> _teacherRecords = [];
   List<String> _locationRecords = [];
   PartnerTimetableBinding? _partnerBinding;
+  String? _htmlImportBaseUrl;
+  Map<int, DateTime> _htmlImportWeekFetchTimes = {};
+  bool _isHtmlImportRefreshing = false;
 
   List<Course> get courses => List.unmodifiable(_courses);
   List<ScheduleItem> get scheduleItems => List.unmodifiable(_scheduleItems);
@@ -156,6 +161,10 @@ class TimetableProvider with ChangeNotifier {
 
   /// 是否有待撤销的主题变更
   bool get hasPendingUndo => _undoThemeConfig != null;
+
+  /// 是否有 HTML 导入源（从网址导入的课程）
+  bool get hasHtmlImportSource =>
+      _htmlImportBaseUrl != null && _htmlImportBaseUrl!.isNotEmpty;
 
   /// 撤销主题名称
   String? get undoThemeName => _undoThemeName;
@@ -415,6 +424,14 @@ class TimetableProvider with ChangeNotifier {
     _timeSchemes = await timeSchemesFuture;
     _activeProfileId = await activeProfileIdFuture;
     _partnerBinding = await partnerBindingFuture;
+
+    if (_activeProfileId != null) {
+      _htmlImportBaseUrl = await _storageService.getHtmlImportBaseUrl(
+        _activeProfileId!,
+      );
+      _htmlImportWeekFetchTimes = await _storageService
+          .getHtmlImportWeekFetchTimes(_activeProfileId!);
+    }
 
     if (_activeProfileId != null) {
       final storedActive = _getProfileById(_activeProfileId);
@@ -868,6 +885,9 @@ class TimetableProvider with ChangeNotifier {
       notifyListeners();
     }
     await persistFuture;
+    if (hasHtmlImportSource) {
+      await refreshHtmlImportForWeek(_currentWeek);
+    }
     await _updateLiveActivity();
   }
 
@@ -1826,6 +1846,95 @@ class TimetableProvider with ChangeNotifier {
 
   Future<String?> importFullAppDataBackup(String content) =>
       _timetableImportFullAppDataBackup(this, content);
+
+  // ---------------------------------------------------------------------------
+  // HTML 网址导入（从教务系统课表页面抓取课程）
+  // ---------------------------------------------------------------------------
+
+  /// 设置 HTML 导入源网址，并启动后台定期刷新
+  Future<void> setHtmlImportSource(String url) async {
+    _htmlImportBaseUrl = url;
+    if (_activeProfileId != null) {
+      await _storageService.saveHtmlImportBaseUrl(_activeProfileId!, url);
+    }
+    _scheduleBackgroundHtmlRefresh();
+    notifyListeners();
+  }
+
+  /// 清除 HTML 导入源，并取消后台刷新
+  Future<void> clearHtmlImportSource() async {
+    _htmlImportBaseUrl = null;
+    _htmlImportWeekFetchTimes.clear();
+    if (_activeProfileId != null) {
+      await _storageService.clearHtmlImportBaseUrl(_activeProfileId!);
+      await _storageService.clearHtmlImportWeekFetchTimes(_activeProfileId!);
+    }
+    _cancelBackgroundHtmlRefresh();
+    notifyListeners();
+  }
+
+  void _scheduleBackgroundHtmlRefresh() {
+    Workmanager().registerPeriodicTask(
+      'html_course_refresh',
+      'html_course_refresh',
+      frequency: const Duration(hours: 6),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+      ),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+    );
+  }
+
+  void _cancelBackgroundHtmlRefresh() {
+    Workmanager().cancelByUniqueName('html_course_refresh');
+  }
+
+  /// 刷新指定周的 HTML 导入课程，返回新增课程数量
+  Future<int> refreshHtmlImportForWeek(int week) async {
+    if (_htmlImportBaseUrl == null || _htmlImportBaseUrl!.isEmpty) return 0;
+    if (_isHtmlImportRefreshing) return 0;
+
+    _isHtmlImportRefreshing = true;
+    notifyListeners();
+
+    try {
+      final weekStartDate = _startOfWeek(
+        _settings.semesterStartDate ?? DateTime.now(),
+      ).add(Duration(days: 7 * (week - 1)));
+      final htmlImportService = HtmlImportService();
+      final newCourses = await htmlImportService.fetchWeekCourses(
+        _htmlImportBaseUrl!,
+        weekStartDate,
+      );
+
+      if (newCourses.isEmpty) return 0;
+
+      final nonHtmlCourses =
+          _courses.where((c) => !c.id.startsWith('html-')).toList();
+      final mergedCourses = [...nonHtmlCourses, ...newCourses];
+
+      _courses = _syncCoursesWithEffectiveTimeSchemes(
+        mergedCourses,
+        settings: _settings,
+      );
+      _htmlImportWeekFetchTimes[week] = DateTime.now();
+      if (_activeProfileId != null) {
+        await _storageService.saveHtmlImportWeekFetchTimes(
+          _activeProfileId!,
+          _htmlImportWeekFetchTimes,
+        );
+      }
+      await _persistActiveProfileState();
+      _currentLiveCourseId = null;
+      notifyListeners();
+      return newCourses.length;
+    } catch (_) {
+      return 0;
+    } finally {
+      _isHtmlImportRefreshing = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> syncCurrentWeekWithSemesterStart() async {
     final semesterStart = _settings.semesterStartDate;

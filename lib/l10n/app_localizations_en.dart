@@ -859,6 +859,79 @@ class AppLocalizationsEn extends AppLocalizations {
       'Supports .csv and .xlsx. Download the template, fill it in, then pick a file.';
 
   @override
+  String get importMethodHtmlTitle => 'Import from URL';
+
+  @override
+  String get importMethodHtmlSubtitle =>
+      'Enter a timetable page URL and read course info from the HTML.';
+
+  @override
+  String get importMethodHtmlFooter =>
+      'For school academic systems that provide a timetable page.';
+
+  @override
+  String get htmlInputUrlLabel => 'Enter timetable URL';
+
+  @override
+  String get htmlScenarioIntro =>
+      'For school academic systems that provide a timetable page. Enter the URL to read course info directly.';
+
+  @override
+  String get htmlStep1Subtitle =>
+      'Open your school\'s academic system timetable page in a browser.';
+
+  @override
+  String get htmlStep2Subtitle => 'Copy the full URL of the timetable page.';
+
+  @override
+  String get htmlStep3Subtitle =>
+      'Paste the URL below and tap Fetch & Import to automatically grab one week of courses.';
+
+  @override
+  String get htmlSupportedFilesSuffix =>
+      'Supports parsing standard HTML timetable pages.';
+
+  @override
+  String get htmlFetchImportLabel => 'Fetch & Import';
+
+  @override
+  String get htmlFetchingLabel => 'Fetching...';
+
+  @override
+  String htmlFetchingDayLabel(String dayLabel) {
+    return 'Fetching $dayLabel courses...';
+  }
+
+  @override
+  String get htmlErrorEmptyUrl => 'Please enter the timetable page URL';
+
+  @override
+  String get htmlErrorNoCourses =>
+      'Could not detect any course info from the page';
+
+  @override
+  String htmlErrorFetchFailed(String details) {
+    return 'Failed to fetch page. Check the URL and network: $details';
+  }
+
+  @override
+  String htmlCoursesDetected(int count) {
+    return 'Detected $count courses (one week)';
+  }
+
+  @override
+  String get htmlImportConfirmTitle => 'Import Courses';
+
+  @override
+  String htmlImportConfirmMessage(int count) {
+    return 'Detected $count courses (one week) from the URL. Import them?';
+  }
+
+  @override
+  String get htmlImportSemesterMappingSubtitle =>
+      'Confirm semester start date and week mapping';
+
+  @override
   String get spreadsheetImportTitle => 'Spreadsheet Import';
 
   @override

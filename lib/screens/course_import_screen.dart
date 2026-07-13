@@ -28,6 +28,7 @@ import '../models/warehouse_repository_models.dart';
 import '../providers/timetable_provider.dart';
 import '../services/ai_course_import_service.dart';
 import '../services/ics_import_service.dart';
+import '../services/html_import_service.dart';
 import '../services/import_random_color_preferences.dart';
 import '../services/import_week_alignment_service.dart';
 import '../services/spreadsheet_import_service.dart';
@@ -203,6 +204,16 @@ class CourseImportScreen extends StatelessWidget {
                     onTap: () => _openImportPage<bool>(
                       context,
                       builder: (_) => const SpreadsheetCourseImportScreen(),
+                    ),
+                  ),
+                  _buildImportMethodChoiceTile(
+                    icon: Icons.language_rounded,
+                    title: l10n.importMethodHtmlTitle,
+                    subtitle: l10n.importMethodHtmlSubtitle,
+                    footer: l10n.importMethodHtmlFooter,
+                    onTap: () => _openImportPage<bool>(
+                      context,
+                      builder: (_) => const HtmlCourseImportScreen(),
                     ),
                   ),
                 ],
@@ -5973,4 +5984,407 @@ Future<String?> _promptWarehouseImportUrl(
 
 void _showLightTip(BuildContext context, String message) {
   showAppLightTip(context, message: message);
+}
+
+/// 从网址导入课程（HTML 解析教务系统课表页面）
+class HtmlCourseImportScreen extends StatefulWidget {
+  const HtmlCourseImportScreen({super.key});
+
+  @override
+  State<HtmlCourseImportScreen> createState() =>
+      _HtmlCourseImportScreenState();
+}
+
+class _HtmlCourseImportScreenState extends State<HtmlCourseImportScreen> {
+  final HtmlImportService _htmlImportService = HtmlImportService();
+  final ImportWeekAlignmentService _weekAlignmentService =
+      const ImportWeekAlignmentService();
+  final TextEditingController _urlController = TextEditingController();
+
+  bool _isImporting = false;
+  List<Course>? _weekCourses;
+  String? _parseError;
+  HtmlWeekFetchProgress? _fetchProgress;
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.importMethodHtmlTitle),
+      childPad: false,
+      child: Material(
+        type: MaterialType.transparency,
+        child: HyperosBlurredBodyInset(
+          child: Column(
+            children: [
+              Expanded(
+                child: HyperosListView(
+                  includeHeaderInset: false,
+                  children: [
+                    _ImportGuidePanel(
+                      scenarioIntro: l10n.htmlScenarioIntro,
+                      step1Subtitle: l10n.htmlStep1Subtitle,
+                      step2Subtitle: l10n.htmlStep2Subtitle,
+                      step3Subtitle: l10n.htmlStep3Subtitle,
+                      supportedFilesSuffix: l10n.htmlSupportedFilesSuffix,
+                    ),
+                    const HyperosSectionGap(),
+                    HyperosSectionLabel(text: l10n.htmlInputUrlLabel),
+                    Padding(
+                      padding: HyperosTokens.rowPadding(
+                        isFirst: true,
+                        isLast: true,
+                      ),
+                      child: HyperosTextField(
+                        controller: _urlController,
+                        hint: 'https://...',
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.done,
+                        enabled: !_isImporting,
+                      ),
+                    ),
+                    if (_isImporting && _fetchProgress != null) ...[
+                      const HyperosSectionGap(),
+                      _HtmlFetchProgressPanel(progress: _fetchProgress!),
+                    ],
+                    if (_parseError != null) ...[
+                      const HyperosSectionGap(),
+                      _HtmlErrorPanel(message: _parseError!),
+                    ],
+                    if (_weekCourses != null) ...[
+                      const HyperosSectionGap(),
+                      _HtmlSuccessPanel(count: _weekCourses!.length),
+                    ],
+                  ],
+                ),
+              ),
+              SafeArea(
+                top: false,
+                minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: FButton(
+                  child: Text(
+                    _isImporting
+                        ? l10n.htmlFetchingLabel
+                        : l10n.htmlFetchImportLabel,
+                  ),
+                  onPress: _isImporting ? null : _fetchAndImport,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _fetchAndImport() async {
+    final l10n = AppLocalizations.of(context)!;
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      setState(() {
+        _parseError = l10n.htmlErrorEmptyUrl;
+      });
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+      _parseError = null;
+      _weekCourses = null;
+      _fetchProgress = null;
+    });
+
+    try {
+      // 从用户输入的 URL 中提取 date 参数，以该日期为基准计算周起始日
+      final parsedUri = Uri.tryParse(url);
+      final dateParam = parsedUri?.queryParameters['date'];
+      final baseDate = dateParam != null ? DateTime.tryParse(dateParam) : null;
+      final weekStartDate = HtmlImportService.startOfWeek(baseDate ?? DateTime.now());
+      final courses = await _htmlImportService.fetchWeekCourses(
+        url,
+        weekStartDate,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _fetchProgress = progress;
+            });
+          }
+        },
+      );
+
+      if (!mounted) return;
+
+      if (courses.isEmpty) {
+        setState(() {
+          _parseError = l10n.htmlErrorNoCourses;
+        });
+        return;
+      }
+
+      setState(() {
+        _weekCourses = courses;
+      });
+
+      final provider = context.read<TimetableProvider>();
+      final replaceExisting = provider.courses.isEmpty
+          ? true
+          : await _askReplaceExisting(
+              context,
+              title: l10n.htmlImportConfirmTitle,
+              message: l10n.htmlImportConfirmMessage(courses.length),
+            );
+      if (replaceExisting == null || !mounted) {
+        return;
+      }
+
+      final semesterConfig = await _pickImportSemesterConfig(
+        context,
+        initialSemesterStartDate: provider.settings.semesterStartDate ??
+            _weekAlignmentService.startOfWeek(DateTime.now()),
+        initialFirstCourseWeek: 1,
+        title: l10n.importConfirmSemesterMappingTitle,
+        subtitle: l10n.htmlImportSemesterMappingSubtitle,
+      );
+      if (semesterConfig == null || !mounted) {
+        return;
+      }
+
+      final alignedCourses = _weekAlignmentService.shiftCoursesToSemesterWeeks(
+        courses,
+        firstCourseWeek: semesterConfig.firstCourseWeek,
+      );
+      final requiredSectionCount =
+          provider.previewImportedCourseRequiredSectionCount(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+      );
+      if (!mounted) return;
+      final capacityReady = await _ensureSectionCapacity(
+        context,
+        requiredSectionCount: requiredSectionCount,
+        provider: provider,
+      );
+      if (!capacityReady || !mounted) return;
+
+      final importedCount = await provider.importParsedCourses(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+        semesterStart: semesterConfig.semesterStartDate,
+        source: 'html',
+      );
+      if (!mounted) return;
+
+      await provider.setHtmlImportSource(url);
+
+      if (importedCount > 0) {
+        Navigator.of(context).pop(true);
+      } else {
+        showAppToast(
+          context,
+          message: l10n.importNoCourseChanges,
+          kind: AppToastKind.error,
+        );
+      }
+    } on FormatException catch (e) {
+      if (mounted) {
+        setState(() {
+          _parseError = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _parseError = l10n.htmlErrorFetchFailed(e.toString());
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+          _fetchProgress = null;
+        });
+      }
+    }
+  }
+
+  Future<bool?> _askReplaceExisting(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    return showHyperosDialog<bool>(
+      context: context,
+      title: title,
+      message: message,
+      actions: [
+        HyperosDialogAction(
+          label: l10n.cancelAction,
+          onPressed: () => Navigator.pop(context, null),
+        ),
+        HyperosDialogAction(
+          label: l10n.importAsNewTimetable,
+          onPressed: () => Navigator.pop(context, false),
+        ),
+        HyperosDialogAction(
+          label: l10n.replaceCurrentTimetable,
+          isPrimary: true,
+          onPressed: () => Navigator.pop(context, true),
+        ),
+      ],
+    );
+  }
+}
+
+class _HtmlFetchProgressPanel extends StatelessWidget {
+  const _HtmlFetchProgressPanel({required this.progress});
+
+  final HtmlWeekFetchProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: HyperosTokens.rowPadding(isFirst: true, isLast: true),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: scheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    progress.currentDayLabel.isNotEmpty
+                        ? l10n.htmlFetchingDayLabel(progress.currentDayLabel)
+                        : l10n.htmlFetchingLabel,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress.completedDays / progress.totalDays,
+                backgroundColor:
+                    scheme.onSecondaryContainer.withValues(alpha: 0.12),
+                valueColor: AlwaysStoppedAnimation(
+                  scheme.onSecondaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HtmlErrorPanel extends StatelessWidget {
+  const _HtmlErrorPanel({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: HyperosTokens.rowPadding(isFirst: true, isLast: true),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: scheme.errorContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 20,
+              color: scheme.onErrorContainer,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HtmlSuccessPanel extends StatelessWidget {
+  const _HtmlSuccessPanel({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: HyperosTokens.rowPadding(isFirst: true, isLast: true),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.check_circle_outline_rounded,
+              size: 20,
+              color: scheme.onPrimaryContainer,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                l10n.htmlCoursesDetected(count),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
