@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'package:university_timetable/ui/hyperos/hyperos.dart';
 import 'dart:math' as math;
 
 import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -13,27 +16,41 @@ import 'package:provider/provider.dart';
 import '../models/course.dart';
 import '../models/exam.dart';
 import '../models/schedule_item.dart';
-import '../models/timetable_profile.dart';
 import '../models/timetable_settings.dart';
+import '../providers/timetable/couple_timetable_logic.dart';
 import '../providers/timetable_provider.dart';
 import '../services/app_update_service.dart';
+import '../utils/app_toast.dart';
 import '../utils/hex_color.dart';
-import '../utils/responsive.dart';
+import '../widgets/home_page_region_blur.dart';
+import '../utils/home_page_background.dart';
+import '../widgets/course_action_sheet.dart';
+import '../widgets/course_followup_sheets.dart';
 import '../widgets/course_card.dart';
+import '../widgets/home_top_menu.dart';
+import '../widgets/profile_quick_switch_sheet.dart';
+import '../widgets/week_selector_picker_sheet.dart';
 import 'add_course_screen.dart';
 import 'add_exam_screen.dart';
 import 'add_schedule_item_screen.dart';
 import 'about_screen.dart';
 import 'course_import_screen.dart';
 import 'course_overview_screen.dart';
+import 'course_statistics_screen.dart';
 import 'exam_list_screen.dart';
+import 'support_creator_screen.dart';
 import 'timetable_profiles_screen.dart';
 import 'timetable_settings_screen.dart';
 
 class TimetableScreen extends StatefulWidget {
   final bool enableUpdateCheck;
+  final bool enableProgressTimer;
 
-  const TimetableScreen({super.key, this.enableUpdateCheck = true});
+  const TimetableScreen({
+    super.key,
+    this.enableUpdateCheck = true,
+    this.enableProgressTimer = true,
+  });
 
   @override
   State<TimetableScreen> createState() => _TimetableScreenState();
@@ -42,8 +59,11 @@ class TimetableScreen extends StatefulWidget {
 class _TimetableScreenState extends State<TimetableScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const int _minWeek = 1;
+  static const double _weekDayHeaderHeight = 40;
+  static const double _homeTitleHorizontalNudge = 4;
   static const Duration _weekSlideDuration = Duration(milliseconds: 280);
   static const Duration _dayExpandDuration = Duration(milliseconds: 360);
+  static const double _dayViewCardRadius = 20;
 
   late final PageController _weekPageController;
   late final AnimationController _dayViewExpandController;
@@ -71,6 +91,10 @@ class _TimetableScreenState extends State<TimetableScreen>
   int? _dayViewTransitionSourceDayOfWeek;
   double _dayViewAnchorFraction = 0.5;
   bool _isDaySwipeAnimating = false;
+  bool _coupleOverlayEnabled = false;
+
+  bool _isCoupleOverlayActive(TimetableProvider provider) =>
+      _coupleOverlayEnabled && provider.hasPartnerBinding;
 
   Color _colorFromHex(String hexColor, Color fallback) {
     return parseHexColorOrFallback(hexColor, fallback: fallback);
@@ -94,12 +118,14 @@ class _TimetableScreenState extends State<TimetableScreen>
       vsync: this,
       duration: _dayExpandDuration,
     );
-    _dayAgendaProgressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || !_isDayView) {
-        return;
-      }
-      setState(() {});
-    });
+    _dayAgendaProgressTimer = widget.enableProgressTimer
+        ? Timer.periodic(const Duration(seconds: 1), (_) {
+            if (!mounted || !_isDayView) {
+              return;
+            }
+            setState(() {});
+          })
+        : null;
     _restoreViewStateFromProvider(provider);
     if (widget.enableUpdateCheck) {
       _checkForAppUpdate(
@@ -131,9 +157,6 @@ class _TimetableScreenState extends State<TimetableScreen>
       // was backgrounded and started the service with stale snapshot settings;
       // this ensures the correct style is applied as soon as the user returns.
       unawaited(provider.refreshLiveActivityNow());
-      if (provider.hasHtmlImportSource) {
-        unawaited(provider.refreshHtmlImportForWeek(provider.currentWeek));
-      }
       if (widget.enableUpdateCheck) {
         _checkForAppUpdate(
           includePrerelease: provider.settings.appUpdateIncludePrerelease,
@@ -149,116 +172,203 @@ class _TimetableScreenState extends State<TimetableScreen>
       builder: (context, provider, child) {
         _syncViewStateIfNeeded(provider);
         _scheduleUpdateCheckIfNeeded(provider);
-        _syncWeekPageWithProvider(
-          provider.currentWeek,
-          provider.settings,
-        );
+        _syncWeekPageWithProvider(provider.currentWeek, provider.settings);
         final colorScheme = Theme.of(context).colorScheme;
-        final backgroundColor = Theme.of(context).brightness == Brightness.dark
-            ? colorScheme.surface
-            : _colorFromHex(
-                provider.settings.timetablePageBackgroundColor,
-                colorScheme.surface,
-              );
-        final isLandscape = context.isLandscape;
-        final isTablet = context.isTablet;
-        final horizontalPadding = isTablet ? 16.0 : 8.0;
-        return Scaffold(
-          resizeToAvoidBottomInset: false,
-          backgroundColor: backgroundColor,
-          appBar: AppBar(
-            backgroundColor: backgroundColor,
-            surfaceTintColor: backgroundColor,
-            toolbarHeight: isLandscape ? 44 : null,
-            title: _buildProfileSwitcherTrigger(provider),
-            actions: [
-              if (provider.hasHtmlImportSource)
-                IconButton(
-                  tooltip: provider.isHtmlImportRefreshing
-                      ? '刷新中…'
-                      : '刷新课表',
-                  onPressed: provider.isHtmlImportRefreshing
-                      ? null
-                      : () => provider.refreshHtmlImportForWeek(provider.currentWeek),
-                  icon: provider.isHtmlImportRefreshing
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded),
+        final foruiTheme = context.theme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final darkFallback = colorScheme.surface;
+        final settings = provider.settings;
+        final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+        final statusBarShowsBackdrop = homePageRegionShowsBackdrop(
+          settings,
+          HomePageBackgroundScope.statusBar,
+          isDark: isDark,
+        );
+        final timetableShowsBackdrop = homePageRegionShowsBackdrop(
+          settings,
+          HomePageBackgroundScope.timetable,
+          isDark: isDark,
+        );
+        final pageBackgroundColor = resolveHomePageBackgroundColor(
+          settings: settings,
+          isDark: isDark,
+          darkFallback: darkFallback,
+        );
+        final headerBackground = resolveHomePageRegionBackground(
+          settings: settings,
+          isDark: isDark,
+          darkFallback: darkFallback,
+          region: HomePageBackgroundScope.header,
+        );
+        final timetableBackground = resolveHomePageRegionBackground(
+          settings: settings,
+          isDark: isDark,
+          darkFallback: darkFallback,
+          region: HomePageBackgroundScope.timetable,
+        );
+        final headerShowsBackdrop = homePageRegionShowsBackdrop(
+          settings,
+          HomePageBackgroundScope.header,
+          isDark: isDark,
+        );
+        final headerUsesFrostedChrome =
+            hasBackdrop &&
+            (headerShowsBackdrop || settings.homePageHeaderBlurEnabled);
+        final headerBarColor = headerUsesFrostedChrome
+            ? Colors.transparent
+            : headerBackground.color;
+        final scaffoldBackgroundColor = timetableShowsBackdrop
+            ? Colors.transparent
+            : timetableBackground.color;
+        final systemOverlayBackground = statusBarShowsBackdrop
+            ? (hasBackdrop
+                  ? (headerUsesFrostedChrome
+                        ? const Color(0xFF1A1A1A)
+                        : Colors.black)
+                  : pageBackgroundColor)
+            : pageBackgroundColor;
+        final headerTitleStyle = foruiTheme.typography.display.xl.copyWith(
+          fontWeight: FontWeight.w400,
+          height: 1.1,
+          color: foruiTheme.colors.foreground,
+        );
+        const headerHorizontalInset = 8.0;
+        const headerTopInset = 0.0;
+        final headerBottomInset = headerUsesFrostedChrome ? 0.0 : 2.0;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasBackdrop)
+              homePageBackdropLayer(settings: settings, isDark: isDark),
+            if (hasBackdrop && !statusBarShowsBackdrop)
+              HomePageStatusBarBackdropMask(color: pageBackgroundColor),
+            HomePageHeaderBlurBand(
+              enabled: settings.homePageHeaderBlurEnabled,
+              includeStatusBar: statusBarShowsBackdrop,
+              extendBottom:
+                  settings.homePageWeekdayBarBlurEnabled && hasBackdrop
+                  ? homePageFrostedRegionSeamOverlap
+                  : 0,
+            ),
+            HyperosRootPage(
+              overlayHeader: false,
+              resizeToAvoidBottomInset: false,
+              backgroundColor: scaffoldBackgroundColor,
+              headerDecoration: BoxDecoration(color: headerBarColor),
+              headerStyle: FHeaderStyleDelta.delta(
+                decoration: DecorationDelta.boxDelta(color: headerBarColor),
+                systemOverlayStyle: HyperosColors.systemOverlayForBackground(
+                  systemOverlayBackground,
                 ),
-              IconButton(
-                tooltip: l10n.moreTooltip,
-                onPressed: _showTopActionsSheet,
-                icon: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(Icons.more_vert_rounded),
-                    if (_hasAvailableUpdate)
-                      Positioned(
-                        right: -1,
-                        top: -1,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: backgroundColor,
-                              width: 1.5,
+                titleTextStyle: TextStyleDelta.value(headerTitleStyle),
+                padding: EdgeInsetsGeometryDelta.value(
+                  EdgeInsets.fromLTRB(
+                    headerHorizontalInset,
+                    headerTopInset,
+                    headerHorizontalInset,
+                    headerBottomInset,
+                  ),
+                ),
+                constraints: const BoxConstraints(minHeight: 44),
+              ),
+              title: _buildProfileSwitcherTrigger(provider),
+              suffixes: [
+                if (provider.hasPartnerBinding)
+                  FHeaderAction(
+                    icon: Icon(
+                      _isCoupleOverlayActive(provider)
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_outline_rounded,
+                      color: _isCoupleOverlayActive(provider)
+                          ? const Color(0xFFE91E63)
+                          : null,
+                    ),
+                    semanticsLabel: _isCoupleOverlayActive(provider)
+                        ? l10n.coupleTimetableModeDisableTooltip
+                        : l10n.coupleTimetableModeEnableTooltip,
+                    onPress: () {
+                      setState(() {
+                        _coupleOverlayEnabled = !_coupleOverlayEnabled;
+                      });
+                    },
+                  ),
+                FHeaderAction(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.more_vert_rounded),
+                      if (_hasAvailableUpdate)
+                        Positioned(
+                          right: -1,
+                          top: -1,
+                          child: Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: headerBarColor.a == 0
+                                    ? colorScheme.surface
+                                    : headerBarColor,
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          body: provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : MediaQuery.removeViewInsets(
-                  context: context,
-                  removeBottom: true,
-                  child: Stack(
-                    children: [
-                      Container(
-                        color: backgroundColor,
-                        child: Padding(
-                          key: _timetableSurfaceKey,
-                          padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 8),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              return _buildWeekPager(
-                                provider,
-                                provider.settings,
-                                constraints.maxWidth,
-                                constraints.maxHeight,
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      ValueListenableBuilder<int>(
-                        valueListenable: _visibleWeekListenable,
-                        builder: (context, visibleWeek, child) {
-                          if (!_shouldShowFloatingBackToCurrentWeekButton(
-                            provider,
-                            provider.settings,
-                            visibleWeek,
-                          )) {
-                            return const SizedBox.shrink();
-                          }
-                          return _buildFloatingBackToCurrentWeekButton(
-                            provider,
-                          );
-                        },
-                      ),
                     ],
                   ),
+                  semanticsLabel: l10n.moreTooltip,
+                  onPress: _showTopActionsSheet,
                 ),
+              ],
+              childPad: false,
+              child: Material(
+                type: MaterialType.transparency,
+                child: provider.isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : MediaQuery.removeViewInsets(
+                        context: context,
+                        removeBottom: true,
+                        child: Stack(
+                          children: [
+                            Padding(
+                              key: _timetableSurfaceKey,
+                              padding: EdgeInsets.only(
+                                bottom: hasBackdrop ? 0 : 8,
+                              ),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return _buildWeekPager(
+                                    provider,
+                                    provider.settings,
+                                    constraints.maxWidth,
+                                    constraints.maxHeight,
+                                  );
+                                },
+                              ),
+                            ),
+                            ValueListenableBuilder<int>(
+                              valueListenable: _visibleWeekListenable,
+                              builder: (context, visibleWeek, child) {
+                                if (!_shouldShowFloatingBackToCurrentWeekButton(
+                                  provider,
+                                  provider.settings,
+                                  visibleWeek,
+                                )) {
+                                  return const SizedBox.shrink();
+                                }
+                                return _buildFloatingBackToCurrentWeekButton(
+                                  provider,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -407,6 +517,31 @@ class _TimetableScreenState extends State<TimetableScreen>
     return _isDayView &&
         _selectedWeekForDayView == week &&
         _selectedDayOfWeek == dayOfWeek;
+  }
+
+  /// Opaque chrome for day-view layers over wallpaper-backed week chrome.
+  HomePageBackgroundVisual _opaqueHomePageRegionBackground({
+    required TimetableSettings settings,
+    required bool isDark,
+    required Color darkFallback,
+    required int region,
+  }) {
+    final regionBackground = resolveHomePageRegionBackground(
+      settings: settings,
+      isDark: isDark,
+      darkFallback: darkFallback,
+      region: region,
+    );
+    if (regionBackground.isTransparent) {
+      return HomePageBackgroundVisual(
+        color: resolveHomePageBackgroundColor(
+          settings: settings,
+          isDark: isDark,
+          darkFallback: darkFallback,
+        ),
+      );
+    }
+    return regionBackground;
   }
 
   double get _dayViewAnchorAlignmentX =>
@@ -762,10 +897,13 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   Widget _buildProfileSwitcherTrigger(TimetableProvider provider) {
-    return switch (provider.settings.homeTitleStyle) {
-      HomeTitleStyle.classic => _buildClassicProfileSwitcherTrigger(provider),
-      HomeTitleStyle.brand => _buildBrandProfileSwitcherTrigger(provider),
-    };
+    return Padding(
+      padding: const EdgeInsets.only(left: _homeTitleHorizontalNudge),
+      child: switch (provider.settings.homeTitleStyle) {
+        HomeTitleStyle.classic => _buildClassicProfileSwitcherTrigger(provider),
+        HomeTitleStyle.brand => _buildBrandProfileSwitcherTrigger(provider),
+      },
+    );
   }
 
   Widget _buildClassicProfileSwitcherTrigger(TimetableProvider provider) {
@@ -780,43 +918,40 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   Widget _buildBrandProfileSwitcherTrigger(TimetableProvider provider) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final foruiTheme = context.theme;
     final activeProfileName = provider.activeProfile?.name.trim();
 
-    return InkWell(
+    return GestureDetector(
       key: const ValueKey('profile_switcher_trigger'),
-      borderRadius: BorderRadius.circular(18),
       onTap: _showProfileQuickSwitchSheet,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.timetableAppName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                height: 1.0,
-                letterSpacing: 0.2,
-              ),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.timetableAppName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: foruiTheme.typography.display.lg.copyWith(
+              fontWeight: FontWeight.w600,
+              height: 1.0,
+              letterSpacing: 0.1,
+              color: foruiTheme.colors.foreground,
             ),
-            Text(
-              (activeProfileName == null || activeProfileName.isEmpty)
-                  ? l10n.switchProfileHint
-                  : activeProfileName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
+          ),
+          Text(
+            (activeProfileName == null || activeProfileName.isEmpty)
+                ? l10n.switchProfileHint
+                : activeProfileName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: foruiTheme.typography.body.sm.copyWith(
+              color: foruiTheme.colors.mutedForeground,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -825,10 +960,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     TimetableProvider provider,
     int week,
     TimetableSettings settings,
-    double timeColumnWidth,
-  ) {
+    double timeColumnWidth, {
+    bool hideBottomBorder = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final subtleBorder = context.theme.colors.border;
     final canReturnToCurrentWeek = _canReturnToCurrentWeek(settings, week);
     final showsInlineBackToCurrentWeek =
         canReturnToCurrentWeek &&
@@ -837,11 +974,13 @@ class _TimetableScreenState extends State<TimetableScreen>
     final visibleDays = _visibleDayNumbers(settings);
 
     return Container(
-      height: context.isLandscape ? 38 : 50,
-      padding: const EdgeInsets.fromLTRB(0, 1, 0, 4),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
-      ),
+      height: _weekDayHeaderHeight,
+      padding: EdgeInsets.zero,
+      decoration: hideBottomBorder
+          ? null
+          : BoxDecoration(
+              border: Border(bottom: BorderSide(color: subtleBorder, width: 1)),
+            ),
       child: Row(
         children: [
           SizedBox(
@@ -912,14 +1051,29 @@ class _TimetableScreenState extends State<TimetableScreen>
                         final isToday =
                             date != null && _isSameDate(date, DateTime.now());
                         final isSelected = _isSelectedDay(week, dayOfWeek);
+                        final isDark =
+                            Theme.of(context).brightness == Brightness.dark;
+                        final weekdayColor = isDark
+                            ? settings.weekdayBarFontColorDark
+                            : settings.weekdayBarFontColorLight;
+                        final accentColor = isDark
+                            ? settings.weekdayBarAccentColorDark
+                            : settings.weekdayBarAccentColorLight;
                         final labelColor = (isSelected || isToday)
-                            ? colorScheme.primary
-                            : colorScheme.onSurface;
+                            ? _colorFromHex(accentColor, colorScheme.primary)
+                            : _colorFromHex(
+                                weekdayColor,
+                                colorScheme.onSurface,
+                              );
                         final subLabelColor = (isSelected || isToday)
-                            ? colorScheme.primary.withValues(
-                                alpha: isSelected ? 0.9 : 0.78,
-                              )
-                            : colorScheme.onSurfaceVariant;
+                            ? _colorFromHex(
+                                accentColor,
+                                colorScheme.primary,
+                              ).withValues(alpha: isSelected ? 0.9 : 0.78)
+                            : _colorFromHex(
+                                weekdayColor,
+                                colorScheme.onSurfaceVariant,
+                              ).withValues(alpha: 0.7);
                         final showsTodayMarker = isToday && !isSelected;
 
                         return Expanded(
@@ -948,9 +1102,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                                   border: Border(
                                     bottom: BorderSide(
                                       color: showsTodayMarker
-                                          ? colorScheme.primary.withValues(
-                                              alpha: 0.35,
-                                            )
+                                          ? _colorFromHex(
+                                              accentColor,
+                                              colorScheme.primary,
+                                            ).withValues(alpha: 0.35)
                                           : Colors.transparent,
                                       width: showsTodayMarker ? 2 : 0,
                                     ),
@@ -1130,10 +1285,15 @@ class _TimetableScreenState extends State<TimetableScreen>
     double sectionHeight,
   ) {
     final visibleDays = _visibleDayNumbers(settings);
-    final timeColumnWidth = _resolveTimeColumnWidth(settings, isTablet: context.isTablet);
+    final timeColumnWidth = _resolveTimeColumnWidth(settings);
     final cardInset = _resolveCourseCardInset(settings);
     final dayWidth = (availableWidth - timeColumnWidth) / visibleDays.length;
-    final conflictMap = provider.courseConflictMapForWeek(week);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final unifiedChromeBlur = homePageUsesUnifiedChromeBlur(
+      settings,
+      hasBackdrop: hasBackdrop,
+    );
 
     return SizedBox(
       key: ValueKey<int>(week),
@@ -1143,30 +1303,37 @@ class _TimetableScreenState extends State<TimetableScreen>
         children: [
           SizedBox(
             width: timeColumnWidth,
-            child: Column(
-              children: List.generate(settings.sectionCount, (index) {
-                final section = settings.sections[index];
-                return Container(
-                  height: sectionHeight,
-                  alignment: Alignment.center,
-                  child: _buildSectionTimeCell(index + 1, section, settings),
-                );
-              }),
+            child: HomePageFrostedRegion(
+              enabled:
+                  !unifiedChromeBlur && settings.homePageTimeColumnBlurEnabled,
+              child: Column(
+                children: List.generate(settings.sectionCount, (index) {
+                  final section = settings.sections[index];
+                  return Container(
+                    height: sectionHeight,
+                    alignment: Alignment.center,
+                    child: _buildSectionTimeCell(index + 1, section, settings),
+                  );
+                }),
+              ),
             ),
           ),
           Row(
-            children: visibleDays.map((dayOfWeek) {
+            children: visibleDays.asMap().entries.map((entry) {
+              final dayIndex = entry.key;
+              final dayOfWeek = entry.value;
               final dayCourses = _getCoursesForDay(
                 provider.courses,
                 week,
                 dayOfWeek,
                 settings,
               );
-              final displayItems = _buildDayCourseDisplayItems(
-                courses: dayCourses,
-                week: week,
+              final displayItems = _buildHomeDayDisplayItems(
+                provider: provider,
                 settings: settings,
-                conflictMap: conflictMap,
+                week: week,
+                dayOfWeek: dayOfWeek,
+                myCourses: dayCourses,
               );
               return SizedBox(
                 width: dayWidth,
@@ -1179,6 +1346,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                   sectionHeight,
                   cardInset,
                   provider,
+                  dayIndex: dayIndex,
+                  dayCount: visibleDays.length,
                 ),
               );
             }).toList(),
@@ -1232,7 +1401,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         ),
         if (_shouldShowDayViewOverlay && visibleDayViewWeek != null)
           Positioned.fill(
-            top: 50,
+            top: _weekDayHeaderHeight,
             child: _buildAnchoredDayViewOverlay(
               provider: provider,
               settings: settings,
@@ -1250,7 +1419,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     double availableHeight,
     int week,
   ) {
-    final bodyAvailableHeight = (availableHeight - 50).clamp(
+    final bodyAvailableHeight = (availableHeight - _weekDayHeaderHeight).clamp(
       0.0,
       double.infinity,
     );
@@ -1265,17 +1434,67 @@ class _TimetableScreenState extends State<TimetableScreen>
       week,
       sectionHeight,
     );
-    return KeyedSubtree(
-      key: ValueKey('week-page-$week'),
-      child: Column(
-        children: [
-          _buildWeekDayHeader(
-            provider,
-            week,
-            settings,
-            _resolveTimeColumnWidth(settings, isTablet: context.isTablet),
-          ),
-          Expanded(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final unifiedChromeBlur = homePageUsesUnifiedChromeBlur(
+      settings,
+      hasBackdrop: hasBackdrop,
+    );
+    final weekdayShowsBackdrop = homePageRegionShowsBackdrop(
+      settings,
+      HomePageBackgroundScope.weekdayBar,
+      isDark: isDark,
+    );
+    final timeColumnWidth = _resolveTimeColumnWidth(settings);
+    final pageChromeFallback = Theme.of(context).colorScheme.surface;
+    final isActiveDayViewWeek = _isDayView && week == _selectedWeekForDayView;
+    final weekdayHeader = homePageBackgroundLayer(
+      visual: isActiveDayViewWeek
+          ? _opaqueHomePageRegionBackground(
+              settings: settings,
+              isDark: isDark,
+              darkFallback: pageChromeFallback,
+              region: HomePageBackgroundScope.weekdayBar,
+            )
+          : homePageRegionChromeVisual(
+              settings: settings,
+              isDark: isDark,
+              darkFallback: pageChromeFallback,
+              region: HomePageBackgroundScope.weekdayBar,
+              chromeBlurEnabled: settings.homePageWeekdayBarBlurEnabled,
+            ),
+      child: HomePageFrostedRegion(
+        enabled:
+            !unifiedChromeBlur &&
+            settings.homePageWeekdayBarBlurEnabled &&
+            !isActiveDayViewWeek,
+        overlapTop: settings.homePageHeaderBlurEnabled && hasBackdrop
+            ? homePageFrostedRegionSeamOverlap
+            : 0,
+        child: _buildWeekDayHeader(
+          provider,
+          week,
+          settings,
+          timeColumnWidth,
+          hideBottomBorder:
+              weekdayShowsBackdrop ||
+              settings.homePageWeekdayBarBlurEnabled ||
+              unifiedChromeBlur,
+        ),
+      ),
+    );
+
+    final pageBody = Column(
+      children: [
+        weekdayHeader,
+        Expanded(
+          child: homePageBackgroundLayer(
+            visual: resolveHomePageRegionBackground(
+              settings: settings,
+              isDark: isDark,
+              darkFallback: Theme.of(context).colorScheme.surface,
+              region: HomePageBackgroundScope.timetable,
+            ),
             child: _buildWeekPageBody(
               provider: provider,
               settings: settings,
@@ -1283,6 +1502,36 @@ class _TimetableScreenState extends State<TimetableScreen>
               grid: grid,
             ),
           ),
+        ),
+      ],
+    );
+
+    final backdropImage = settings.homePageBackdropFollowsWeekPager
+        ? homePageBackdropImageWidget(settings: settings, isDark: isDark)
+        : null;
+    final needsPageStack = backdropImage != null || unifiedChromeBlur;
+
+    if (!needsPageStack) {
+      return KeyedSubtree(key: ValueKey('week-page-$week'), child: pageBody);
+    }
+
+    return KeyedSubtree(
+      key: ValueKey('week-page-$week'),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (backdropImage != null) Positioned.fill(child: backdropImage),
+          if (unifiedChromeBlur && !isActiveDayViewWeek)
+            Positioned.fill(
+              child: HomePageUnifiedWeekFrostedOverlay(
+                weekdayBarHeight: _weekDayHeaderHeight,
+                timeColumnWidth: timeColumnWidth,
+                overlapTop: settings.homePageHeaderBlurEnabled
+                    ? homePageFrostedRegionSeamOverlap
+                    : 0,
+              ),
+            ),
+          pageBody,
         ],
       ),
     );
@@ -1390,140 +1639,142 @@ class _TimetableScreenState extends State<TimetableScreen>
     required int dayOfWeek,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final backgroundColor = Theme.of(context).brightness == Brightness.dark
-        ? colorScheme.surface
-        : _colorFromHex(
-            provider.settings.timetablePageBackgroundColor,
-            colorScheme.surface,
-          );
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final darkFallback = colorScheme.surface;
+    final backgroundVisual = _opaqueHomePageRegionBackground(
+      settings: settings,
+      isDark: isDark,
+      darkFallback: darkFallback,
+      region: HomePageBackgroundScope.timetable,
+    );
     final controller = _ensureDayViewPageController(settings, week);
     _syncDayViewPageWithSelection(settings, week);
     final pageCount = _dayViewPageCount(settings, week);
 
-    return Container(
-      key: ValueKey('timetable-day-view-panel-$week'),
-      color: backgroundColor,
-      child: Column(
-        children: [
-          const SizedBox(height: 14),
-          SizedBox(key: ValueKey('timetable-day-view-$week-$dayOfWeek')),
-          Expanded(
-            child: IgnorePointer(
-              ignoring: _isDaySwipeAnimating,
-              child: PageView.builder(
-                key: const ValueKey('day-view-swipe-area'),
-                controller: controller,
-                physics: const PageScrollPhysics(
-                  parent: ClampingScrollPhysics(),
-                ),
-                itemCount: pageCount,
-                onPageChanged: (page) =>
-                    _handleDayViewPageChanged(provider, settings, week, page),
-                itemBuilder: (context, page) {
-                  final target = _dayViewTargetForPage(settings, week, page);
-                  final selectedDate = _dateForWeekDay(
-                    settings,
-                    target.week,
-                    target.dayOfWeek,
-                  );
-                  final conflictMap = provider.courseConflictMapForWeek(
-                    target.week,
-                  );
-                  final courses = _getCoursesForDay(
-                    provider.courses,
-                    target.week,
-                    target.dayOfWeek,
-                    settings,
-                  );
-                  final currentCourse =
-                      _isSelectedDayToday(
-                        provider: provider,
-                        settings: settings,
-                        week: target.week,
-                        dayOfWeek: target.dayOfWeek,
-                      )
-                      ? provider.getCourseInProgress(
-                          dayOfWeek: target.dayOfWeek,
+    return homePageBackgroundLayer(
+      visual: backgroundVisual,
+      child: Container(
+        key: ValueKey('timetable-day-view-panel-$week'),
+        child: Column(
+          children: [
+            const SizedBox(height: 14),
+            SizedBox(key: ValueKey('timetable-day-view-$week-$dayOfWeek')),
+            Expanded(
+              child: IgnorePointer(
+                ignoring: _isDaySwipeAnimating,
+                child: PageView.builder(
+                  key: const ValueKey('day-view-swipe-area'),
+                  controller: controller,
+                  physics: const PageScrollPhysics(
+                    parent: ClampingScrollPhysics(),
+                  ),
+                  itemCount: pageCount,
+                  onPageChanged: (page) =>
+                      _handleDayViewPageChanged(provider, settings, week, page),
+                  itemBuilder: (context, page) {
+                    final target = _dayViewTargetForPage(settings, week, page);
+                    final selectedDate = _dateForWeekDay(
+                      settings,
+                      target.week,
+                      target.dayOfWeek,
+                    );
+                    final courses = _getCoursesForDay(
+                      provider.courses,
+                      target.week,
+                      target.dayOfWeek,
+                      settings,
+                    );
+                    final currentCourse =
+                        _isSelectedDayToday(
+                          provider: provider,
+                          settings: settings,
                           week: target.week,
+                          dayOfWeek: target.dayOfWeek,
                         )
-                      : null;
-                  final currentCourseIds =
-                      _isSelectedDayToday(
-                        provider: provider,
-                        settings: settings,
-                        week: target.week,
-                        dayOfWeek: target.dayOfWeek,
-                      )
-                      ? provider
-                            .getCoursesInProgress(
-                              dayOfWeek: target.dayOfWeek,
-                              week: target.week,
-                            )
-                            .map((course) => course.id)
-                            .toSet()
-                      : const <String>{};
-                  final displayItems = _buildDayCourseDisplayItems(
-                    courses: courses,
-                    week: target.week,
-                    settings: settings,
-                    conflictMap: conflictMap,
-                    currentCourseIds: currentCourseIds,
-                  );
-                  final agendaItems = _buildDayAgendaItems(
-                    provider: provider,
-                    settings: settings,
-                    week: target.week,
-                    dayOfWeek: target.dayOfWeek,
-                    courseItems: displayItems,
-                  );
-                  final scheduleItems = agendaItems
-                      .where((item) => item.isScheduleItem)
-                      .map((item) => item.scheduleItem!)
-                      .toList(growable: false);
-                  final isActivePage =
-                      target.week == _selectedWeekForDayView &&
-                      target.dayOfWeek == _selectedDayOfWeek;
-                  return Column(
-                    key: ValueKey(
-                      'day-content-${target.week}-${target.dayOfWeek}',
-                    ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: _buildDayViewSummary(
-                          key: isActivePage
-                              ? const ValueKey('day-view-summary')
-                              : null,
+                        ? provider.getCourseInProgress(
+                            dayOfWeek: target.dayOfWeek,
+                            week: target.week,
+                          )
+                        : null;
+                    final currentCourseIds =
+                        _isSelectedDayToday(
                           provider: provider,
                           settings: settings,
                           week: target.week,
                           dayOfWeek: target.dayOfWeek,
-                          selectedDate: selectedDate,
-                          currentCourse: currentCourse,
-                          courseItems: displayItems,
-                          scheduleItems: scheduleItems,
-                          agendaItems: agendaItems,
-                        ),
+                        )
+                        ? provider
+                              .getCoursesInProgress(
+                                dayOfWeek: target.dayOfWeek,
+                                week: target.week,
+                              )
+                              .map((course) => course.id)
+                              .toSet()
+                        : const <String>{};
+                    final displayItems = _buildHomeDayDisplayItems(
+                      provider: provider,
+                      settings: settings,
+                      week: target.week,
+                      dayOfWeek: target.dayOfWeek,
+                      myCourses: courses,
+                      currentCourseIds: currentCourseIds,
+                    );
+                    final agendaItems = _buildDayAgendaItems(
+                      provider: provider,
+                      settings: settings,
+                      week: target.week,
+                      dayOfWeek: target.dayOfWeek,
+                      courseItems: displayItems,
+                    );
+                    final scheduleItems = agendaItems
+                        .where((item) => item.isScheduleItem)
+                        .map((item) => item.scheduleItem!)
+                        .toList(growable: false);
+                    final isActivePage =
+                        target.week == _selectedWeekForDayView &&
+                        target.dayOfWeek == _selectedDayOfWeek;
+                    return Column(
+                      key: ValueKey(
+                        'day-content-${target.week}-${target.dayOfWeek}',
                       ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: _buildExpandedDayColumnView(
-                          key: ValueKey(
-                            'day-column-${target.week}-${target.dayOfWeek}',
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: _buildDayViewSummary(
+                            key: isActivePage
+                                ? const ValueKey('day-view-summary')
+                                : null,
+                            provider: provider,
+                            settings: settings,
+                            week: target.week,
+                            dayOfWeek: target.dayOfWeek,
+                            selectedDate: selectedDate,
+                            currentCourse: currentCourse,
+                            courseItems: displayItems,
+                            scheduleItems: scheduleItems,
+                            agendaItems: agendaItems,
                           ),
-                          provider: provider,
-                          settings: settings,
-                          week: target.week,
-                          dayOfWeek: target.dayOfWeek,
                         ),
-                      ),
-                    ],
-                  );
-                },
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: _buildExpandedDayColumnView(
+                            key: ValueKey(
+                              'day-column-${target.week}-${target.dayOfWeek}',
+                            ),
+                            provider: provider,
+                            settings: settings,
+                            week: target.week,
+                            dayOfWeek: target.dayOfWeek,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1658,6 +1909,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   }) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final foruiTheme = context.theme;
     final colorScheme = theme.colorScheme;
     final isToday = _isSelectedDayToday(
       provider: provider,
@@ -1688,23 +1940,22 @@ class _TimetableScreenState extends State<TimetableScreen>
             localeName: localeName,
           )
         : _weekdayLabel(context, dayOfWeek);
-    final cardColor = theme.brightness == Brightness.dark
-        ? colorScheme.surface
-        : Colors.white;
     final countBadgeColor = hasAgenda
         ? colorScheme.primary.withValues(alpha: 0.10)
         : colorScheme.surfaceContainerHigh;
-    final targetDate = selectedDate ??
+    final targetDate =
+        selectedDate ??
         _resolveDisplayDateForWeekDay(
           provider: provider,
           settings: settings,
           week: week,
           dayOfWeek: dayOfWeek,
         );
-    final dayExams = provider.exams
-        .where((e) => !e.isExpired && _isSameDate(e.dateTime, targetDate))
-        .toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final dayExams =
+        provider.exams
+            .where((e) => !e.isExpired && _isSameDate(e.dateTime, targetDate))
+            .toList()
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
     final countBadgeTextColor = hasAgenda
         ? colorScheme.primary
         : colorScheme.onSurfaceVariant;
@@ -1721,250 +1972,225 @@ class _TimetableScreenState extends State<TimetableScreen>
     return DecoratedBox(
       key: key,
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(
-              alpha: theme.brightness == Brightness.dark ? 0.12 : 0.05,
-            ),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: foruiTheme.colors.background,
+        borderRadius: BorderRadius.circular(_dayViewCardRadius),
+        border: Border.all(color: foruiTheme.colors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-        child: Column(
+        padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       if (isToday)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            l10n.todayTimetableTitle,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        Text(
+                          l10n.todayTimetableTitle,
+                          style: foruiTheme.typography.body.sm.copyWith(
+                            color: foruiTheme.colors.mutedForeground,
+                            fontWeight: FontWeight.w500,
                           ),
                         )
                       else
-                        TextButton.icon(
-                          key: const ValueKey('back-to-today-button'),
-                          onPressed: () async {
-                            final now = DateTime.now();
-                            final visibleDays = _visibleDayNumbers(settings);
-                            final currentSemesterWeek =
-                                _resolveCurrentSemesterWeek(settings);
-                            if (!visibleDays.contains(now.weekday) ||
-                                currentSemesterWeek == null) {
-                              return;
-                            }
-                            await _animateDayViewToWeek(
-                              provider,
-                              settings,
-                              currentSemesterWeek,
-                              now.weekday,
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            backgroundColor: colorScheme.primary.withValues(
-                              alpha: 0.08,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                              side: BorderSide(
-                                color: colorScheme.primary.withValues(
-                                  alpha: 0.12,
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            key: const ValueKey('back-to-today-button'),
+                            onTap: () async {
+                              final now = DateTime.now();
+                              final visibleDays = _visibleDayNumbers(settings);
+                              final currentSemesterWeek =
+                                  _resolveCurrentSemesterWeek(settings);
+                              if (!visibleDays.contains(now.weekday) ||
+                                  currentSemesterWeek == null) {
+                                return;
+                              }
+                              await _animateDayViewToWeek(
+                                provider,
+                                settings,
+                                currentSemesterWeek,
+                                now.weekday,
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(999),
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                color: colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      backToTodayIcon,
+                                      size: 14,
+                                      color: colorScheme.onPrimaryContainer,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      l10n.backToTodayAction,
+                                      style: foruiTheme.typography.body.xs
+                                          .copyWith(
+                                            color:
+                                                colorScheme.onPrimaryContainer,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.1,
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
                           ),
-                          icon: Icon(
-                            backToTodayIcon,
-                            size: 14,
-                            color: colorScheme.primary,
-                          ),
-                          label: Text(
-                            l10n.backToTodayAction,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          '·',
+                          style: foruiTheme.typography.body.sm.copyWith(
+                            color: foruiTheme.colors.mutedForeground,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
+                      ),
                       Text(
                         l10n.weekLabel(week),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11.5,
+                        style: foruiTheme.typography.body.sm.copyWith(
+                          color: foruiTheme.colors.mutedForeground,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  key: const ValueKey('back-to-week-view-button'),
-                  onPressed: () => _closeDayView(settings),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  tooltip: l10n.backToWeekViewAction,
-                  style: IconButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.all(4),
-                    minimumSize: const Size(28, 28),
-                    foregroundColor: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              dateLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.1,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 5,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: countBadgeColor,
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: Text(
-                    hasAgenda
-                        ? (courseCount > 0
-                              ? l10n.courseCountSummary(courseCount)
-                              : l10n.scheduleCountSummary(scheduleCount))
-                        : l10n.courseCountSummary(0),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: countBadgeTextColor,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(height: 10),
+                  Text(
+                    dateLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: foruiTheme.typography.display.lg.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
+                      height: 1.15,
+                      color: foruiTheme.colors.foreground,
                     ),
                   ),
-                ),
-                if (scheduleCount > 0 && courseCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Text(
-                      l10n.scheduleCountSummary(scheduleCount),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: countBadgeColor,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Text(
+                          hasAgenda
+                              ? (courseCount > 0
+                                    ? l10n.courseCountSummary(courseCount)
+                                    : l10n.scheduleCountSummary(scheduleCount))
+                              : l10n.courseCountSummary(0),
+                          style: foruiTheme.typography.body.xs2.copyWith(
+                            color: countBadgeTextColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (scheduleCount > 0 && courseCount > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            l10n.scheduleCountSummary(scheduleCount),
+                            style: foruiTheme.typography.body.xs2.copyWith(
+                              color: foruiTheme.colors.mutedForeground,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if (firstAgenda != null)
+                        Text(
+                          '${l10n.classStartsAtLabel(firstAgenda.startTime)} · ${l10n.classEndsAtLabel(lastAgenda!.endTime)}',
+                          style: foruiTheme.typography.body.xs2.copyWith(
+                            color: foruiTheme.colors.mutedForeground,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
                   ),
-                if (firstAgenda != null) ...[
-                  Text(
-                    l10n.classStartsAtLabel(firstAgenda.startTime),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11.5,
+                  if (currentCourse != null ||
+                      conflictCount > 0 ||
+                      nonCurrentWeekCourseCount > 0 ||
+                      dayExams.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (currentCourse != null)
+                          _buildDayViewSummaryChip(
+                            icon: Icons.bolt_rounded,
+                            text:
+                                '${l10n.ongoingCourseBadge} · ${currentCourse.name}',
+                            accentColor: colorScheme.primary,
+                          ),
+                        if (conflictCount > 0)
+                          _buildDayViewSummaryChip(
+                            icon: Icons.warning_amber_rounded,
+                            text: l10n.conflictCountLabel(conflictCount),
+                            accentColor: colorScheme.error,
+                          ),
+                        if (nonCurrentWeekCourseCount > 0)
+                          _buildDayViewSummaryChip(
+                            icon: Icons.visibility_rounded,
+                            text:
+                                '${l10n.nonCurrentWeekLabel} ${l10n.courseCountSummary(nonCurrentWeekCourseCount)}',
+                          ),
+                        ...dayExams.map(
+                          (exam) => _buildDayViewSummaryChip(
+                            icon: Icons.school_outlined,
+                            text:
+                                '${exam.name} · ${exam.daysUntil == 0 ? l10n.examCountdownToday : l10n.examCountdownDays(exam.daysUntil)}',
+                            accentColor: colorScheme.error,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Text(
-                    '|',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.outline,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                  Text(
-                    l10n.classEndsAtLabel(lastAgenda!.endTime),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            if (currentCourse != null ||
-                conflictCount > 0 ||
-                nonCurrentWeekCourseCount > 0 ||
-                dayExams.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  if (currentCourse != null)
-                    _buildDayViewSummaryChip(
-                      icon: Icons.bolt_rounded,
-                      text:
-                          '${l10n.ongoingCourseBadge} · ${currentCourse.name}',
-                      accentColor: colorScheme.primary,
-                    ),
-                  if (conflictCount > 0)
-                    _buildDayViewSummaryChip(
-                      icon: Icons.warning_amber_rounded,
-                      text: l10n.conflictCountLabel(conflictCount),
-                      accentColor: colorScheme.error,
-                    ),
-                  if (nonCurrentWeekCourseCount > 0)
-                    _buildDayViewSummaryChip(
-                      icon: Icons.visibility_rounded,
-                      text:
-                          '${l10n.nonCurrentWeekLabel} ${l10n.courseCountSummary(nonCurrentWeekCourseCount)}',
-                    ),
-                  ...dayExams.map(
-                    (exam) => _buildDayViewSummaryChip(
-                      icon: Icons.school_outlined,
-                      text:
-                          '${exam.name} · ${exam.daysUntil == 0 ? l10n.examCountdownToday : l10n.examCountdownDays(exam.daysUntil)}',
-                      accentColor: colorScheme.error,
-                    ),
-                  ),
+                  ],
                 ],
               ),
-            ],
+            ),
+            IconButton(
+              key: const ValueKey('back-to-week-view-button'),
+              onPressed: () => _closeDayView(settings),
+              icon: const Icon(Icons.close_rounded, size: 18),
+              tooltip: l10n.backToWeekViewAction,
+              style: IconButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.all(6),
+                minimumSize: const Size(32, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: foruiTheme.colors.mutedForeground,
+              ),
+            ),
           ],
         ),
       ),
@@ -1976,11 +2202,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     required String text,
     Color? accentColor,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final resolvedAccent = accentColor ?? colorScheme.onSurfaceVariant;
+    final foruiTheme = context.theme;
+    final resolvedAccent = accentColor ?? foruiTheme.colors.mutedForeground;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: resolvedAccent.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
@@ -1988,15 +2213,15 @@ class _TimetableScreenState extends State<TimetableScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: resolvedAccent),
-          const SizedBox(width: 6),
+          Icon(icon, size: 15, color: resolvedAccent),
+          const SizedBox(width: 5),
           Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(
+            style: foruiTheme.typography.body.xs.copyWith(
               color: resolvedAccent,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -2009,9 +2234,6 @@ class _TimetableScreenState extends State<TimetableScreen>
     required int dayOfWeek,
     required String localeName,
   }) {
-    if (localeName.startsWith('zh')) {
-      return '${date.month}月${date.day}日 ${_weekdayLabel(context, dayOfWeek)}';
-    }
     final formattedDate = DateFormat.MMMd(localeName).format(date);
     return '$formattedDate ${_weekdayLabel(context, dayOfWeek)}';
   }
@@ -2074,11 +2296,12 @@ class _TimetableScreenState extends State<TimetableScreen>
               .map((course) => course.id)
               .toSet()
         : const <String>{};
-    final displayItems = _buildDayCourseDisplayItems(
-      courses: courses,
-      week: week,
+    final displayItems = _buildHomeDayDisplayItems(
+      provider: provider,
       settings: settings,
-      conflictMap: provider.courseConflictMapForWeek(week),
+      week: week,
+      dayOfWeek: dayOfWeek,
+      myCourses: courses,
       currentCourseIds: currentCourseIds,
     );
     final agendaItems = _buildDayAgendaItems(
@@ -2111,13 +2334,9 @@ class _TimetableScreenState extends State<TimetableScreen>
     required int week,
     required TimetableSettings settings,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: _buildDayViewEmptyState(week: week),
     );
   }
@@ -2128,7 +2347,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     required _DayAgendaItem item,
   }) {
     if (item.isExam) {
-      return _buildExamAgendaEntry(item.exam!, provider: context.read<TimetableProvider>());
+      return _buildExamAgendaEntry(
+        item.exam!,
+        provider: context.read<TimetableProvider>(),
+      );
     }
     if (item.isScheduleItem) {
       return _buildScheduleAgendaEntry(item);
@@ -2158,16 +2380,44 @@ class _TimetableScreenState extends State<TimetableScreen>
           textColor: Colors.white,
           backgroundColor: colorScheme.error,
         ),
+      if (courseItem.coupleKind == CoupleCourseKind.together)
+        _buildDayAgendaStatusBadge(
+          text: l10n.coupleTimetableLegendTogether,
+          textColor: Colors.white,
+          backgroundColor: _colorFromHex(
+            context.read<TimetableProvider>().coupleColorForKind(
+              CoupleCourseKind.together,
+            ),
+            Colors.purple,
+          ),
+        ),
+      if (courseItem.coupleKind == CoupleCourseKind.partner)
+        _buildDayAgendaStatusBadge(
+          text: l10n.coupleTimetableLegendPartner,
+          textColor: Colors.white,
+          backgroundColor: _colorFromHex(
+            context.read<TimetableProvider>().coupleColorForKind(
+              CoupleCourseKind.partner,
+            ),
+            Colors.pink,
+          ),
+        ),
       if (!courseItem.isCurrentWeekCourse)
         _buildDayAgendaStatusBadge(
           text: l10n.nonCurrentWeekLabel,
           textColor: onCardColor,
           backgroundColor: Colors.white.withValues(alpha: 0.14),
         ),
+      if (courseItem.course.isSuspendedInWeek(week))
+        _buildDayAgendaStatusBadge(
+          text: l10n.suspendedBadgeLabel,
+          textColor: Colors.white,
+          backgroundColor: Colors.red.shade700,
+        ),
     ];
     final cardDecoration = BoxDecoration(
       color: palette.baseColor,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(_dayViewCardRadius),
       border: courseItem.isConflicting
           ? Border.all(
               color: colorScheme.error.withValues(alpha: 0.30),
@@ -2200,8 +2450,44 @@ class _TimetableScreenState extends State<TimetableScreen>
         ? _resolveDayAgendaProgressInfo(courseItem.course, palette: palette)
         : null;
 
+    final isSuspended = courseItem.course.isSuspendedInWeek(week);
+    final effectiveOpacity = isSuspended ? 0.4 : courseItem.opacity;
+
+    if (courseItem.isPartnerCourse) {
+      void openCoursePreview() {
+        _showCourseActions(
+          courseItem.course,
+          week,
+          displayItem: courseItem,
+        );
+      }
+
+      final partnerCard = progressInfo != null
+          ? _buildCurrentDayAgendaCard(
+              item: courseItem,
+              progressInfo: progressInfo,
+              l10n: l10n,
+              colorScheme: colorScheme,
+              openContainer: openCoursePreview,
+            )
+          : _buildDefaultDayAgendaCard(
+              item: courseItem,
+              settings: settings,
+              l10n: l10n,
+              palette: palette,
+              statusBadges: statusBadges,
+              cardDecoration: cardDecoration,
+              openContainer: openCoursePreview,
+            );
+
+      return Opacity(
+        opacity: effectiveOpacity,
+        child: Material(color: Colors.transparent, child: partnerCard),
+      );
+    }
+
     return Opacity(
-      opacity: courseItem.opacity,
+      opacity: effectiveOpacity,
       child: OpenContainer<void>(
         key: ValueKey('day-view-edit-card-${courseItem.course.id}'),
         tappable: false,
@@ -2212,7 +2498,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         closedElevation: 0,
         openElevation: 0,
         closedShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(_dayViewCardRadius),
         ),
         openShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(28),
@@ -2220,7 +2506,9 @@ class _TimetableScreenState extends State<TimetableScreen>
         openBuilder: (context, _) => ClipRRect(
           borderRadius: BorderRadius.circular(28),
           child: AddCourseScreen(
-            courseGroup: context.read<TimetableProvider>().courseGroupForCourse(courseItem.course),
+            courseGroup: context.read<TimetableProvider>().courseGroupForCourse(
+              courseItem.course,
+            ),
             initialCourse: courseItem.course,
           ),
         ),
@@ -2493,7 +2781,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
-  Widget _buildExamAgendaEntry(Exam exam, {required TimetableProvider provider}) {
+  Widget _buildExamAgendaEntry(
+    Exam exam, {
+    required TimetableProvider provider,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -2540,10 +2831,11 @@ class _TimetableScreenState extends State<TimetableScreen>
                     colors: [
                       colorScheme.error,
                       Color.lerp(
-                        colorScheme.error,
-                        colorScheme.errorContainer,
-                        0.25,
-                      ) ?? colorScheme.error,
+                            colorScheme.error,
+                            colorScheme.errorContainer,
+                            0.25,
+                          ) ??
+                          colorScheme.error,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(20),
@@ -2688,7 +2980,7 @@ class _TimetableScreenState extends State<TimetableScreen>
       closedElevation: 0,
       openElevation: 0,
       closedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(_dayViewCardRadius),
       ),
       openShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
@@ -3147,6 +3439,26 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
+  BorderRadius _groupedDayColumnBorderRadius(
+    int dayIndex,
+    int dayCount, {
+    double radius = 12,
+  }) {
+    if (dayCount <= 1) {
+      return BorderRadius.circular(radius);
+    }
+    return BorderRadius.only(
+      topLeft: dayIndex == 0 ? Radius.circular(radius) : Radius.zero,
+      bottomLeft: dayIndex == 0 ? Radius.circular(radius) : Radius.zero,
+      topRight: dayIndex == dayCount - 1
+          ? Radius.circular(radius)
+          : Radius.zero,
+      bottomRight: dayIndex == dayCount - 1
+          ? Radius.circular(radius)
+          : Radius.zero,
+    );
+  }
+
   Widget _buildDayColumn(
     int week,
     int dayOfWeek,
@@ -3155,12 +3467,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     bool showConflictBadge,
     double sectionHeight,
     double cardInset,
-    TimetableProvider provider,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final columnBackground = colorScheme.surfaceContainerLowest.withValues(
-      alpha: 0.45,
-    );
+    TimetableProvider provider, {
+    required int dayIndex,
+    required int dayCount,
+  }) {
     final courseCards = <Widget>[];
     final gridLines = <Widget>[];
 
@@ -3213,6 +3523,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                 ),
                 isHighlighted: item.isCurrentCourse,
                 isHoliday: isDayHoliday,
+                isSuspended: item.course.isSuspendedInWeek(week),
                 isCompact: true,
                 showName: settings.courseCardShowName,
                 showTeacher: settings.courseCardShowTeacher,
@@ -3223,12 +3534,22 @@ class _TimetableScreenState extends State<TimetableScreen>
                 showDescription: settings.courseCardShowDescription,
                 verticalAlign: settings.courseCardVerticalAlign,
                 horizontalAlign: settings.courseCardHorizontalAlign,
-                onTap: () => _showCourseActions(item.course, week),
+                onTap: () => _showCourseActions(
+                  item.course,
+                  week,
+                  displayItem: item,
+                ),
                 compactTitleFontSize: settings.courseCardFontSize,
                 compactSubtitleFontSize: (settings.courseCardFontSize - 1)
                     .clamp(7.0, 14.0),
                 compactVerticalPadding: sectionHeight < 64 ? 4 : 6,
                 compactOuterInset: cardInset,
+                titleColorHex: Theme.of(context).brightness == Brightness.dark
+                    ? settings.courseCardTitleColorDark
+                    : settings.courseCardTitleColorLight,
+                detailColorHex: Theme.of(context).brightness == Brightness.dark
+                    ? settings.courseCardDetailColorDark
+                    : settings.courseCardDetailColorLight,
               ),
             ),
           ),
@@ -3239,8 +3560,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     return Container(
       height: settings.sectionCount * sectionHeight,
       decoration: BoxDecoration(
-        color: columnBackground,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: _groupedDayColumnBorderRadius(dayIndex, dayCount),
       ),
       child: Stack(
         clipBehavior: Clip.antiAlias,
@@ -3250,152 +3570,14 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   Future<void> _showWeekSelector() async {
-    final l10n = AppLocalizations.of(context)!;
     final provider = context.read<TimetableProvider>();
     final availableWeeks = provider.settings.availableWeeks;
     final currentSemesterWeek = _resolveCurrentSemesterWeek(provider.settings);
-    final selectedWeek = await showModalBottomSheet<int>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final mediaQuery = MediaQuery.of(sheetContext);
-        final maxSheetHeight =
-            (mediaQuery.size.height -
-                    mediaQuery.padding.top -
-                    mediaQuery.padding.bottom -
-                    40)
-                .clamp(260.0, 520.0);
-        final maxSheetBodyHeight = (maxSheetHeight - 88).clamp(200.0, 360.0);
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxSheetHeight),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.selectWeekTitle,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (currentSemesterWeek != null &&
-                          _visibleWeek != currentSemesterWeek)
-                        FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            shape: const StadiumBorder(),
-                            backgroundColor: colorScheme.primary.withValues(
-                              alpha: 0.12,
-                            ),
-                            foregroundColor: colorScheme.primary,
-                            minimumSize: const Size(0, 36),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            side: BorderSide(
-                              color: colorScheme.primary.withValues(
-                                alpha: 0.18,
-                              ),
-                            ),
-                          ),
-                          onPressed: () => Navigator.of(
-                            sheetContext,
-                          ).pop(currentSemesterWeek),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.my_location_rounded, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                l10n.backToCurrentWeekAction,
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.fade,
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.availableWeeksCount(availableWeeks.length),
-                    style: Theme.of(sheetContext).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  Flexible(
-                    child: SizedBox(
-                      height: maxSheetBodyHeight,
-                      child: GridView.builder(
-                        itemCount: availableWeeks.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 4,
-                              mainAxisSpacing: 10,
-                              crossAxisSpacing: 10,
-                              childAspectRatio: 2.1,
-                            ),
-                        itemBuilder: (gridContext, index) {
-                          final week = availableWeeks[index];
-                          final isCurrentSemesterWeek =
-                              week == currentSemesterWeek;
-                          final colorScheme = Theme.of(gridContext).colorScheme;
-                          return FilledButton.tonal(
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              backgroundColor: isCurrentSemesterWeek
-                                  ? colorScheme.primary.withValues(alpha: 0.12)
-                                  : colorScheme.surfaceContainerLowest,
-                              foregroundColor: isCurrentSemesterWeek
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface,
-                              side: isCurrentSemesterWeek
-                                  ? BorderSide(
-                                      color: colorScheme.primary.withValues(
-                                        alpha: 0.45,
-                                      ),
-                                    )
-                                  : BorderSide(
-                                      color: colorScheme.outlineVariant,
-                                    ),
-                            ),
-                            onPressed: () =>
-                                Navigator.of(sheetContext).pop(week),
-                            child: Text(
-                              l10n.goToWeekLabel(week),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: isCurrentSemesterWeek
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    final selectedWeek = await showWeekSelectorPickerSheet(
+      context,
+      availableWeeks: availableWeeks,
+      visibleWeek: _visibleWeek,
+      currentSemesterWeek: currentSemesterWeek,
     );
 
     if (!mounted || selectedWeek == null) {
@@ -3410,6 +3592,147 @@ class _TimetableScreenState extends State<TimetableScreen>
     int section,
   ) {
     return items.where((item) => item.course.startSection == section).toList();
+  }
+
+  List<_DayCourseDisplayItem> _buildHomeDayDisplayItems({
+    required TimetableProvider provider,
+    required TimetableSettings settings,
+    required int week,
+    required int dayOfWeek,
+    required List<Course> myCourses,
+    Set<String> currentCourseIds = const <String>{},
+  }) {
+    final conflictMap = provider.courseConflictMapForWeek(week);
+    if (!_isCoupleOverlayActive(provider)) {
+      return _buildDayCourseDisplayItems(
+        courses: myCourses,
+        week: week,
+        settings: settings,
+        conflictMap: conflictMap,
+        currentCourseIds: currentCourseIds,
+      );
+    }
+
+    final partnerWeek = provider.partnerWeekFor(week);
+    final partnerCourses = _getCoursesForDay(
+      provider.partnerCourses,
+      partnerWeek,
+      dayOfWeek,
+      settings,
+    );
+    return _buildCoupleDayCourseDisplayItems(
+      myCourses: myCourses,
+      partnerCourses: partnerCourses,
+      week: week,
+      partnerWeek: partnerWeek,
+      partnerWeekOffset: provider.partnerWeekOffset,
+      settings: settings,
+      conflictMap: conflictMap,
+      currentCourseIds: currentCourseIds,
+    );
+  }
+
+  List<_DayCourseDisplayItem> _buildCoupleDayCourseDisplayItems({
+    required List<Course> myCourses,
+    required List<Course> partnerCourses,
+    required int week,
+    required int partnerWeek,
+    required int partnerWeekOffset,
+    required TimetableSettings settings,
+    required Map<String, List<Course>> conflictMap,
+    Set<String> currentCourseIds = const <String>{},
+  }) {
+    final usedPartnerIds = <String>{};
+    final items = <_DayCourseDisplayItem>[];
+
+    for (final course in myCourses) {
+      final isCurrentWeekCourse = course.isInWeek(week);
+      if (!isCurrentWeekCourse &&
+          _hasCurrentWeekOverlap(myCourses, course, week)) {
+        continue;
+      }
+      if (!isCurrentWeekCourse &&
+          !_isPreferredNonCurrentCourse(myCourses, course, week)) {
+        continue;
+      }
+
+      var kind = CoupleCourseKind.mine;
+      for (final partner in partnerCourses) {
+        if (CoupleTimetableLogic.isTogetherClass(
+          course,
+          partner,
+          week: week,
+          partnerWeekOffset: partnerWeekOffset,
+        )) {
+          kind = CoupleCourseKind.together;
+          usedPartnerIds.add(partner.id);
+          break;
+        }
+      }
+
+      items.add(
+        _DayCourseDisplayItem(
+          course: course,
+          isCurrentWeekCourse: isCurrentWeekCourse,
+          isConflicting: conflictMap.containsKey(course.id),
+          isCurrentCourse: currentCourseIds.contains(course.id),
+          opacity: !isCurrentWeekCourse
+              ? 0.62
+              : (conflictMap.containsKey(course.id)
+                    ? settings.timetableConflictCourseOpacity
+                    : 1),
+          coupleKind: kind,
+        ),
+      );
+    }
+
+    for (final course in partnerCourses) {
+      if (usedPartnerIds.contains(course.id)) {
+        continue;
+      }
+      final isCurrentWeekCourse = course.isInWeek(partnerWeek);
+      if (!isCurrentWeekCourse &&
+          _hasCurrentWeekOverlap(partnerCourses, course, partnerWeek)) {
+        continue;
+      }
+      if (!isCurrentWeekCourse &&
+          !_isPreferredNonCurrentCourse(partnerCourses, course, partnerWeek)) {
+        continue;
+      }
+
+      items.add(
+        _DayCourseDisplayItem(
+          course: course,
+          isCurrentWeekCourse: isCurrentWeekCourse,
+          isConflicting: false,
+          isCurrentCourse: false,
+          opacity: isCurrentWeekCourse ? 1 : 0.62,
+          coupleKind: CoupleCourseKind.partner,
+          isPartnerCourse: true,
+        ),
+      );
+    }
+
+    return items..sort((left, right) {
+      final startCompare = left.course.startSection.compareTo(
+        right.course.startSection,
+      );
+      if (startCompare != 0) {
+        return startCompare;
+      }
+      final leftCurrent = left.isCurrentWeekCourse;
+      final rightCurrent = right.isCurrentWeekCourse;
+      if (leftCurrent != rightCurrent) {
+        return leftCurrent ? 1 : -1;
+      }
+      final endCompare = left.course.endSection.compareTo(
+        right.course.endSection,
+      );
+      if (endCompare != 0) {
+        return endCompare;
+      }
+      return left.course.id.compareTo(right.course.id);
+    });
   }
 
   List<_DayCourseDisplayItem> _buildDayCourseDisplayItems({
@@ -3470,6 +3793,11 @@ class _TimetableScreenState extends State<TimetableScreen>
     _DayCourseDisplayItem item, {
     required TimetableSettings settings,
   }) {
+    if (item.coupleKind != null) {
+      return context.read<TimetableProvider>().coupleColorForKind(
+        item.coupleKind!,
+      );
+    }
     if (!item.isCurrentWeekCourse) {
       return '#94A3B8';
     }
@@ -3483,6 +3811,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     bool showConflictBadge,
   ) {
     final l10n = AppLocalizations.of(context)!;
+    if (item.coupleKind == CoupleCourseKind.together) {
+      return l10n.coupleTimetableLegendTogether;
+    }
+    if (item.coupleKind == CoupleCourseKind.partner) {
+      return l10n.coupleTimetableLegendPartner;
+    }
     if (!item.isCurrentWeekCourse) {
       return l10n.nonCurrentWeekLabel;
     }
@@ -3498,6 +3832,9 @@ class _TimetableScreenState extends State<TimetableScreen>
   ) {
     final l10n = AppLocalizations.of(context)!;
     final labels = <String>[];
+    if (item.coupleKind == CoupleCourseKind.together) {
+      labels.add(l10n.coupleTimetableLegendTogether);
+    }
     if (item.isCurrentCourse) {
       labels.add(l10n.ongoingCourseBadge);
     }
@@ -3668,6 +4005,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final foruiColors = context.theme.colors;
     final buttonOpacity =
         provider.settings.timetableFloatingBackToCurrentWeekButtonOpacity;
     final borderRadius = BorderRadius.circular(18);
@@ -3678,49 +4016,60 @@ class _TimetableScreenState extends State<TimetableScreen>
         alignment: Alignment.bottomRight,
         child: Tooltip(
           message: l10n.backToCurrentWeekAction,
-          child: Material(
-            color: colorScheme.surfaceContainerHigh.withValues(
-              alpha: buttonOpacity,
-            ),
-            elevation: 3,
-            shadowColor: Colors.black.withValues(
-              alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: borderRadius,
-              side: BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.65),
-              ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: const ValueKey('back-to-current-week-button'),
-              onTap: () => _jumpToCurrentWeek(provider),
-              borderRadius: borderRadius,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.my_location_rounded,
-                      size: 15,
-                      color: colorScheme.primary,
+          child: Opacity(
+            opacity: buttonOpacity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: borderRadius,
+                border: Border.all(color: foruiColors.border, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      l10n.backToCurrentWeekAction,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurface,
-                        height: 1,
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: borderRadius,
+                child: HyperosFrostedSurface(
+                  borderRadius: borderRadius,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: const ValueKey('back-to-current-week-button'),
+                      onTap: () => _jumpToCurrentWeek(provider),
+                      borderRadius: borderRadius,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.my_location_rounded,
+                              size: 15,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.backToCurrentWeekAction,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: colorScheme.onSurface,
+                                height: 1,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -3739,12 +4088,10 @@ class _TimetableScreenState extends State<TimetableScreen>
   Future<void> _jumpToCurrentWeek(TimetableProvider provider) async {
     if (provider.settings.semesterStartDate == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!.pleaseSetSemesterStartDate,
-          ),
-        ),
+      showAppToast(
+        context,
+        message: AppLocalizations.of(context)!.pleaseSetSemesterStartDate,
+        kind: AppToastKind.warning,
       );
       return;
     }
@@ -3825,7 +4172,9 @@ class _TimetableScreenState extends State<TimetableScreen>
     final targetWeek = _clampWeek(week, maxWeek);
     final targetPage = targetWeek - 1;
     final shouldSyncDayView =
-        _isDayView && !_isDaySwipeAnimating && _selectedWeekForDayView != targetWeek;
+        _isDayView &&
+        !_isDaySwipeAnimating &&
+        _selectedWeekForDayView != targetWeek;
     final needsVisualSync =
         _visibleWeek != targetWeek ||
         shouldSyncDayView ||
@@ -3945,12 +4294,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     final group = provider.courseGroupForCourse(course);
     Navigator.push(
       context,
-      MaterialPageRoute(
+      HyperosPageRoute(
         settings: const RouteSettings(name: '/course/edit'),
-        builder: (context) => AddCourseScreen(
-          courseGroup: group,
-          initialCourse: course,
-        ),
+        builder: (context) =>
+            AddCourseScreen(courseGroup: group, initialCourse: course),
       ),
     );
   }
@@ -3976,143 +4323,248 @@ class _TimetableScreenState extends State<TimetableScreen>
     final initialDayOfWeek = _isDayView && _selectedDayOfWeek != null
         ? _selectedDayOfWeek!
         : DateTime.now().weekday;
-    await showModalBottomSheet<void>(
+    await showHomeHyperosSheet<void>(
       context: context,
-      showDragHandle: true,
-      useSafeArea: true,
       builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.addCourseSheetTitle,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+        final itemWidth =
+            ((MediaQuery.sizeOf(sheetContext).width - 32 - 24) / 3).clamp(
+              96.0,
+              120.0,
+            );
+
+        return HyperosSheet(
+          frosted: true,
+          title: l10n.addCourseSheetTitle,
+          description: l10n.addCourseSheetSubtitle,
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              SizedBox(
+                width: itemWidth,
+                child: _HomeActionPageButton(
+                  sheetRoute: ModalRoute.of(sheetContext),
+                  icon: Icons.view_week_rounded,
+                  title: l10n.addCourseTitle,
+                  pageBuilder: (_) => AddCourseScreen(
+                    initialWeek: _visibleWeek,
+                    initialDayOfWeek: initialDayOfWeek,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.addCourseSheetSubtitle,
-                  style: Theme.of(sheetContext).textTheme.bodySmall,
+              ),
+              SizedBox(
+                width: itemWidth,
+                child: _HomeActionPageButton(
+                  sheetRoute: ModalRoute.of(sheetContext),
+                  icon: Icons.event_note_rounded,
+                  title: l10n.addScheduleAction,
+                  pageBuilder: (_) => AddScheduleItemScreen(
+                    initialDate: _resolveAddScheduleInitialDate(provider),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _HomeActionPageButton(
-                      sheetRoute: ModalRoute.of(sheetContext),
-                      icon: Icons.looks_one_rounded,
-                      title: l10n.singleLessonLabel,
-                      pageBuilder: (_) => AddCourseScreen(
-                        mode: CourseEditorMode.singleLesson,
-                        initialWeek: _visibleWeek,
-                        initialDayOfWeek: initialDayOfWeek,
-                      ),
-                    ),
-                    _HomeActionPageButton(
-                      sheetRoute: ModalRoute.of(sheetContext),
-                      icon: Icons.view_week_rounded,
-                      title: l10n.recurringLessonLabel,
-                      pageBuilder: (_) => AddCourseScreen(
-                        mode: CourseEditorMode.recurring,
-                        initialWeek: _visibleWeek,
-                      ),
-                    ),
-                    _HomeActionPageButton(
-                      sheetRoute: ModalRoute.of(sheetContext),
-                      icon: Icons.event_note_rounded,
-                      title: l10n.addScheduleAction,
-                      pageBuilder: (_) => AddScheduleItemScreen(
-                        initialDate: _resolveAddScheduleInitialDate(provider),
-                      ),
-                    ),
-                    _HomeActionPageButton(
-                      sheetRoute: ModalRoute.of(sheetContext),
-                      icon: Icons.school_outlined,
-                      title: l10n.addExam,
-                      pageBuilder: (_) => const AddExamScreen(),
-                    ),
-                  ],
+              ),
+              SizedBox(
+                width: itemWidth,
+                child: _HomeActionPageButton(
+                  sheetRoute: ModalRoute.of(sheetContext),
+                  icon: Icons.school_outlined,
+                  title: l10n.addExam,
+                  pageBuilder: (_) => const AddExamScreen(),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  Future<void> _showCourseActions(Course course, int week) async {
-    final l10n = AppLocalizations.of(context)!;
-    final conflicts = _conflictsForCourseInWeek(course, week);
-    final previewCourses = <Course>[course, ...conflicts];
-    final selected = await showModalBottomSheet<_CourseActionSelection>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var index = 0; index < previewCourses.length; index++) ...[
-                  _buildCourseActionPreviewCard(
-                    sheetContext,
-                    previewCourses[index],
-                    badgeText: conflicts.isEmpty ? null : l10n.conflictLabel,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    previewCourses[index].isInWeek(week)
-                        ? l10n.courseDialogCurrentWeekHint(week)
-                        : l10n.courseDialogNotThisWeekHint(week),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildCourseActionButtons(
-                    sheetContext,
-                    previewCourses[index],
-                    week,
-                  ),
-                  if (index != previewCourses.length - 1) ...[
-                    const SizedBox(height: 20),
-                  ],
-                ],
-              ],
-            ),
+  Future<void> _showCourseActions(
+    Course course,
+    int week, {
+    _DayCourseDisplayItem? displayItem,
+  }) async {
+    final previewItems = _buildCourseActionPreviewItems(
+      course,
+      week,
+      displayItem: displayItem,
+    );
+    await showCourseActionSheet(
+      context,
+      previewItems: previewItems,
+      week: week,
+      onEdit: _editCourse,
+      onReschedule: (target) => _showRescheduleSheet(target, sourceWeek: week),
+      onDelete: (target) => _showDeleteCourseOptions(target, week),
+      onSuspend: (target) => _showSuspendSheet(target, week),
+    );
+  }
+
+  List<CourseActionPreviewItem> _buildCourseActionPreviewItems(
+    Course course,
+    int week, {
+    _DayCourseDisplayItem? displayItem,
+  }) {
+    final provider = context.read<TimetableProvider>();
+    final isPartner = displayItem?.isPartnerCourse ?? false;
+    final partnerWeekOffset = provider.partnerWeekOffset;
+    var coupleKind = displayItem?.coupleKind;
+    if (coupleKind == null &&
+        !isPartner &&
+        _isCoupleOverlayActive(provider) &&
+        _findTogetherPartnerCourse(
+          course,
+          week,
+          partnerWeekOffset: partnerWeekOffset,
+        ) !=
+            null) {
+      coupleKind = CoupleCourseKind.together;
+    }
+    if (coupleKind == null &&
+        isPartner &&
+        _isCoupleOverlayActive(provider) &&
+        provider.courses.any(
+          (mine) => CoupleTimetableLogic.isTogetherClass(
+            mine,
+            course,
+            week: week,
+            partnerWeekOffset: partnerWeekOffset,
+          ),
+        )) {
+      coupleKind = CoupleCourseKind.together;
+    }
+    if (coupleKind == null &&
+        isPartner &&
+        _isCoupleOverlayActive(provider)) {
+      coupleKind = CoupleCourseKind.partner;
+    }
+    final items = <CourseActionPreviewItem>[
+      CourseActionPreviewItem(
+        course: course,
+        isPartnerCourse: isPartner,
+        coupleKind: coupleKind,
+      ),
+    ];
+
+    if (!isPartner) {
+      for (final conflict in _conflictsForCourseInWeek(course, week)) {
+        if (items.any((item) => item.course.id == conflict.id)) {
+          continue;
+        }
+        items.add(
+          CourseActionPreviewItem(
+            course: conflict,
+            isConflict: true,
           ),
         );
-      },
-    );
-
-    if (!mounted || selected == null) {
-      return;
+      }
     }
 
-    switch (selected.action) {
-      case _CourseActionType.edit:
-        _editCourse(selected.course);
-        break;
-      case _CourseActionType.reschedule:
-        await _showRescheduleSheet(selected.course, sourceWeek: week);
-        break;
-      case _CourseActionType.delete:
-        await _showDeleteCourseOptions(selected.course, week);
-        break;
+    if (!_isCoupleOverlayActive(provider)) {
+      return items;
     }
+
+    if (coupleKind == CoupleCourseKind.together) {
+      final partner = _findTogetherPartnerCourse(
+        course,
+        week,
+        partnerWeekOffset: partnerWeekOffset,
+      );
+      if (partner != null &&
+          !items.any((item) => item.course.id == partner.id)) {
+        items.add(
+          CourseActionPreviewItem(
+            course: partner,
+            isPartnerCourse: true,
+            coupleKind: CoupleCourseKind.together,
+          ),
+        );
+      }
+      return items;
+    }
+
+    if (isPartner) {
+      for (final mine in provider.courses) {
+        if (CoupleTimetableLogic.isTogetherClass(
+              mine,
+              course,
+              week: week,
+              partnerWeekOffset: partnerWeekOffset,
+            ) &&
+            !items.any((item) => item.course.id == mine.id)) {
+          items.add(
+            CourseActionPreviewItem(
+              course: mine,
+              coupleKind: CoupleCourseKind.together,
+            ),
+          );
+          break;
+        }
+      }
+      return items;
+    }
+
+    for (final partner in _overlappingPartnerCourses(
+      course,
+      week,
+      partnerWeekOffset: partnerWeekOffset,
+    )) {
+      if (items.any((item) => item.course.id == partner.id)) {
+        continue;
+      }
+      items.add(
+        CourseActionPreviewItem(
+          course: partner,
+          isPartnerCourse: true,
+          coupleKind: CoupleCourseKind.partner,
+        ),
+      );
+    }
+    return items;
+  }
+
+  Course? _findTogetherPartnerCourse(
+    Course mine,
+    int week, {
+    required int partnerWeekOffset,
+  }) {
+    final provider = context.read<TimetableProvider>();
+    for (final partner in provider.partnerCourses) {
+      if (CoupleTimetableLogic.isTogetherClass(
+        mine,
+        partner,
+        week: week,
+        partnerWeekOffset: partnerWeekOffset,
+      )) {
+        return partner;
+      }
+    }
+    return null;
+  }
+
+  List<Course> _overlappingPartnerCourses(
+    Course mine,
+    int week, {
+    required int partnerWeekOffset,
+  }) {
+    final provider = context.read<TimetableProvider>();
+    return provider.partnerCourses
+        .where(
+          (partner) =>
+              CoupleTimetableLogic.coursesOverlapForCoupleView(
+                mine,
+                partner,
+                myWeek: week,
+                partnerWeekOffset: partnerWeekOffset,
+              ) &&
+              !CoupleTimetableLogic.isTogetherClass(
+                mine,
+                partner,
+                week: week,
+                partnerWeekOffset: partnerWeekOffset,
+              ),
+        )
+        .toList();
   }
 
   List<Course> _conflictsForCourseInWeek(Course course, int week) {
@@ -4141,230 +4593,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     return conflicts;
   }
 
-  Widget _buildCourseActionPreviewCard(
-    BuildContext context,
-    Course course, {
-    String? badgeText,
-  }) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final courseColor = _colorFromHex(course.color, colorScheme.primary);
-
-    return Container(
-      key: ValueKey('course-action-card-${course.id}'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: courseColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(Icons.menu_book_rounded, color: courseColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            course.name,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        if (badgeText != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colorScheme.errorContainer,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              badgeText,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onErrorContainer,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (course.shortName?.trim().isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          l10n.shortNamePrefix(course.shortName!.trim()),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            '${_weekdayLabel(context, course.dayOfWeek)} · 第${course.startSection}-${course.endSection}节 · ${course.startTime}-${course.endTime}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(course.weekDescription, style: theme.textTheme.bodySmall),
-          if (course.teacher.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              l10n.teacherPrefix(course.teacher.trim()),
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-          if (course.location.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              l10n.locationPrefix(course.location.trim()),
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCourseActionButtons(
-    BuildContext context,
-    Course course,
-    int week,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final canReschedule = course.isInWeek(week);
-
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _HomeActionButton(
-          key: ValueKey('course-action-edit-${course.id}'),
-          icon: Icons.edit_rounded,
-          title: l10n.editActionShort,
-          onTap: () => Navigator.of(context).pop(
-            _CourseActionSelection(
-              course: course,
-              action: _CourseActionType.edit,
-            ),
-          ),
-        ),
-        _HomeActionButton(
-          key: ValueKey('course-action-reschedule-${course.id}'),
-          icon: Icons.swap_horiz_rounded,
-          title: l10n.rescheduleAction,
-          enabled: canReschedule,
-          onTap: () => Navigator.of(context).pop(
-            _CourseActionSelection(
-              course: course,
-              action: _CourseActionType.reschedule,
-            ),
-          ),
-        ),
-        _HomeActionButton(
-          key: ValueKey('course-action-delete-${course.id}'),
-          icon: Icons.delete_outline_rounded,
-          title: l10n.deleteActionShort,
-          accentColor: theme.colorScheme.error,
-          onTap: () => Navigator.of(context).pop(
-            _CourseActionSelection(
-              course: course,
-              action: _CourseActionType.delete,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Future<void> _showDeleteCourseOptions(Course course, int week) async {
-    final l10n = AppLocalizations.of(context)!;
     final canDeleteOccurrence = course.isInWeek(week);
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.deleteModeTitle,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(l10n.deleteModeSubtitle, style: theme.textTheme.bodySmall),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _HomeActionButton(
-                      icon: Icons.delete_sweep_rounded,
-                      title: l10n.deleteCourseAction,
-                      accentColor: theme.colorScheme.error,
-                      onTap: () => Navigator.of(sheetContext).pop('course'),
-                    ),
-                    _HomeActionButton(
-                      icon: Icons.remove_circle_outline_rounded,
-                      title: l10n.deleteOccurrenceAction,
-                      accentColor: theme.colorScheme.error,
-                      enabled: canDeleteOccurrence,
-                      onTap: () => Navigator.of(sheetContext).pop('occurrence'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  canDeleteOccurrence
-                      ? l10n.deleteModeHintCurrentWeek(week)
-                      : l10n.deleteModeHintUnavailable(week),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final selected = await showCourseDeleteModeSheet(
+      context,
+      canDeleteOccurrence: canDeleteOccurrence,
+      week: week,
     );
 
     if (!mounted || selected == null) {
@@ -4372,46 +4606,57 @@ class _TimetableScreenState extends State<TimetableScreen>
     }
 
     switch (selected) {
-      case 'course':
+      case CourseDeleteMode.course:
         await _confirmDeleteCourse(course);
-        break;
-      case 'occurrence':
+      case CourseDeleteMode.occurrence:
         await _confirmDeleteOccurrence(course, week);
-        break;
+    }
+  }
+
+  Future<void> _showSuspendSheet(Course course, int week) async {
+    final provider = context.read<TimetableProvider>();
+    final isSuspended = course.isSuspendedInWeek(week);
+    final hasAnySuspended = course.suspendedWeeks?.isNotEmpty ?? false;
+
+    final selected = await showCourseSuspendModeSheet(
+      context,
+      isSuspendedThisWeek: isSuspended,
+      hasAnySuspended: hasAnySuspended,
+    );
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    switch (selected) {
+      case CourseSuspendMode.thisWeek:
+        await provider.toggleCourseSuspension(course.id, week);
+      case CourseSuspendMode.allWeeks:
+        if (hasAnySuspended) {
+          await provider.unsuspendAllWeeks(course.id);
+        } else {
+          await provider.suspendAllWeeks(course.id);
+        }
     }
   }
 
   Future<void> _confirmDeleteCourse(Course course) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(AppLocalizations.of(dialogContext)!.deleteScheduleTitle),
-        content: Text(
-          l10n.deleteScheduleConfirmMessage(
-            course.name,
-            l10n.courseWeekdaySectionSummary(
-              course.weekDescription,
-              _weekdayLabel(context, course.dayOfWeek),
-              course.startSection,
-              course.endSection,
-            ),
-          ),
+    final confirmed = await showDeleteCourseConfirmDialog(
+      context,
+      title: l10n.deleteScheduleTitle,
+      message: l10n.deleteScheduleConfirmMessage(
+        course.name,
+        l10n.courseWeekdaySectionSummary(
+          course.weekDescription(l10n),
+          _weekdayLabel(context, course.dayOfWeek),
+          course.startSection,
+          course.endSection,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(AppLocalizations.of(dialogContext)!.cancelAction),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(AppLocalizations.of(dialogContext)!.deleteAction),
-          ),
-        ],
       ),
     );
 
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
 
@@ -4419,48 +4664,32 @@ class _TimetableScreenState extends State<TimetableScreen>
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          AppLocalizations.of(context)!.deletedCourseMessage(course.name),
-        ),
-      ),
+    showAppToast(
+      context,
+      message: AppLocalizations.of(context)!.deletedCourseMessage(course.name),
+      kind: AppToastKind.success,
     );
   }
 
   Future<void> _confirmDeleteOccurrence(Course course, int sourceWeek) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(AppLocalizations.of(dialogContext)!.deleteLessonTitle),
-        content: Text(
-          l10n.deleteOccurrenceConfirmMessage(
-            course.name,
-            sourceWeek,
-            l10n.weekdaySectionTimeSummary(
-              _weekdayLabel(context, course.dayOfWeek),
-              course.startSection,
-              course.endSection,
-              course.startTime,
-              course.endTime,
-            ),
-          ),
+    final confirmed = await showDeleteOccurrenceConfirmDialog(
+      context,
+      title: l10n.deleteLessonTitle,
+      message: l10n.deleteOccurrenceConfirmMessage(
+        course.name,
+        sourceWeek,
+        l10n.weekdaySectionTimeSummary(
+          _weekdayLabel(context, course.dayOfWeek),
+          course.startSection,
+          course.endSection,
+          course.startTime,
+          course.endTime,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(AppLocalizations.of(dialogContext)!.cancelAction),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(AppLocalizations.of(dialogContext)!.deleteAction),
-          ),
-        ],
       ),
     );
 
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
 
@@ -4471,26 +4700,23 @@ class _TimetableScreenState extends State<TimetableScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            changed
-                ? l10n.occurrenceDeletedMessage(sourceWeek)
-                : l10n.noChangesDetected,
-          ),
-        ),
+      showAppToast(
+        context,
+        message: changed
+            ? l10n.occurrenceDeletedMessage(sourceWeek)
+            : l10n.noChangesDetected,
+        kind: changed ? AppToastKind.success : AppToastKind.info,
       );
     } on ArgumentError catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message?.toString() ??
-                AppLocalizations.of(context)!.deleteFailed,
-          ),
-        ),
+      showAppToast(
+        context,
+        message: error.message != null
+            ? localizeServiceMessage(l10n, error.message!)
+            : AppLocalizations.of(context)!.deleteFailed,
+        kind: AppToastKind.error,
       );
     }
   }
@@ -4503,18 +4729,17 @@ class _TimetableScreenState extends State<TimetableScreen>
     final provider = context.read<TimetableProvider>();
     final settings = provider.settings;
     final weekdayLabels = _weekdayLabels(context);
+    final scheme = provider.resolveCourseTimeScheme(course);
+    final sectionTimes = scheme?.sections ?? settings.sections;
 
-    final draft = await showModalBottomSheet<_CourseRescheduleDraft>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => _CourseRescheduleSheet(
-        course: course,
-        sourceWeek: sourceWeek,
-        settings: settings,
-        weekDays: weekdayLabels,
-      ),
+    final draft = await showCourseRescheduleSheet(
+      context,
+      course: course,
+      sourceWeek: sourceWeek,
+      settings: settings,
+      weekDays: weekdayLabels,
+      sectionTimes: sectionTimes,
+      locationSuggestions: provider.uniqueLocations,
     );
 
     if (draft == null) {
@@ -4534,31 +4759,28 @@ class _TimetableScreenState extends State<TimetableScreen>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            changed
-                ? l10n.rescheduledToMessage(
-                    draft.targetWeek,
-                    _weekdayLabel(context, draft.targetDayOfWeek),
-                    draft.targetStartSection,
-                    draft.targetEndSection,
-                  )
-                : l10n.noChangesDetected,
-          ),
-        ),
+      showAppToast(
+        context,
+        message: changed
+            ? l10n.rescheduledToMessage(
+                draft.targetWeek,
+                _weekdayLabel(context, draft.targetDayOfWeek),
+                draft.targetStartSection,
+                draft.targetEndSection,
+              )
+            : l10n.noChangesDetected,
+        kind: changed ? AppToastKind.success : AppToastKind.info,
       );
     } on ArgumentError catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message?.toString() ??
-                AppLocalizations.of(context)!.rescheduleFailed,
-          ),
-        ),
+      showAppToast(
+        context,
+        message: error.message != null
+            ? localizeServiceMessage(l10n, error.message!)
+            : AppLocalizations.of(context)!.rescheduleFailed,
+        kind: AppToastKind.error,
       );
     }
   }
@@ -4568,9 +4790,13 @@ class _TimetableScreenState extends State<TimetableScreen>
     SectionTime section,
     TimetableSettings settings,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final timeAxisColor = isDark
+        ? settings.timeAxisFontColorDark
+        : settings.timeAxisFontColorLight;
     final compactTextStyle = TextStyle(
       fontSize: (settings.compactFontSize - 2).clamp(6.0, 10.0),
-      color: Colors.grey.shade600,
+      color: _colorFromHex(timeAxisColor, Colors.grey.shade600),
       height: 1.05,
     );
 
@@ -4583,6 +4809,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           style: TextStyle(
             fontSize: settings.compactFontSize.clamp(8.0, 11.0),
             fontWeight: FontWeight.bold,
+            color: _colorFromHex(timeAxisColor, Colors.grey.shade800),
           ),
         ),
         if (settings.timetableSectionTimeDisplayMode !=
@@ -4601,12 +4828,11 @@ class _TimetableScreenState extends State<TimetableScreen>
         : const [1, 2, 3, 4, 5, 6, 7];
   }
 
-  double _resolveTimeColumnWidth(TimetableSettings settings, {bool isTablet = false}) {
-    final base = switch (settings.timetableTimeColumnWidthMode) {
+  double _resolveTimeColumnWidth(TimetableSettings settings) {
+    return switch (settings.timetableTimeColumnWidthMode) {
       TimetableTimeColumnWidthMode.narrow => 34,
       TimetableTimeColumnWidthMode.wide => 40,
     };
-    return isTablet ? (base + 8).toDouble() : base.toDouble();
   }
 
   double _resolveCourseCardInset(TimetableSettings settings) {
@@ -4621,145 +4847,16 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   Future<void> _showProfileQuickSwitchSheet() async {
-    final l10n = AppLocalizations.of(context)!;
     final provider = context.read<TimetableProvider>();
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        final sheetRoute = ModalRoute.of(sheetContext);
-        final theme = Theme.of(sheetContext);
-        final colorScheme = theme.colorScheme;
-        final activeProfile = provider.activeProfile;
-        final profiles = provider.profiles;
-
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            color: colorScheme.primary.withValues(alpha: 0.12),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Image.asset(
-                            'assets/branding/launcher_icon.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                Icons.view_week_rounded,
-                                color: colorScheme.primary,
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                l10n.switchTimetableTitle,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                activeProfile == null
-                                    ? l10n.switchTimetableSubtitleEmpty
-                                    : l10n.switchTimetableSubtitleCurrent(
-                                        activeProfile.name,
-                                      ),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (
-                          var index = 0;
-                          index < profiles.length;
-                          index++
-                        ) ...[
-                          _ProfileQuickSwitchTile(
-                            profile: profiles[index],
-                            isActive:
-                                profiles[index].id == provider.activeProfileId,
-                            onTap: () => Navigator.of(
-                              sheetContext,
-                            ).pop(profiles[index].id),
-                          ),
-                          if (index != profiles.length - 1)
-                            Divider(
-                              height: 1,
-                              indent: 16,
-                              endIndent: 16,
-                              color: colorScheme.outlineVariant,
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Builder(
-                      builder: (buttonContext) {
-                        return OutlinedButton.icon(
-                          onPressed: () => _openPopupActionPage(
-                            buttonContext,
-                            pageBuilder: (_) => const TimetableProfilesScreen(),
-                            sheetRoute: sheetRoute,
-                          ),
-                          icon: const Icon(Icons.view_week_rounded),
-                          label: Text(
-                            AppLocalizations.of(
-                              sheetContext,
-                            )!.timetableManagement,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+    final selected = await showProfileQuickSwitchSheet(
+      context,
+      profiles: provider.profiles,
+      activeProfileId: provider.activeProfileId,
+      onManageTimetables: (buttonContext) {
+        _openPopupActionPage(
+          buttonContext,
+          pageBuilder: (_) => const TimetableProfilesScreen(),
+          sheetRoute: ModalRoute.of(buttonContext),
         );
       },
     );
@@ -4778,94 +4875,57 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   Future<void> _showTopActionsSheet() async {
-    final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final actionTitles = [
-      l10n.homeMenuUpdateTitle,
-      l10n.homeMenuProfilesTitle,
-      l10n.homeMenuOverviewTitle,
-      l10n.homeMenuAddCourseTitle,
-      l10n.homeMenuImportTitle,
-      l10n.homeMenuSettingsTitle,
-    ];
-    final reserveTwoLineTitleSpace = actionTitles.any(
-      (title) => _homeActionNeedsTwoLines(context, title),
-    );
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _HomeActionPageButton(
-                  sheetRoute: ModalRoute.of(sheetContext),
-                  icon: Icons.system_update_alt_rounded,
-                  title: l10n.homeMenuUpdateTitle,
-                  badgeText: _hasAvailableUpdate ? l10n.updateLabel : null,
-                  accentColor: _hasAvailableUpdate ? colorScheme.primary : null,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  pageBuilder: (_) => const _TopMenuUpdatePage(),
-                ),
-                _HomeActionPageButton(
-                  sheetRoute: ModalRoute.of(sheetContext),
-                  icon: Icons.view_week_rounded,
-                  title: l10n.homeMenuProfilesTitle,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  pageBuilder: (_) => const TimetableProfilesScreen(),
-                ),
-                _HomeActionPageButton(
-                  sheetRoute: ModalRoute.of(sheetContext),
-                  icon: Icons.dashboard_customize_rounded,
-                  title: l10n.homeMenuOverviewTitle,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  pageBuilder: (_) => const CourseOverviewScreen(),
-                ),
-                _HomeActionButton(
-                  icon: Icons.add_circle_outline_rounded,
-                  title: l10n.homeMenuAddCourseTitle,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  onTap: () => Navigator.of(sheetContext).pop('add'),
-                ),
-                _HomeActionPageButton(
-                  sheetRoute: ModalRoute.of(sheetContext),
-                  icon: Icons.school_outlined,
-                  title: l10n.examListTitle,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  pageBuilder: (_) => const ExamListScreen(),
-                ),
-                _HomeActionPageButton(
-                  sheetRoute: ModalRoute.of(sheetContext),
-                  icon: Icons.file_upload_outlined,
-                  title: l10n.homeMenuImportTitle,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  pageBuilder: (_) => const CourseImportScreen(),
-                ),
-                _HomeActionPageButton(
-                  sheetRoute: ModalRoute.of(sheetContext),
-                  icon: Icons.tune_rounded,
-                  title: l10n.homeMenuSettingsTitle,
-                  reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-                  pageBuilder: (_) => const TimetableSettingsScreen(),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final selected = await showHomeTopMenuSheet(
+      context,
+      hasAvailableUpdate: _hasAvailableUpdate,
     );
 
     if (!mounted || selected == null) {
       return;
     }
-    if (selected == 'add') {
-      _navigateToAddCourse(context);
+
+    // Let the sheet route finish closing before pushing the next page.
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) {
+      return;
     }
+
+    switch (selected) {
+      case HomeTopMenuAction.update:
+        await _openTopMenuUpdatePage();
+      case HomeTopMenuAction.overview:
+        await _openTopMenuPage(const CourseOverviewScreen());
+      case HomeTopMenuAction.statistics:
+        await _openTopMenuPage(const CourseStatisticsScreen());
+      case HomeTopMenuAction.addCourse:
+        await _navigateToAddCourse(context);
+      case HomeTopMenuAction.exams:
+        await _openTopMenuPage(const ExamListScreen());
+      case HomeTopMenuAction.importCourses:
+        await _openTopMenuPage(const CourseImportScreen());
+      case HomeTopMenuAction.settings:
+        await _openTopMenuPage(const TimetableSettingsScreen());
+      case HomeTopMenuAction.support:
+        await _openTopMenuPage(const SupportCreatorScreen());
+    }
+  }
+
+  Future<void> _openTopMenuPage(Widget page) {
+    return Navigator.of(
+      context,
+    ).push<void>(HyperosPageRoute<void>(builder: (_) => page));
+  }
+
+  Future<void> _openTopMenuUpdatePage() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      HyperosPageRoute<void>(
+        builder: (_) => AboutUpdateScreen(packageInfo: packageInfo),
+      ),
+    );
   }
 
   void _scheduleUpdateCheckIfNeeded(TimetableProvider provider) {
@@ -4933,64 +4993,6 @@ class _TimetableScreenState extends State<TimetableScreen>
     } finally {
       _isCheckingForUpdate = false;
     }
-  }
-
-  bool _homeActionNeedsTwoLines(BuildContext context, String title) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.bodySmall?.copyWith(
-      fontWeight: FontWeight.w700,
-      height: 1.25,
-    );
-    final width = ((MediaQuery.of(context).size.width - 32 - 36) / 4).clamp(
-      72.0,
-      112.0,
-    );
-    final textPainter = TextPainter(
-      text: TextSpan(text: title, style: style),
-      maxLines: 2,
-      textDirection: Directionality.of(context),
-    )..layout(maxWidth: width - 16);
-    return textPainter.computeLineMetrics().length > 1;
-  }
-}
-
-enum _CourseActionType { edit, reschedule, delete }
-
-class _CourseActionSelection {
-  const _CourseActionSelection({required this.course, required this.action});
-
-  final Course course;
-  final _CourseActionType action;
-}
-
-class _HomeActionButton extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final Color? accentColor;
-  final bool enabled;
-  final bool reserveTwoLineTitleSpace;
-
-  const _HomeActionButton({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.accentColor,
-    this.enabled = true,
-    this.reserveTwoLineTitleSpace = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _HomeActionButtonBody(
-      icon: icon,
-      title: title,
-      accentColor: accentColor,
-      enabled: enabled,
-      reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
-      onTap: onTap,
-    );
   }
 }
 
@@ -5095,18 +5097,12 @@ class _HomeActionPageButton extends StatelessWidget {
   final String title;
   final WidgetBuilder pageBuilder;
   final Route<dynamic>? sheetRoute;
-  final String? badgeText;
-  final Color? accentColor;
-  final bool reserveTwoLineTitleSpace;
 
   const _HomeActionPageButton({
     required this.icon,
     required this.title,
     required this.pageBuilder,
     required this.sheetRoute,
-    this.badgeText,
-    this.accentColor,
-    this.reserveTwoLineTitleSpace = false,
   });
 
   @override
@@ -5116,10 +5112,7 @@ class _HomeActionPageButton extends StatelessWidget {
         return _HomeActionButtonBody(
           icon: icon,
           title: title,
-          badgeText: badgeText,
-          accentColor: accentColor,
           enabled: true,
-          reserveTwoLineTitleSpace: reserveTwoLineTitleSpace,
           onTap: () => _openPopupActionPage(
             buttonContext,
             pageBuilder: pageBuilder,
@@ -5135,39 +5128,30 @@ class _HomeActionButtonBody extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
-  final String? badgeText;
-  final Color? accentColor;
   final bool enabled;
-  final bool reserveTwoLineTitleSpace;
 
   const _HomeActionButtonBody({
     required this.icon,
     required this.title,
     required this.onTap,
-    this.badgeText,
-    this.accentColor,
     this.enabled = true,
-    this.reserveTwoLineTitleSpace = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final colors = context.theme.colors;
     final highlightColor = enabled
-        ? accentColor ?? colorScheme.primary
+        ? colorScheme.primary
         : colorScheme.onSurfaceVariant;
-    final width = ((MediaQuery.of(context).size.width - 32 - 36) / 4).clamp(
-      72.0,
-      112.0,
-    );
-    return SizedBox(
-      width: width,
+
+    return HyperosFrostedSurface(
+      borderRadius: HyperosTheme.cardBorderRadius,
       child: Material(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(22),
+        type: MaterialType.transparency,
         child: InkWell(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: HyperosTheme.cardBorderRadius,
           overlayColor: const WidgetStatePropertyAll(Colors.transparent),
           splashFactory: NoSplash.splashFactory,
           onTap: enabled ? onTap : null,
@@ -5176,73 +5160,30 @@ class _HomeActionButtonBody extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: highlightColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(icon, color: highlightColor),
-                    ),
-                    if ((badgeText ?? '').isNotEmpty)
-                      Positioned(
-                        right: -8,
-                        top: -6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: highlightColor,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            badgeText!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                HyperosFrostedSurface(
+                  borderRadius: const BorderRadius.all(Radius.circular(16)),
+                  blurEnabled: false,
+                  tint: HyperosBlurredHeader.accentSurfaceTintColor(
+                    highlightColor,
+                  ),
+                  child: SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Center(child: Icon(icon, color: highlightColor)),
+                  ),
                 ),
                 const SizedBox(height: 10),
-                if (reserveTwoLineTitleSpace)
-                  SizedBox(
-                    height: 34,
-                    child: Center(
-                      child: Text(
-                        title,
-                        maxLines: 2,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                          color: enabled ? null : colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  Text(
-                    title,
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      height: 1.25,
-                      color: enabled ? null : colorScheme.onSurfaceVariant,
-                    ),
+                Text(
+                  title,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                    color: enabled ? null : colors.mutedForeground,
                   ),
+                ),
               ],
             ),
           ),
@@ -5250,146 +5191,6 @@ class _HomeActionButtonBody extends StatelessWidget {
       ),
     );
   }
-}
-
-class _TopMenuUpdatePage extends StatefulWidget {
-  const _TopMenuUpdatePage();
-
-  @override
-  State<_TopMenuUpdatePage> createState() => _TopMenuUpdatePageState();
-}
-
-class _TopMenuUpdatePageState extends State<_TopMenuUpdatePage> {
-  late final Future<PackageInfo> _packageInfoFuture =
-      PackageInfo.fromPlatform();
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<PackageInfo>(
-      future: _packageInfoFuture,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        return AboutUpdateScreen(packageInfo: snapshot.data);
-      },
-    );
-  }
-}
-
-class _ProfileQuickSwitchTile extends StatelessWidget {
-  final TimetableProfile profile;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _ProfileQuickSwitchTile({
-    required this.profile,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final accentColor = isActive
-        ? colorScheme.primary
-        : colorScheme.onSurfaceVariant;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: isActive ? 0.14 : 0.10),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  isActive ? Icons.check_circle_rounded : Icons.layers_rounded,
-                  color: accentColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      profile.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.courseCountSummary(profile.courses.length),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isActive)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    l10n.currentBadge,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              else
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CourseRescheduleDraft {
-  final int targetWeek;
-  final int targetDayOfWeek;
-  final int targetStartSection;
-  final int targetEndSection;
-  final String targetLocation;
-
-  const _CourseRescheduleDraft({
-    required this.targetWeek,
-    required this.targetDayOfWeek,
-    required this.targetStartSection,
-    required this.targetEndSection,
-    required this.targetLocation,
-  });
 }
 
 class _DayViewPageTarget {
@@ -5410,6 +5211,8 @@ class _DayCourseDisplayItem {
   final bool isConflicting;
   final bool isCurrentCourse;
   final double opacity;
+  final CoupleCourseKind? coupleKind;
+  final bool isPartnerCourse;
 
   const _DayCourseDisplayItem({
     required this.course,
@@ -5417,6 +5220,8 @@ class _DayCourseDisplayItem {
     required this.isConflicting,
     required this.isCurrentCourse,
     required this.opacity,
+    this.coupleKind,
+    this.isPartnerCourse = false,
   });
 }
 
@@ -5473,8 +5278,8 @@ class _DayAgendaItem {
 
   bool get isScheduleItem => scheduleItem != null;
   bool get isExam => exam != null;
-  String get id => exam?.id ??
-      (isScheduleItem ? scheduleItem!.id : courseItem!.course.id);
+  String get id =>
+      exam?.id ?? (isScheduleItem ? scheduleItem!.id : courseItem!.course.id);
 }
 
 class _DayAgendaProgressInfo {
@@ -5507,232 +5312,4 @@ class _DayAgendaPalette {
     required this.fillColor,
     required this.foregroundColor,
   });
-}
-
-class _CourseRescheduleSheet extends StatefulWidget {
-  final Course course;
-  final int sourceWeek;
-  final TimetableSettings settings;
-  final List<String> weekDays;
-
-  const _CourseRescheduleSheet({
-    required this.course,
-    required this.sourceWeek,
-    required this.settings,
-    required this.weekDays,
-  });
-
-  @override
-  State<_CourseRescheduleSheet> createState() => _CourseRescheduleSheetState();
-}
-
-class _CourseRescheduleSheetState extends State<_CourseRescheduleSheet> {
-  late int _targetWeek;
-  late int _targetDayOfWeek;
-  late int _targetStartSection;
-  late int _targetEndSection;
-  late final TextEditingController _locationController;
-
-  @override
-  void initState() {
-    super.initState();
-    _targetWeek = widget.sourceWeek;
-    _targetDayOfWeek = widget.course.dayOfWeek;
-    _targetStartSection = widget.course.startSection;
-    _targetEndSection = widget.course.endSection;
-    _locationController = TextEditingController(text: widget.course.location);
-  }
-
-  @override
-  void dispose() {
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final sectionNumbers = List.generate(
-      widget.settings.sectionCount,
-      (index) => index + 1,
-    );
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + bottomInset),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.rescheduleCurrentOccurrenceTitle,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.rescheduleCurrentOccurrenceSubtitle(widget.sourceWeek),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<int>(
-              initialValue: _targetWeek,
-              decoration: InputDecoration(
-                labelText: l10n.rescheduleTargetWeekLabel,
-                border: const OutlineInputBorder(),
-                prefixIcon: Icon(Icons.calendar_month_rounded),
-              ),
-              items: widget.settings.availableWeeks
-                  .map(
-                    (week) => DropdownMenuItem(
-                      value: week,
-                      child: Text(
-                        AppLocalizations.of(context)!.weekLabel(week),
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _targetWeek = value;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<int>(
-              initialValue: _targetDayOfWeek,
-              decoration: InputDecoration(
-                labelText: l10n.weekdayFieldLabel,
-                border: const OutlineInputBorder(),
-                prefixIcon: Icon(Icons.event_available_rounded),
-              ),
-              items: List.generate(
-                widget.weekDays.length,
-                (index) => DropdownMenuItem(
-                  value: index + 1,
-                  child: Text(widget.weekDays[index]),
-                ),
-              ),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _targetDayOfWeek = value;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _targetStartSection,
-                    decoration: InputDecoration(
-                      labelText: l10n.startSectionFieldLabel,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: sectionNumbers
-                        .map(
-                          (section) => DropdownMenuItem(
-                            value: section,
-                            child: Text(
-                              AppLocalizations.of(
-                                context,
-                              )!.sectionLabel(section),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _targetStartSection = value;
-                        if (_targetEndSection < _targetStartSection) {
-                          _targetEndSection = _targetStartSection;
-                        }
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _targetEndSection,
-                    decoration: InputDecoration(
-                      labelText: l10n.endSectionFieldLabel,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: sectionNumbers
-                        .where((section) => section >= _targetStartSection)
-                        .map(
-                          (section) => DropdownMenuItem(
-                            value: section,
-                            child: Text(
-                              AppLocalizations.of(
-                                context,
-                              )!.sectionLabel(section),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _targetEndSection = value;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _locationController,
-              decoration: InputDecoration(
-                labelText: l10n.courseLocationFieldLabel,
-                border: const OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_on_outlined),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(l10n.cancelAction),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).pop(
-                        _CourseRescheduleDraft(
-                          targetWeek: _targetWeek,
-                          targetDayOfWeek: _targetDayOfWeek,
-                          targetStartSection: _targetStartSection,
-                          targetEndSection: _targetEndSection,
-                          targetLocation: _locationController.text,
-                        ),
-                      );
-                    },
-                    child: Text(l10n.confirmRescheduleAction),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

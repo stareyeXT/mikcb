@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:university_timetable/ui/hyperos/hyperos.dart';
 
+import '../models/timetable_profile.dart';
 import '../providers/timetable_provider.dart';
-import '../utils/responsive.dart';
+import '../utils/app_toast.dart';
+import '../widgets/app_dialogs.dart';
 
 class TimetableProfilesScreen extends StatelessWidget {
   const TimetableProfilesScreen({super.key});
@@ -16,238 +20,77 @@ class TimetableProfilesScreen extends StatelessWidget {
         final profiles = provider.profiles;
         final activeProfileId = provider.activeProfileId;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(l10n.timetableProfilesTitle),
-            actions: [
-              IconButton(
-                tooltip: l10n.createTimetableTooltip,
-                onPressed: () => _createBlankProfile(context),
-                icon: const Icon(Icons.add_rounded),
+        return HyperosSubpage(
+          onBack: () => Navigator.pop(context),
+          title: Text(l10n.timetableProfilesTitle),
+          suffixes: [
+            FHeaderAction(
+              icon: const Icon(Icons.add_rounded),
+              semanticsLabel: l10n.createTimetableTooltip,
+              onPress: () => _createBlankProfile(context),
+            ),
+          ],
+          child: HyperosListView(
+            children: [
+              HyperosListGroup(
+                children: [
+                  for (var index = 0; index < profiles.length; index++)
+                    _TimetableProfileTile(
+                      index: index,
+                      profile: profiles[index],
+                      isActive: profiles[index].id == activeProfileId,
+                      canDelete:
+                          profiles.length > 1 &&
+                          !profiles[index].isPartnerImported,
+                      isPartnerImported: profiles[index].isPartnerImported,
+                      onSwitch: profiles[index].isPartnerImported
+                          ? () {}
+                          : () => _switchProfile(
+                              context,
+                              profiles[index].id,
+                              profiles[index].name,
+                            ),
+                      onRename: profiles[index].isPartnerImported
+                          ? () {}
+                          : () => _renameProfile(
+                              context,
+                              profiles[index].id,
+                              profiles[index].name,
+                            ),
+                      onDuplicate: profiles[index].isPartnerImported
+                          ? () {}
+                          : () async {
+                              await provider.switchProfile(profiles[index].id);
+                              await provider.duplicateActiveProfile();
+                              if (context.mounted) {
+                                showAppToast(
+                                  context,
+                                  message: l10n.copiedCurrentTimetable,
+                                  kind: AppToastKind.success,
+                                );
+                              }
+                            },
+                      onClear:
+                          profiles[index].id == activeProfileId &&
+                              !profiles[index].isPartnerImported
+                          ? () => _clearActiveProfileCourses(
+                              context,
+                              profiles[index].name,
+                            )
+                          : null,
+                      onDelete:
+                          profiles.length > 1 &&
+                              !profiles[index].isPartnerImported
+                          ? () => _deleteProfile(
+                              context,
+                              profiles[index].id,
+                              profiles[index].name,
+                            )
+                          : null,
+                    ),
+                ],
               ),
             ],
-          ),
-          body: ListView.separated(
-            padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
-            itemCount: profiles.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final profile = profiles[index];
-              final isActive = profile.id == activeProfileId;
-              final theme = Theme.of(context);
-              final colorScheme = theme.colorScheme;
-              return Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: isActive
-                      ? null
-                      : () => _switchProfile(
-                            context,
-                            profile.id,
-                            profile.name,
-                          ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: (isActive
-                                        ? colorScheme.primary
-                                        : colorScheme.secondaryContainer)
-                                    .withValues(alpha: 0.14),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                '${index + 1}',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: isActive
-                                      ? colorScheme.primary
-                                      : colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    profile.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style:
-                                        theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    l10n.coursesAndWeekSummary(
-                                      profile.courses.length,
-                                      profile.currentWeek,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            PopupMenuButton<String>(
-                              tooltip: l10n.moreActionsTooltip,
-                              onSelected: (value) async {
-                                switch (value) {
-                                  case 'switch':
-                                    await _switchProfile(
-                                      context,
-                                      profile.id,
-                                      profile.name,
-                                    );
-                                    break;
-                                  case 'rename':
-                                    await _renameProfile(
-                                      context,
-                                      profile.id,
-                                      profile.name,
-                                    );
-                                    break;
-                                  case 'duplicate':
-                                    await provider.switchProfile(profile.id);
-                                    await provider.duplicateActiveProfile();
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            l10n.copiedCurrentTimetable,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    break;
-                                  case 'clear':
-                                    await _clearActiveProfileCourses(
-                                      context,
-                                      profile.name,
-                                    );
-                                    break;
-                                  case 'delete':
-                                    await _deleteProfile(
-                                      context,
-                                      profile.id,
-                                      profile.name,
-                                    );
-                                    break;
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                if (!isActive)
-                                  PopupMenuItem(
-                                    value: 'switch',
-                                    child: Text(l10n.switchToThisTimetable),
-                                  ),
-                                PopupMenuItem(
-                                  value: 'rename',
-                                  child: Text(l10n.renameAction),
-                                ),
-                                PopupMenuItem(
-                                  value: 'duplicate',
-                                  child: Text(l10n.duplicateAction),
-                                ),
-                                if (isActive || profiles.length > 1)
-                                  const PopupMenuDivider(),
-                                if (isActive)
-                                  PopupMenuItem(
-                                    value: 'clear',
-                                    enabled: profile.courses.isNotEmpty,
-                                    child: Text(
-                                      l10n.clearCoursesAction,
-                                      style: TextStyle(
-                                        color: colorScheme.error,
-                                      ),
-                                    ),
-                                  ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  enabled: profiles.length > 1,
-                                  child: Text(
-                                    l10n.deleteAction,
-                                    style: TextStyle(
-                                      color: profiles.length > 1
-                                          ? colorScheme.error
-                                          : colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: FilledButton.tonal(
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                onPressed: isActive
-                                    ? null
-                                    : () => _switchProfile(
-                                          context,
-                                          profile.id,
-                                          profile.name,
-                                        ),
-                                child: Text(
-                                  isActive
-                                      ? l10n.usingNow
-                                      : l10n.switchToThisTimetable,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(0, 36),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _renameProfile(
-                                context,
-                                profile.id,
-                                profile.name,
-                              ),
-                              icon: const Icon(Icons.edit_outlined),
-                              label: Text(l10n.renameAction),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
           ),
         );
       },
@@ -263,40 +106,26 @@ class TimetableProfilesScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(
-              AppLocalizations.of(context)!.switchedToProfile(profileName))),
+    showAppToast(
+      context,
+      message: AppLocalizations.of(context)!.switchedToProfile(profileName),
+      kind: AppToastKind.success,
     );
   }
 
   Future<void> _createBlankProfile(BuildContext context) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(AppLocalizations.of(context)!.createTimetableTitle),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: AppLocalizations.of(context)!.timetableNameLabel,
-              hintText: AppLocalizations.of(context)!.timetableNameHint,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(AppLocalizations.of(context)!.cancelAction),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: Text(AppLocalizations.of(context)!.createAction),
-            ),
-          ],
-        );
-      },
+    final l10n = AppLocalizations.of(context)!;
+    final name = await showAppTextInputDialog(
+      context,
+      title: l10n.createTimetableTitle,
+      confirmLabel: l10n.createAction,
+      bodyBuilder: (controller) => HyperosTextField(
+        controller: controller,
+        label: l10n.timetableNameLabel,
+        hint: l10n.timetableNameHint,
+        autofocus: true,
+      ),
+      validate: (value) => value.isNotEmpty,
     );
 
     if (!context.mounted || name == null || name.isEmpty) {
@@ -307,9 +136,10 @@ class TimetableProfilesScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(AppLocalizations.of(context)!.createdProfile(name))),
+    showAppToast(
+      context,
+      message: l10n.createdProfile(name),
+      kind: AppToastKind.success,
     );
   }
 
@@ -318,31 +148,17 @@ class TimetableProfilesScreen extends StatelessWidget {
     String profileId,
     String currentName,
   ) async {
-    final controller = TextEditingController(text: currentName);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(AppLocalizations.of(context)!.renameTimetableTitle),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: AppLocalizations.of(context)!.timetableNameLabel,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(AppLocalizations.of(context)!.cancelAction),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: Text(AppLocalizations.of(context)!.saveAction),
-            ),
-          ],
-        );
-      },
+    final l10n = AppLocalizations.of(context)!;
+    final name = await showAppTextInputDialog(
+      context,
+      title: l10n.renameTimetableTitle,
+      initialValue: currentName,
+      bodyBuilder: (controller) => HyperosTextField(
+        controller: controller,
+        label: l10n.timetableNameLabel,
+        autofocus: true,
+      ),
+      validate: (value) => value.isNotEmpty,
     );
 
     if (!context.mounted ||
@@ -356,9 +172,10 @@ class TimetableProfilesScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(AppLocalizations.of(context)!.renamedProfile(name))),
+    showAppToast(
+      context,
+      message: l10n.renamedProfile(name),
+      kind: AppToastKind.success,
     );
   }
 
@@ -366,46 +183,31 @@ class TimetableProfilesScreen extends StatelessWidget {
     BuildContext context,
     String profileName,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showHyperosConfirmDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(AppLocalizations.of(context)!.clearCurrentTimetableTitle),
-          content: Text(
-            AppLocalizations.of(context)!
-                .clearCurrentTimetableMessage(profileName),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(AppLocalizations.of(context)!.cancelAction),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(AppLocalizations.of(context)!.clearAction),
-            ),
-          ],
-        );
-      },
+      title: l10n.clearCurrentTimetableTitle,
+      message: l10n.clearCurrentTimetableMessage(profileName),
+      cancelLabel: l10n.cancelAction,
+      confirmLabel: l10n.clearAction,
     );
 
     if (!context.mounted || confirmed != true) {
       return;
     }
 
-    final cleared =
-        await context.read<TimetableProvider>().clearActiveProfileCourses();
+    final cleared = await context
+        .read<TimetableProvider>()
+        .clearActiveProfileCourses();
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          cleared
-              ? AppLocalizations.of(context)!.clearedProfile(profileName)
-              : AppLocalizations.of(context)!.noCoursesInCurrentProfile,
-        ),
-      ),
+    showAppToast(
+      context,
+      message: cleared
+          ? l10n.clearedProfile(profileName)
+          : l10n.noCoursesInCurrentProfile,
+      kind: cleared ? AppToastKind.success : AppToastKind.info,
     );
   }
 
@@ -414,45 +216,190 @@ class TimetableProfilesScreen extends StatelessWidget {
     String profileId,
     String name,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showHyperosConfirmDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(AppLocalizations.of(context)!.deleteTimetableTitle),
-          content:
-              Text(AppLocalizations.of(context)!.deleteTimetableMessage(name)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(AppLocalizations.of(context)!.cancelAction),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(AppLocalizations.of(context)!.deleteAction),
-            ),
-          ],
-        );
-      },
+      title: l10n.deleteTimetableTitle,
+      message: l10n.deleteTimetableMessage(name),
+      cancelLabel: l10n.cancelAction,
+      confirmLabel: l10n.deleteAction,
+      destructive: true,
     );
 
     if (!context.mounted || confirmed != true) {
       return;
     }
 
-    final success =
-        await context.read<TimetableProvider>().deleteProfile(profileId);
+    final success = await context.read<TimetableProvider>().deleteProfile(
+      profileId,
+    );
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? AppLocalizations.of(context)!.deletedProfile(name)
-              : AppLocalizations.of(context)!.keepAtLeastOneProfile,
-        ),
-      ),
+    showAppToast(
+      context,
+      message: success ? l10n.deletedProfile(name) : l10n.keepAtLeastOneProfile,
+      kind: success ? AppToastKind.success : AppToastKind.warning,
     );
   }
 }
 
+class _TimetableProfileTile extends StatelessWidget {
+  const _TimetableProfileTile({
+    required this.index,
+    required this.profile,
+    required this.isActive,
+    required this.canDelete,
+    this.isPartnerImported = false,
+    required this.onSwitch,
+    required this.onRename,
+    required this.onDuplicate,
+    this.onClear,
+    this.onDelete,
+  });
+
+  final int index;
+  final TimetableProfile profile;
+  final bool isActive;
+  final bool canDelete;
+  final bool isPartnerImported;
+  final VoidCallback onSwitch;
+  final VoidCallback onRename;
+  final VoidCallback onDuplicate;
+  final VoidCallback? onClear;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = context.theme;
+    final cardColor = HyperosColors.card(context);
+    final highlightColor = HyperosColors.rowHighlight(context);
+
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: HyperosTokens.listRowMinHeight,
+      ),
+      child: Padding(
+        padding: HyperosTokens.rowPadding(
+          isFirst: HyperosListTileScope.maybeOf(context)?.isFirst ?? true,
+          isLast: HyperosListTileScope.maybeOf(context)?.isLast ?? true,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: (isActive ? theme.colors.primary : theme.colors.muted)
+                    .withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '${index + 1}',
+                style: theme.typography.body.sm.copyWith(
+                  color: isActive
+                      ? theme.colors.primary
+                      : theme.colors.mutedForeground,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: HyperosTokens.rowContentGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    profile.name,
+                    style: HyperosTypography.listTitle(context).copyWith(
+                      color: isActive
+                          ? theme.colors.primary
+                          : HyperosColors.primaryText(context),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isPartnerImported
+                        ? l10n.coupleTimetablePartnerReadOnlyBadge
+                        : l10n.coursesAndWeekSummary(
+                            profile.courses.length,
+                            profile.currentWeek,
+                          ),
+                    style: HyperosTypography.listDetail(context),
+                  ),
+                ],
+              ),
+            ),
+            if (!isPartnerImported)
+              PopupMenuButton<String>(
+              tooltip: l10n.moreActionsTooltip,
+              onSelected: (value) {
+                switch (value) {
+                  case 'switch':
+                    onSwitch();
+                  case 'rename':
+                    onRename();
+                  case 'duplicate':
+                    onDuplicate();
+                  case 'clear':
+                    onClear?.call();
+                  case 'delete':
+                    onDelete?.call();
+                }
+              },
+              itemBuilder: (context) => [
+                if (!isActive)
+                  PopupMenuItem(
+                    value: 'switch',
+                    child: Text(l10n.switchToThisTimetable),
+                  ),
+                PopupMenuItem(value: 'rename', child: Text(l10n.renameAction)),
+                PopupMenuItem(
+                  value: 'duplicate',
+                  child: Text(l10n.duplicateAction),
+                ),
+                if (isActive || canDelete) const PopupMenuDivider(),
+                if (isActive)
+                  PopupMenuItem(
+                    value: 'clear',
+                    enabled: profile.courses.isNotEmpty,
+                    child: Text(
+                      l10n.clearCoursesAction,
+                      style: TextStyle(color: theme.colors.destructive),
+                    ),
+                  ),
+                PopupMenuItem(
+                  value: 'delete',
+                  enabled: canDelete,
+                  child: Text(
+                    l10n.deleteAction,
+                    style: TextStyle(
+                      color: canDelete
+                          ? theme.colors.destructive
+                          : theme.colors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!isPartnerImported && !isActive) ...[
+              SizedBox(width: HyperosTokens.titleChevronGap),
+              const HyperosChevron(),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    return HyperosPressableRow(
+      onTap: isActive ? null : onSwitch,
+      backgroundColor: cardColor,
+      highlightColor: highlightColor,
+      child: row,
+    );
+  }
+}

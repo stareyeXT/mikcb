@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:university_timetable/ui/hyperos/hyperos.dart';
+import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:university_timetable/l10n/enum_localizations.dart';
 import 'package:provider/provider.dart';
 import '../models/course.dart';
 import '../providers/timetable_provider.dart';
 import '../utils/hex_color.dart';
-import '../utils/responsive.dart';
 import 'add_course_screen.dart';
 
 enum _SortMode { name, schedule, added }
@@ -29,40 +31,43 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
 
     final sorted = _sortGroups(List.of(groups), conflictMap);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.courseOverviewTitle),
-        actions: [
-          _buildSortButton(l10n),
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: l10n.addNewCourseTooltip,
-            onPressed: () => _navigateToAddCourse(context),
-          ),
-        ],
-      ),
-      body: sorted.isEmpty
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.courseOverviewTitle),
+      suffixes: [
+        FHeaderAction(
+          icon: const Icon(Icons.sort_rounded),
+          semanticsLabel: l10n.sortAction,
+          onPress: _showSortSheet,
+        ),
+        FHeaderAction(
+          icon: const Icon(Icons.add_rounded),
+          semanticsLabel: l10n.addNewCourseTooltip,
+          onPress: () => _navigateToAddCourse(context),
+        ),
+      ],
+      child: sorted.isEmpty
           ? _buildEmptyState(context, l10n)
-          : Column(
+          : HyperosListView(
               children: [
-                if (conflictingCourseCount > 0) _buildConflictBanner(context, l10n, conflictingCourseCount),
-                Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 24 : 0, vertical: 8),
-                    itemCount: sorted.length,
-                    itemBuilder: (context, index) {
-                      return _buildGroupCard(context, l10n, sorted[index], conflictMap);
-                    },
-                  ),
+                if (conflictingCourseCount > 0) ...[
+                  _buildConflictBanner(context, l10n, conflictingCourseCount),
+                  const HyperosSectionGap(),
+                ],
+                HyperosListGroup(
+                  children: [
+                    for (final group in sorted)
+                      _CourseGroupTile(
+                        group: group,
+                        conflictMap: conflictMap,
+                        onTap: () => _navigateToEditGroup(context, group),
+                      ),
+                  ],
                 ),
               ],
             ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Sorting
-  // ---------------------------------------------------------------------------
 
   List<CourseGroup> _sortGroups(
     List<CourseGroup> groups,
@@ -78,40 +83,48 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
           return a.earliestStartSection.compareTo(b.earliestStartSection);
         });
       case _SortMode.added:
-        // keep provider order (insertion order)
         break;
     }
     return groups;
   }
 
-  Widget _buildSortButton(AppLocalizations l10n) {
-    return PopupMenuButton<_SortMode>(
-      icon: const Icon(Icons.sort_rounded),
-      tooltip: l10n.sortAction,
-      onSelected: (mode) => setState(() => _sortMode = mode),
-      itemBuilder: (_) => [
-        CheckedPopupMenuItem(
-          value: _SortMode.added,
-          checked: _sortMode == _SortMode.added,
-          child: Text(l10n.sortByAdded),
+  Future<void> _showSortSheet() async {
+    final l10n = AppLocalizations.of(context)!;
+    await showHyperosSheet<void>(
+      context: context,
+      builder: (sheetContext) => HyperosSheet(
+        title: l10n.sortAction,
+        child: HyperosChoiceGroup(
+          children: [
+            HyperosChoiceTile(
+              title: l10n.sortByAdded,
+              selected: _sortMode == _SortMode.added,
+              onTap: () {
+                setState(() => _sortMode = _SortMode.added);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            HyperosChoiceTile(
+              title: l10n.sortByName,
+              selected: _sortMode == _SortMode.name,
+              onTap: () {
+                setState(() => _sortMode = _SortMode.name);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            HyperosChoiceTile(
+              title: l10n.sortBySchedule,
+              selected: _sortMode == _SortMode.schedule,
+              onTap: () {
+                setState(() => _sortMode = _SortMode.schedule);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+          ],
         ),
-        CheckedPopupMenuItem(
-          value: _SortMode.name,
-          checked: _sortMode == _SortMode.name,
-          child: Text(l10n.sortByName),
-        ),
-        CheckedPopupMenuItem(
-          value: _SortMode.schedule,
-          checked: _sortMode == _SortMode.schedule,
-          child: Text(l10n.sortBySchedule),
-        ),
-      ],
+      ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Empty state
-  // ---------------------------------------------------------------------------
 
   Widget _buildEmptyState(BuildContext context, AppLocalizations l10n) {
     return Center(
@@ -120,14 +133,21 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.school_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 16),
-            Text(l10n.emptyCourseOverviewHint, textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            FilledButton.icon(
+            Icon(
+              Icons.school_outlined,
+              size: 56,
+              color: HyperosColors.secondaryText(context),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.emptyCourseOverviewHint,
+              textAlign: TextAlign.center,
+              style: HyperosTypography.listDetail(context),
+            ),
+            const SizedBox(height: 20),
+            HyperosButton(
+              label: l10n.addNewCourseTooltip,
               onPressed: () => _navigateToAddCourse(context),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.addNewCourseTooltip),
             ),
           ],
         ),
@@ -135,204 +155,47 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Conflict banner
-  // ---------------------------------------------------------------------------
-
-  Widget _buildConflictBanner(BuildContext context, AppLocalizations l10n, int count) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.error.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: colorScheme.error.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.warning_amber_rounded, size: 18, color: colorScheme.error),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              l10n.conflictDetectedMessage(count),
-              style: TextStyle(
-                color: colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Group card
-  // ---------------------------------------------------------------------------
-
-  Widget _buildGroupCard(
+  Widget _buildConflictBanner(
     BuildContext context,
     AppLocalizations l10n,
-    CourseGroup group,
-    Map<String, List<Course>> conflictMap,
+    int count,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final courseColor = parseHexColorOrFallback(group.color, fallback: colorScheme.primary);
-    final hasConflict = group.courses.any((c) => conflictMap.containsKey(c.id));
-    final chipLabels = group.scheduleChipLabels(l10n);
-
-    final conflictCount = group.courses.where((c) => conflictMap.containsKey(c.id)).length;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: hasConflict
-              ? colorScheme.error.withValues(alpha: 0.35)
-              : colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: hasConflict ? 1.4 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: hasConflict
-                ? colorScheme.error.withValues(alpha: 0.10)
-                : colorScheme.shadow.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _navigateToEditGroup(context, group),
+    final theme = context.theme;
+    return HyperosListGroup(
+      children: [
+        HyperosPressableRow(
+          backgroundColor: HyperosColors.card(context),
+          highlightColor: HyperosColors.rowHighlight(context),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: HyperosTokens.rowPaddingUniform,
+            child: Row(
               children: [
-                // Row 1: name + nature badge + conflict badge
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        group.name + (group.shortName != null && group.shortName!.isNotEmpty ? ' (${group.shortName})' : ''),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                    _buildNatureChip(l10n, group.courseNature),
-                    if (hasConflict) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          l10n.conflictCountLabel(conflictCount),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: colorScheme.onErrorContainer,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: theme.colors.destructive,
                 ),
-                // Row 2: teacher
-                if (group.teacher.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    group.teacher,
-                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                const SizedBox(width: HyperosTokens.rowContentGap),
+                Expanded(
+                  child: Text(
+                    l10n.conflictDetectedMessage(count),
+                    style: HyperosTypography.listTitle(context).copyWith(
+                      color: theme.colors.destructive,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ],
-                // Row 3: schedule chips
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: chipLabels
-                      .map((label) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: courseColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: courseColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ))
-                      .toList(),
                 ),
               ],
             ),
           ),
         ),
-      ),
+      ],
     );
   }
-
-  Widget _buildNatureChip(AppLocalizations l10n, CourseNature nature) {
-    final isRequired = nature == CourseNature.required;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: isRequired
-            ? Theme.of(context).colorScheme.primaryContainer
-            : Theme.of(context).colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        nature.label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: isRequired
-              ? Theme.of(context).colorScheme.onPrimaryContainer
-              : Theme.of(context).colorScheme.onTertiaryContainer,
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Navigation
-  // ---------------------------------------------------------------------------
 
   void _navigateToAddCourse(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      HyperosPageRoute(
         settings: const RouteSettings(name: '/course/create'),
         builder: (_) => const AddCourseScreen(),
       ),
@@ -342,10 +205,136 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
   void _navigateToEditGroup(BuildContext context, CourseGroup group) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      HyperosPageRoute(
         settings: const RouteSettings(name: '/course/edit'),
         builder: (_) => AddCourseScreen(courseGroup: group),
       ),
     );
+  }
+}
+
+class _CourseGroupTile extends StatelessWidget {
+  const _CourseGroupTile({
+    required this.group,
+    required this.conflictMap,
+    required this.onTap,
+  });
+
+  final CourseGroup group;
+  final Map<String, List<Course>> conflictMap;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = context.theme;
+    final courseColor = parseHexColorOrFallback(
+      group.color,
+      fallback: theme.colors.primary,
+    );
+    final hasConflict = group.courses.any((c) => conflictMap.containsKey(c.id));
+    final conflictCount = group.courses
+        .where((c) => conflictMap.containsKey(c.id))
+        .length;
+    final initial = group.name.isNotEmpty ? group.name[0] : '?';
+    final cardColor = HyperosColors.card(context);
+    final highlightColor = HyperosColors.rowHighlight(context);
+    final scope = HyperosListTileScope.maybeOf(context);
+
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: HyperosTokens.listRowMinHeight,
+      ),
+      child: Padding(
+        padding: HyperosTokens.rowPadding(
+          isFirst: scope?.isFirst ?? true,
+          isLast: scope?.isLast ?? true,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: courseColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+                border: hasConflict
+                    ? Border.all(
+                        color: theme.colors.destructive.withValues(alpha: 0.55),
+                        width: 1.5,
+                      )
+                    : null,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initial,
+                style: theme.typography.body.sm.copyWith(
+                  color: courseColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: HyperosTokens.rowContentGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _displayName(group),
+                    style: HyperosTypography.listTitle(context),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _subtitle(group, l10n),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: HyperosTypography.listDetail(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              hasConflict
+                  ? l10n.conflictCountLabel(conflictCount)
+                  : courseNatureLabel(l10n, group.courseNature),
+              style: HyperosTypography.listDetail(context).copyWith(
+                fontWeight: hasConflict ? FontWeight.w700 : FontWeight.w400,
+                color: hasConflict
+                    ? theme.colors.destructive
+                    : HyperosColors.secondaryText(context),
+              ),
+            ),
+            SizedBox(width: HyperosTokens.titleChevronGap),
+            const HyperosChevron(),
+          ],
+        ),
+      ),
+    );
+
+    return HyperosPressableRow(
+      onTap: onTap,
+      backgroundColor: cardColor,
+      highlightColor: highlightColor,
+      child: row,
+    );
+  }
+
+  static String _displayName(CourseGroup group) {
+    final shortName = group.shortName;
+    if (shortName != null && shortName.isNotEmpty) {
+      return '${group.name} ($shortName)';
+    }
+    return group.name;
+  }
+
+  static String _subtitle(CourseGroup group, AppLocalizations l10n) {
+    final schedules = group.scheduleChipLabels(l10n).join(' · ');
+    if (group.teacher.isEmpty) {
+      return schedules;
+    }
+    return '${group.teacher} · $schedules';
   }
 }

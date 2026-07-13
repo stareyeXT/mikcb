@@ -1,28 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import '../utils/responsive.dart';
 
 import '../models/schedule_item.dart';
 import '../providers/timetable_provider.dart';
+import '../utils/app_toast.dart';
 import '../utils/hex_color.dart';
+import '../ui/hyperos/hyperos.dart';
 
 class AddScheduleItemScreen extends StatefulWidget {
   final ScheduleItem? scheduleItem;
   final DateTime? initialDate;
 
-  const AddScheduleItemScreen({
-    super.key,
-    this.scheduleItem,
-    this.initialDate,
-  });
+  const AddScheduleItemScreen({super.key, this.scheduleItem, this.initialDate});
 
   @override
   State<AddScheduleItemScreen> createState() => _AddScheduleItemScreenState();
 }
 
 class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
+  static const double _pagePadding = 12;
+  static const double _sectionSpacing = 10;
+  static const double _fieldSpacing = 8;
+
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _locationController = TextEditingController();
@@ -66,9 +69,11 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
         scheduleItem.endDate.month,
         scheduleItem.endDate.day,
       );
-      _startTime = _parseTime(scheduleItem.startTime) ??
+      _startTime =
+          _parseTime(scheduleItem.startTime) ??
           const TimeOfDay(hour: 8, minute: 0);
-      _endTime = _parseTime(scheduleItem.endTime) ??
+      _endTime =
+          _parseTime(scheduleItem.endTime) ??
           const TimeOfDay(hour: 9, minute: 0);
       _selectedColor = scheduleItem.color;
     } else {
@@ -101,150 +106,85 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _isEditing ? l10n.editScheduleTitle : l10n.addScheduleTitle,
-        ),
-        actions: [
-          if (_isEditing)
-            IconButton(
-              tooltip: l10n.deleteAction,
-              onPressed: _confirmDelete,
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
-          TextButton(
-            onPressed: _save,
-            child: Text(
-              l10n.saveAction,
-              style: TextStyle(color: theme.colorScheme.primary),
-            ),
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      resizeToAvoidBottomInset: true,
+      title: Text(_isEditing ? l10n.editScheduleTitle : l10n.addScheduleTitle),
+      suffixes: [
+        if (_isEditing)
+          FHeaderAction(
+            icon: const Icon(Icons.delete_outline_rounded),
+            semanticsLabel: l10n.deleteAction,
+            onPress: _confirmDelete,
           ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
-          children: [
-            _buildSectionCard(
-              title: l10n.scheduleInfoSectionTitle,
-              subtitle: l10n.scheduleInfoSectionSubtitle,
-              children: [
-                TextFormField(
-                  controller: _titleController,
-                  textInputAction: TextInputAction.next,
-                  decoration: _buildFieldDecoration(
-                    label: l10n.scheduleTitleLabel,
-                    hint: l10n.scheduleTitleHint,
-                    prefixIcon: const Icon(Icons.event_note_rounded),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return l10n.scheduleTitleRequired;
-                    }
-                    return null;
-                  },
-                ),
-                TextFormField(
-                  controller: _locationController,
-                  textInputAction: TextInputAction.next,
-                  decoration: _buildFieldDecoration(
-                    label: l10n.scheduleLocationLabel,
-                    hint: l10n.scheduleLocationHint,
-                    prefixIcon: const Icon(Icons.location_on_outlined),
-                  ),
-                ),
-                TextFormField(
-                  controller: _noteController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: _buildFieldDecoration(
-                    label: l10n.scheduleNoteLabel,
-                    hint: l10n.scheduleNoteHint,
-                    alignLabelWithHint: true,
-                    prefixIcon: const Icon(Icons.notes_rounded),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildSectionCard(
-              title: l10n.scheduleTimeSectionTitle,
-              subtitle: l10n.scheduleTimeSectionSubtitle,
-              children: [
-                _buildResponsiveFieldPair(
-                  leading: _buildPickerField(
-                    label: l10n.scheduleStartDateLabel,
-                    value: _formatDateLabel(context, _selectedStartDate),
-                    icon: Icons.calendar_today_outlined,
-                    onTap: () => _pickDate(isStart: true),
-                  ),
-                  trailing: _buildPickerField(
-                    label: l10n.scheduleStartTimeLabel,
-                    value: _formatTimeLabel(context, _startTime),
-                    icon: Icons.schedule_rounded,
-                    onTap: () => _pickTime(isStart: true),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildResponsiveFieldPair(
-                  leading: _buildPickerField(
-                    label: l10n.scheduleEndDateLabel,
-                    value: _formatDateLabel(context, _selectedEndDate),
-                    icon: Icons.date_range_rounded,
-                    onTap: () => _pickDate(isStart: false),
-                  ),
-                  trailing: _buildPickerField(
-                    label: l10n.scheduleEndTimeLabel,
-                    value: _formatTimeLabel(context, _endTime),
-                    icon: Icons.schedule_outlined,
-                    onTap: () => _pickTime(isStart: false),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildScheduleRangeHint(),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildSectionCard(
-              title: l10n.scheduleAppearanceSectionTitle,
-              subtitle: l10n.scheduleAppearanceSectionSubtitle,
-              children: [
-                _buildColorPalette(),
-              ],
-            ),
-          ],
+        FHeaderAction(
+          icon: const Icon(Icons.check_rounded),
+          semanticsLabel: l10n.saveAction,
+          onPress: _save,
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required String title,
-    required String subtitle,
-    required List<Widget> children,
-  }) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      ],
+      child: Form(
+        key: _formKey,
+        child: HyperosListView(
+          padding: const EdgeInsets.all(_pagePadding),
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            HyperosControlCard(
+              title: l10n.scheduleInfoSectionTitle,
+              child: HyperosControlCardInset(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _withSpacing([
+                    FormField<String>(
+                      initialValue: _titleController.text,
+                      validator: (value) {
+                        final title = (value ?? _titleController.text).trim();
+                        if (title.isEmpty) {
+                          return l10n.scheduleTitleRequired;
+                        }
+                        return null;
+                      },
+                      builder: (field) {
+                        return HyperosTextField(
+                          controller: _titleController,
+                          label: l10n.scheduleTitleLabel,
+                          hint: l10n.scheduleTitleHint,
+                          helper: field.errorText,
+                          textInputAction: TextInputAction.next,
+                          onChanged: field.didChange,
+                        );
+                      },
+                    ),
+                    HyperosTextField(
+                      controller: _locationController,
+                      label: l10n.scheduleLocationLabel,
+                      hint: l10n.scheduleLocationHint,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    HyperosTextField(
+                      controller: _noteController,
+                      label: l10n.scheduleNoteLabel,
+                      hint: l10n.scheduleNoteHint,
+                      minLines: 1,
+                      maxLines: 3,
+                    ),
+                  ]),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodySmall,
+            const SizedBox(height: _sectionSpacing),
+            HyperosControlCard(
+              title: l10n.scheduleTimeSectionTitle,
+              child: HyperosControlCardInset(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _withSpacing([
+                    _buildStartEndTimeLayout(l10n),
+                    _buildScheduleRangeHint(),
+                    _buildColorSection(l10n),
+                  ]),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
-            ..._withSpacing(children),
           ],
         ),
       ),
@@ -255,103 +195,104 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
     final spaced = <Widget>[];
     for (var index = 0; index < children.length; index++) {
       if (index > 0) {
-        spaced.add(const SizedBox(height: 16));
+        spaced.add(const SizedBox(height: _fieldSpacing));
       }
       spaced.add(children[index]);
     }
     return spaced;
   }
 
-  InputDecoration _buildFieldDecoration({
-    required String label,
-    String? hint,
-    Widget? prefixIcon,
-    Widget? suffixIcon,
-    bool alignLabelWithHint = false,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      alignLabelWithHint: alignLabelWithHint,
-      border: const OutlineInputBorder(),
-      prefixIcon: prefixIcon,
-      suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+  Widget _buildStartEndTimeLayout(AppLocalizations l10n) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _buildEndpointColumn(
+            groupLabel: l10n.scheduleStartGroupLabel,
+            dateValue: _formatCompactDateLabel(context, _selectedStartDate),
+            timeValue: _formatTimeLabel(context, _startTime),
+            dateIcon: Icons.calendar_today_outlined,
+            timeIcon: Icons.schedule_rounded,
+            onDatePress: () => _pickDate(isStart: true),
+            onTimePress: () => _pickTime(isStart: true),
+          ),
+        ),
+        const SizedBox(width: _fieldSpacing),
+        Expanded(
+          child: _buildEndpointColumn(
+            groupLabel: l10n.scheduleEndGroupLabel,
+            dateValue: _formatCompactDateLabel(context, _selectedEndDate),
+            timeValue: _formatTimeLabel(context, _endTime),
+            dateIcon: Icons.date_range_rounded,
+            timeIcon: Icons.schedule_outlined,
+            onDatePress: () => _pickDate(isStart: false),
+            onTimePress: () => _pickTime(isStart: false),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildPickerField({
-    required String label,
+  Widget _buildEndpointColumn({
+    required String groupLabel,
+    required String dateValue,
+    required String timeValue,
+    required IconData dateIcon,
+    required IconData timeIcon,
+    required VoidCallback onDatePress,
+    required VoidCallback onTimePress,
+  }) {
+    final theme = context.theme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          groupLabel,
+          style: theme.typography.body.sm.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        _buildCompactPickerTile(
+          value: dateValue,
+          icon: dateIcon,
+          onPress: onDatePress,
+        ),
+        const SizedBox(height: _fieldSpacing),
+        _buildCompactPickerTile(
+          value: timeValue,
+          icon: timeIcon,
+          onPress: onTimePress,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactPickerTile({
     required String value,
     required IconData icon,
-    required VoidCallback onTap,
+    required VoidCallback onPress,
   }) {
-    final theme = Theme.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: InputDecorator(
-          isFocused: false,
-          isHovering: false,
-          decoration: _buildFieldDecoration(
-            label: label,
-            prefixIcon: Icon(icon),
-            suffixIcon: const Icon(Icons.arrow_drop_down_rounded),
-          ),
-          child: Text(
-            value,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResponsiveFieldPair({
-    required Widget leading,
-    required Widget trailing,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 420) {
-          return Column(
-            children: [
-              leading,
-              const SizedBox(height: 16),
-              trailing,
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: leading),
-            const SizedBox(width: 16),
-            Expanded(child: trailing),
-          ],
-        );
-      },
+    return HyperosChoiceTile(
+      prefix: Icon(icon, size: 18),
+      title: value,
+      onTap: onPress,
     );
   }
 
   Widget _buildScheduleRangeHint() {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final theme = context.theme;
     final isCrossDay = _selectedEndDate.isAfter(_selectedStartDate);
-    final text =
-        isCrossDay ? l10n.scheduleCrossDayHint : l10n.scheduleSingleDayHint;
+    final text = isCrossDay
+        ? l10n.scheduleCrossDayHint
+        : l10n.scheduleSingleDayHint;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
+        color: theme.colors.muted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        border: Border.all(color: theme.colors.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,14 +300,14 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
           Icon(
             isCrossDay ? Icons.nights_stay_rounded : Icons.today_rounded,
             size: 18,
-            color: theme.colorScheme.primary,
+            color: theme.colors.primary,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              style: theme.typography.body.xs.copyWith(
+                color: theme.colors.mutedForeground,
                 fontWeight: FontWeight.w600,
                 height: 1.35,
               ),
@@ -377,33 +318,68 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
     );
   }
 
-  Widget _buildColorPalette() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _colors.map((colorHex) {
-        final isSelected = colorHex == _selectedColor;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedColor = colorHex),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _colorFromHex(colorHex),
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected
-                  ? Border.all(color: Colors.black, width: 3)
-                  : null,
-            ),
-            child: isSelected ? const Icon(Icons.check, color: Colors.white) : null,
+  Widget _buildColorSection(AppLocalizations l10n) {
+    final theme = context.theme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.scheduleAppearanceSectionTitle,
+          style: theme.typography.body.xs.copyWith(
+            color: theme.colors.mutedForeground,
+            fontWeight: FontWeight.w600,
           ),
-        );
-      }).toList(),
+        ),
+        const SizedBox(height: 6),
+        _buildColorPalette(),
+      ],
     );
   }
 
-  String _formatDateLabel(BuildContext context, DateTime value) {
-    return MaterialLocalizations.of(context).formatMediumDate(value);
+  Widget _buildColorPalette() {
+    final theme = context.theme;
+    const swatchSize = 32.0;
+    const swatchSpacing = 8.0;
+    final selectionBorder = theme.colors.foreground;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final colorHex in _colors) ...[
+            GestureDetector(
+              onTap: () => setState(() => _selectedColor = colorHex),
+              child: Container(
+                width: swatchSize,
+                height: swatchSize,
+                decoration: BoxDecoration(
+                  color: _colorFromHex(colorHex),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _selectedColor == colorHex
+                        ? selectionBorder
+                        : theme.colors.border,
+                    width: _selectedColor == colorHex ? 2 : 1,
+                  ),
+                ),
+                child: _selectedColor == colorHex
+                    ? const Icon(Icons.check, size: 16, color: Colors.white)
+                    : null,
+              ),
+            ),
+            const SizedBox(width: swatchSpacing),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatCompactDateLabel(BuildContext context, DateTime value) {
+    final locale = Localizations.localeOf(context).toString();
+    if (value.year == DateTime.now().year) {
+      return DateFormat.Md(locale).format(value);
+    }
+    return DateFormat.yMd(locale).format(value);
   }
 
   String _formatTimeLabel(BuildContext context, TimeOfDay time) {
@@ -439,10 +415,7 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
 
   Future<void> _pickTime({required bool isStart}) async {
     final current = isStart ? _startTime : _endTime;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: current,
-    );
+    final picked = await showTimePicker(context: context, initialTime: current);
     if (picked == null) {
       return;
     }
@@ -462,14 +435,18 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
     }
     final sameDay = _isSameDate(_selectedStartDate, _selectedEndDate);
     if (sameDay && _asMinutes(_endTime) <= _asMinutes(_startTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.scheduleTimeRangeInvalid)),
+      showAppToast(
+        context,
+        message: l10n.scheduleTimeRangeInvalid,
+        kind: AppToastKind.warning,
       );
       return;
     }
     if (_selectedEndDate.isBefore(_selectedStartDate)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.scheduleDateRangeInvalid)),
+      showAppToast(
+        context,
+        message: l10n.scheduleDateRangeInvalid,
+        kind: AppToastKind.warning,
       );
       return;
     }
@@ -504,12 +481,12 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
       return;
     }
     Navigator.of(context).pop(true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          existing == null ? l10n.scheduleSavedHint : l10n.scheduleUpdatedHint,
-        ),
-      ),
+    showAppToast(
+      context,
+      message: existing == null
+          ? l10n.scheduleSavedHint
+          : l10n.scheduleUpdatedHint,
+      kind: AppToastKind.success,
     );
   }
 
@@ -527,22 +504,13 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
 
     final l10n = AppLocalizations.of(context)!;
     final provider = context.read<TimetableProvider>();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showHyperosConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.deleteScheduleTitle),
-        content: Text(l10n.deleteScheduleMessage(scheduleItem.title)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.cancelAction),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.deleteAction),
-          ),
-        ],
-      ),
+      title: l10n.deleteScheduleTitle,
+      message: l10n.deleteScheduleMessage(scheduleItem.title),
+      cancelLabel: l10n.cancelAction,
+      confirmLabel: l10n.deleteAction,
+      destructive: true,
     );
 
     if (confirmed != true) {
@@ -554,8 +522,10 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
       return;
     }
     Navigator.of(context).pop(true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.scheduleDeletedHint)),
+    showAppToast(
+      context,
+      message: l10n.scheduleDeletedHint,
+      kind: AppToastKind.success,
     );
   }
 
@@ -584,4 +554,3 @@ class _AddScheduleItemScreenState extends State<AddScheduleItemScreen> {
     return parseHexColorOrFallback(value, fallback: const Color(0xFF2196F3));
   }
 }
-

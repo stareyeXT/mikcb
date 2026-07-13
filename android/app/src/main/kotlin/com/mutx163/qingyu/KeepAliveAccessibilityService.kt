@@ -9,12 +9,21 @@ class KeepAliveAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         KeepAliveAccessibilityStatus.markServiceConnected(true)
-        Log.i("KeepAliveAccessibility", "Accessibility keep-alive service connected")
         UmengDiagnosticReporter.record(
             context = applicationContext,
             category = "keep_alive_accessibility_connected",
-            message = "Accessibility keep-alive service connected",
+            message = DiagnosticLogMessages.KEEP_ALIVE_ACCESSIBILITY_CONNECTED,
         )
+        // Trigger an immediate widget refresh and ensure the WorkManager
+        // periodic backup is scheduled, so widgets stay updated even when
+        // AlarmManager alarms are suppressed by MIUI/HyperOS.
+        try {
+            TodayWidgetSupport.updateAll(applicationContext)
+            HomeWidgetStorage.rescheduleRefresh(applicationContext)
+            WidgetRefreshWorker.ensureScheduled(applicationContext)
+        } catch (e: Exception) {
+            Log.w("KeepAliveAccessibility", DiagnosticLogMessages.LOG_KEEP_ALIVE_REFRESH_WIDGET_FAILED, e)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -22,7 +31,6 @@ class KeepAliveAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        Log.i("KeepAliveAccessibility", "Accessibility keep-alive service interrupted")
     }
 
     override fun onUnbind(intent: Intent?): Boolean {

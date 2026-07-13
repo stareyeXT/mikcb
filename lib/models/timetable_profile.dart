@@ -3,9 +3,27 @@ import 'exam.dart';
 import 'schedule_item.dart';
 import 'timetable_settings.dart';
 
+enum TimetableProfileKind {
+  normal,
+  partnerImported;
+
+  String get value => switch (this) {
+    TimetableProfileKind.normal => 'normal',
+    TimetableProfileKind.partnerImported => 'partnerImported',
+  };
+
+  static TimetableProfileKind fromValue(String? value) {
+    return TimetableProfileKind.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => TimetableProfileKind.normal,
+    );
+  }
+}
+
 int clampCurrentWeekToSettings(int week, TimetableSettings settings) {
-  final maxWeek =
-      settings.semesterWeekCount < 1 ? 1 : settings.semesterWeekCount;
+  final maxWeek = settings.semesterWeekCount < 1
+      ? 1
+      : settings.semesterWeekCount;
   if (week < 1) {
     return 1;
   }
@@ -25,6 +43,7 @@ class TimetableProfile {
   final int currentWeek;
   final DateTime createdAt;
   final DateTime lastUsedAt;
+  final TimetableProfileKind profileKind;
 
   const TimetableProfile({
     required this.id,
@@ -36,7 +55,11 @@ class TimetableProfile {
     required this.currentWeek,
     required this.createdAt,
     required this.lastUsedAt,
+    this.profileKind = TimetableProfileKind.normal,
   });
+
+  bool get isPartnerImported =>
+      profileKind == TimetableProfileKind.partnerImported;
 
   Map<String, dynamic> toJson() {
     return {
@@ -49,6 +72,7 @@ class TimetableProfile {
       'currentWeek': currentWeek,
       'createdAt': createdAt.toIso8601String(),
       'lastUsedAt': lastUsedAt.toIso8601String(),
+      'profileKind': profileKind.value,
     };
   }
 
@@ -63,25 +87,30 @@ class TimetableProfile {
       name: json['name'] as String? ?? '未命名课表',
       courses: (json['courses'] as List<dynamic>? ?? const [])
           .map(
-              (item) => Course.fromJson(Map<String, dynamic>.from(item as Map)))
+            (item) => Course.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
           .toList(),
       scheduleItems: (json['scheduleItems'] as List<dynamic>? ?? const [])
-          .map((item) =>
-              ScheduleItem.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) =>
+                ScheduleItem.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
           .toList(),
       exams: (json['exams'] as List<dynamic>? ?? const [])
-          .map((item) =>
-              Exam.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map((item) => Exam.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList(),
       settings: settings,
       currentWeek: clampCurrentWeekToSettings(
         ((json['currentWeek'] as num?)?.toInt() ?? 1).clamp(1, 30),
         settings,
       ),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
-      lastUsedAt: DateTime.tryParse(json['lastUsedAt'] as String? ?? '') ??
+      lastUsedAt:
+          DateTime.tryParse(json['lastUsedAt'] as String? ?? '') ??
           DateTime.now(),
+      profileKind: TimetableProfileKind.fromValue(json['profileKind'] as String?),
     );
   }
 
@@ -95,6 +124,7 @@ class TimetableProfile {
     int? currentWeek,
     DateTime? createdAt,
     DateTime? lastUsedAt,
+    TimetableProfileKind? profileKind,
   }) {
     return TimetableProfile(
       id: id ?? this.id,
@@ -106,6 +136,7 @@ class TimetableProfile {
       currentWeek: currentWeek ?? this.currentWeek,
       createdAt: createdAt ?? this.createdAt,
       lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      profileKind: profileKind ?? this.profileKind,
     );
   }
 }

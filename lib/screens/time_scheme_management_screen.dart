@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:university_timetable/ui/hyperos/hyperos.dart';
+import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:provider/provider.dart';
 
 import '../models/time_scheme.dart';
 import '../models/timetable_settings.dart';
 import '../providers/timetable_provider.dart';
-import '../utils/responsive.dart';
+import '../utils/app_toast.dart';
+import '../widgets/app_dialogs.dart';
 
 class TimeSchemeManagementScreen extends StatefulWidget {
   final String? initialEditSchemeId;
+  final bool openCreateOnOpen;
 
   const TimeSchemeManagementScreen({
     super.key,
     this.initialEditSchemeId,
+    this.openCreateOnOpen = false,
   });
 
   @override
@@ -22,20 +28,29 @@ class TimeSchemeManagementScreen extends StatefulWidget {
 
 class _TimeSchemeManagementScreenState
     extends State<TimeSchemeManagementScreen> {
-  bool _didOpenInitialEditor = false;
+  bool _didOpenInitialAction = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didOpenInitialEditor || widget.initialEditSchemeId == null) {
+    if (_didOpenInitialAction) {
       return;
     }
-    _didOpenInitialEditor = true;
+    final editId = widget.initialEditSchemeId;
+    final openCreate = widget.openCreateOnOpen;
+    if (editId == null && !openCreate) {
+      return;
+    }
+    _didOpenInitialAction = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      _openEditor(widget.initialEditSchemeId!);
+      if (editId != null) {
+        _openEditor(editId);
+      } else {
+        _createScheme(context);
+      }
     });
   }
 
@@ -47,32 +62,33 @@ class _TimeSchemeManagementScreenState
         final schemes = provider.timeSchemes;
         final activeSchemeId = provider.activeTimeScheme?.id;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(l10n.timeSchemeTitle),
-            actions: [
-              IconButton(
-                tooltip: l10n.newSchemeTooltip,
-                onPressed: () => _createScheme(context),
-                icon: const Icon(Icons.add_rounded),
-              ),
-            ],
-          ),
-          body: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: schemes.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final scheme = schemes[index];
-              final isActive = scheme.id == activeSchemeId;
-              final usage = _buildUsageSummary(provider, scheme.id);
-              return _buildSchemeCard(
-                context,
-                scheme: scheme,
-                usage: usage,
-                isActive: isActive,
-              );
-            },
+        return HyperosSubpage(
+          onBack: () => Navigator.pop(context),
+          title: Text(l10n.timeSchemeTitle),
+          suffixes: [
+            FHeaderAction(
+              icon: const Icon(Icons.add_rounded),
+              semanticsLabel: l10n.newSchemeTooltip,
+              onPress: () => _createScheme(context),
+            ),
+          ],
+          child: HyperosBlurredBodyInset(
+            child: ListView.separated(
+              padding: HyperosTokens.listPadding,
+              itemCount: schemes.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final scheme = schemes[index];
+                final isActive = scheme.id == activeSchemeId;
+                final usage = _buildUsageSummary(provider, scheme.id);
+                return _buildSchemeCard(
+                  context,
+                  scheme: scheme,
+                  usage: usage,
+                  isActive: isActive,
+                );
+              },
+            ),
           ),
         );
       },
@@ -86,9 +102,10 @@ class _TimeSchemeManagementScreenState
     required bool isActive,
   }) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Card(
+    final theme = context.theme;
+    return Material(
+      color: HyperosColors.card(context),
+      shape: HyperosTheme.cardShape(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: isActive ? null : () => _applyScheme(context, scheme),
@@ -104,10 +121,9 @@ class _TimeSchemeManagementScreenState
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: (isActive
-                              ? colorScheme.primary
-                              : colorScheme.secondaryContainer)
-                          .withValues(alpha: 0.14),
+                      color:
+                          (isActive ? theme.colors.primary : theme.colors.muted)
+                              .withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -115,8 +131,8 @@ class _TimeSchemeManagementScreenState
                           ? Icons.schedule_rounded
                           : Icons.access_time_rounded,
                       color: isActive
-                          ? colorScheme.primary
-                          : colorScheme.onSecondaryContainer,
+                          ? theme.colors.primary
+                          : theme.colors.mutedForeground,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -128,7 +144,7 @@ class _TimeSchemeManagementScreenState
                           scheme.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
+                          style: theme.typography.body.md.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -142,8 +158,8 @@ class _TimeSchemeManagementScreenState
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                          style: theme.typography.body.xs.copyWith(
+                            color: theme.colors.mutedForeground,
                           ),
                         ),
                       ],
@@ -170,10 +186,10 @@ class _TimeSchemeManagementScreenState
                               .read<TimetableProvider>()
                               .duplicateTimeScheme(scheme.id);
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(l10n.copiedTimeSchemeMessage),
-                              ),
+                            showAppToast(
+                              context,
+                              message: l10n.copiedTimeSchemeMessage,
+                              kind: AppToastKind.success,
                             );
                           }
                           break;
@@ -212,8 +228,8 @@ class _TimeSchemeManagementScreenState
                           l10n.deleteAction,
                           style: TextStyle(
                             color: usage.isUnused
-                                ? colorScheme.error
-                                : colorScheme.onSurfaceVariant,
+                                ? theme.colors.destructive
+                                : theme.colors.mutedForeground,
                           ),
                         ),
                       ),
@@ -226,42 +242,30 @@ class _TimeSchemeManagementScreenState
                 scheme.sectionCount > 1
                     ? l10n.timeSchemeStartsAt(scheme.sections.first.displayText)
                     : scheme.sections.first.displayText,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                style: theme.typography.body.sm.copyWith(
+                  color: theme.colors.mutedForeground,
                 ),
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
-                    child: FilledButton.tonal(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: isActive ? null : () => _applyScheme(context, scheme),
-                      child: Text(
-                        isActive ? l10n.usingNow : l10n.applyToCurrentTimetable,
-                      ),
+                    child: HyperosButton(
+                      label: isActive
+                          ? l10n.usingNow
+                          : l10n.applyToCurrentTimetable,
+                      variant: HyperosButtonVariant.secondary,
+                      expand: true,
+                      onPressed: isActive
+                          ? null
+                          : () => _applyScheme(context, scheme),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 36),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+                  HyperosButton(
+                    label: l10n.editSectionsAction,
+                    variant: HyperosButtonVariant.secondary,
                     onPressed: () => _openEditor(scheme.id),
-                    icon: const Icon(Icons.edit_outlined),
-                    label: Text(l10n.editSectionsAction),
                   ),
                 ],
               ),
@@ -275,40 +279,25 @@ class _TimeSchemeManagementScreenState
   Future<void> _openEditor(String schemeId) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => _TimeSchemeEditorScreen(
-          schemeId: schemeId,
-        ),
+      HyperosPageRoute(
+        builder: (_) => _TimeSchemeEditorScreen(schemeId: schemeId),
       ),
     );
   }
 
   Future<void> _createScheme(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.createTimeSchemeTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: l10n.timeSchemeNameLabel,
-            hintText: l10n.timeSchemeNameHint,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.cancelAction),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text(l10n.createAction),
-          ),
-        ],
+    final name = await showAppTextInputDialog(
+      context,
+      title: l10n.createTimeSchemeTitle,
+      confirmLabel: l10n.createAction,
+      bodyBuilder: (controller) => HyperosTextField(
+        controller: controller,
+        label: l10n.timeSchemeNameLabel,
+        hint: l10n.timeSchemeNameHint,
+        autofocus: true,
       ),
+      validate: (value) => value.isNotEmpty,
     );
 
     if (!context.mounted || name == null || name.isEmpty) {
@@ -316,8 +305,8 @@ class _TimeSchemeManagementScreenState
     }
 
     final scheme = await context.read<TimetableProvider>().createTimeScheme(
-          name: name,
-        );
+      name: name,
+    );
     if (!context.mounted) {
       return;
     }
@@ -326,27 +315,16 @@ class _TimeSchemeManagementScreenState
 
   Future<void> _renameScheme(BuildContext context, TimeScheme scheme) async {
     final l10n = AppLocalizations.of(context)!;
-    final controller = TextEditingController(text: scheme.name);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.renameTimeSchemeTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: l10n.timeSchemeNameLabel),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.cancelAction),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text(l10n.saveAction),
-          ),
-        ],
+    final name = await showAppTextInputDialog(
+      context,
+      title: l10n.renameTimeSchemeTitle,
+      initialValue: scheme.name,
+      bodyBuilder: (controller) => HyperosTextField(
+        controller: controller,
+        label: l10n.timeSchemeNameLabel,
+        autofocus: true,
       ),
+      validate: (value) => value.isNotEmpty,
     );
 
     if (!context.mounted ||
@@ -360,29 +338,22 @@ class _TimeSchemeManagementScreenState
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.renamedToMessage(name))),
+    showAppToast(
+      context,
+      message: l10n.renamedToMessage(name),
+      kind: AppToastKind.success,
     );
   }
 
   Future<void> _deleteScheme(BuildContext context, TimeScheme scheme) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showHyperosConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.deleteTimeSchemeTitle),
-        content: Text(l10n.deleteTimeSchemeMessage(scheme.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancelAction),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.deleteAction),
-          ),
-        ],
-      ),
+      title: l10n.deleteTimeSchemeTitle,
+      message: l10n.deleteTimeSchemeMessage(scheme.name),
+      cancelLabel: l10n.cancelAction,
+      confirmLabel: l10n.deleteAction,
+      destructive: true,
     );
 
     if (!context.mounted || confirmed != true) {
@@ -390,19 +361,17 @@ class _TimeSchemeManagementScreenState
     }
 
     final deleted = await context.read<TimetableProvider>().deleteTimeScheme(
-          scheme.id,
-        );
+      scheme.id,
+    );
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          deleted
-              ? l10n.deletedTimeSchemeMessage(scheme.name)
-              : l10n.timeSchemeInUseMessage,
-        ),
-      ),
+    showAppToast(
+      context,
+      message: deleted
+          ? l10n.deletedTimeSchemeMessage(scheme.name)
+          : l10n.timeSchemeInUseMessage,
+      kind: deleted ? AppToastKind.success : AppToastKind.warning,
     );
   }
 
@@ -412,8 +381,10 @@ class _TimeSchemeManagementScreenState
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.appliedTimeSchemeMessage(scheme.name))),
+    showAppToast(
+      context,
+      message: l10n.appliedTimeSchemeMessage(scheme.name),
+      kind: AppToastKind.success,
     );
   }
 
@@ -427,16 +398,17 @@ class _TimeSchemeManagementScreenState
         .map((profile) => profile.name)
         .toList(growable: false);
     final references = provider.getTimeSchemeCourseUsages(schemeId);
-    final overrideReferences =
-        references.where((item) => item.usesOverride).toList(growable: false);
+    final overrideReferences = references
+        .where((item) => item.usesOverride)
+        .toList(growable: false);
     final previewText = references.isEmpty
         ? null
         : references.length == 1
-            ? _formatUsageReference(l10n, references.first)
-            : l10n.timeSchemeBottomUsageMulti(
-                _formatUsageReference(l10n, references.first),
-                references.length,
-              );
+        ? _formatUsageReference(l10n, references.first)
+        : l10n.timeSchemeBottomUsageMulti(
+            _formatUsageReference(l10n, references.first),
+            references.length,
+          );
     return _TimeSchemeUsageSummary(
       profileNames: profileNames,
       courseReferences: references,
@@ -471,110 +443,107 @@ class _TimeSchemeManagementScreenState
     final l10n = AppLocalizations.of(context)!;
     final directCourseReferences = usage.directCourseReferences;
     final overrideReferences = usage.overrideReferences;
-    await showDialog<void>(
+    final theme = context.theme;
+    await showHyperosDialog<void>(
       context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        final colorScheme = theme.colorScheme;
-        return AlertDialog(
-          title: Text(l10n.timeSchemeUsageTitle(scheme.name)),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+      title: l10n.timeSchemeUsageTitle(scheme.name),
+      body: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                l10n.timeSchemeUsageIntro,
+                style: theme.typography.body.xs.copyWith(
+                  color: theme.colors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Text(
-                    l10n.timeSchemeUsageIntro,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  _TimeSchemeInfoChip(
+                    label: l10n.profileCountLabel,
+                    value: l10n.profileCountValue(usage.profileCount),
+                  ),
+                  _TimeSchemeInfoChip(
+                    label: l10n.courseCountLabel,
+                    value: l10n.courseSectionCountValue(usage.courseCount),
+                  ),
+                  _TimeSchemeInfoChip(
+                    label: l10n.overrideTimeSchemeLabel,
+                    value: l10n.courseSectionCountValue(
+                      usage.overrideCourseCount,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _TimeSchemeInfoChip(
-                        label: l10n.profileCountLabel,
-                        value: l10n.profileCountValue(usage.profileCount),
-                      ),
-                      _TimeSchemeInfoChip(
-                        label: l10n.courseCountLabel,
-                        value: l10n.courseSectionCountValue(usage.courseCount),
-                      ),
-                      _TimeSchemeInfoChip(
-                        label: l10n.overrideTimeSchemeLabel,
-                        value: l10n.courseSectionCountValue(usage.overrideCourseCount),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _UsageSection(
-                    title: l10n.directlyBoundProfilesTitle,
-                    subtitle: usage.profileCount == 0
-                        ? l10n.directlyBoundProfilesEmpty
-                        : l10n.directlyBoundProfilesSubtitle,
-                    items: usage.profileNames
-                        .map((name) => _UsageLine(primary: name))
-                        .toList(growable: false),
-                    emptyText: l10n.directlyBoundProfilesEmpty,
-                  ),
-                  const SizedBox(height: 12),
-                  _UsageSection(
-                    title: l10n.followMainSchemeCoursesTitle,
-                    subtitle: directCourseReferences.isEmpty
-                        ? l10n.followMainSchemeCoursesEmpty
-                        : l10n.followMainSchemeCoursesSubtitle,
-                    items: directCourseReferences
-                        .map(
-                          (reference) => _UsageLine(
-                            primary:
-                                '${reference.profileName} · ${reference.course.name}',
-                            secondary: l10n.weekdaySectionRange(
-                              _weekdayLabel(l10n, reference.course.dayOfWeek),
-                              reference.course.startSection,
-                              reference.course.endSection,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    emptyText: l10n.followMainSchemeCoursesEmpty,
-                  ),
-                  const SizedBox(height: 12),
-                  _UsageSection(
-                    title: l10n.overrideSchemeCoursesTitle,
-                    subtitle: overrideReferences.isEmpty
-                        ? l10n.overrideSchemeCoursesEmpty
-                        : l10n.overrideSchemeCoursesSubtitle,
-                    items: overrideReferences
-                        .map(
-                          (reference) => _UsageLine(
-                            primary:
-                                '${reference.profileName} · ${reference.course.name}',
-                            secondary: l10n.weekdaySectionRange(
-                              _weekdayLabel(l10n, reference.course.dayOfWeek),
-                              reference.course.startSection,
-                              reference.course.endSection,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    emptyText: l10n.overrideSchemeCoursesEmpty,
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 16),
+              _UsageSection(
+                title: l10n.directlyBoundProfilesTitle,
+                subtitle: usage.profileCount == 0
+                    ? l10n.directlyBoundProfilesEmpty
+                    : l10n.directlyBoundProfilesSubtitle,
+                items: usage.profileNames
+                    .map((name) => _UsageLine(primary: name))
+                    .toList(growable: false),
+                emptyText: l10n.directlyBoundProfilesEmpty,
+              ),
+              const SizedBox(height: 12),
+              _UsageSection(
+                title: l10n.followMainSchemeCoursesTitle,
+                subtitle: directCourseReferences.isEmpty
+                    ? l10n.followMainSchemeCoursesEmpty
+                    : l10n.followMainSchemeCoursesSubtitle,
+                items: directCourseReferences
+                    .map(
+                      (reference) => _UsageLine(
+                        primary:
+                            '${reference.profileName} · ${reference.course.name}',
+                        secondary: l10n.weekdaySectionRange(
+                          _weekdayLabel(l10n, reference.course.dayOfWeek),
+                          reference.course.startSection,
+                          reference.course.endSection,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                emptyText: l10n.followMainSchemeCoursesEmpty,
+              ),
+              const SizedBox(height: 12),
+              _UsageSection(
+                title: l10n.overrideSchemeCoursesTitle,
+                subtitle: overrideReferences.isEmpty
+                    ? l10n.overrideSchemeCoursesEmpty
+                    : l10n.overrideSchemeCoursesSubtitle,
+                items: overrideReferences
+                    .map(
+                      (reference) => _UsageLine(
+                        primary:
+                            '${reference.profileName} · ${reference.course.name}',
+                        secondary: l10n.weekdaySectionRange(
+                          _weekdayLabel(l10n, reference.course.dayOfWeek),
+                          reference.course.startSection,
+                          reference.course.endSection,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                emptyText: l10n.overrideSchemeCoursesEmpty,
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(l10n.closeAction),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
+      actions: [
+        HyperosDialogAction(
+          label: l10n.closeAction,
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
     );
   }
 
@@ -631,8 +600,9 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
   void initState() {
     super.initState();
     final provider = context.read<TimetableProvider>();
-    final scheme =
-        provider.timeSchemes.firstWhere((item) => item.id == widget.schemeId);
+    final scheme = provider.timeSchemes.firstWhere(
+      (item) => item.id == widget.schemeId,
+    );
     _nameController = TextEditingController(text: scheme.name);
     _sections = List<SectionTime>.from(scheme.sections);
   }
@@ -649,206 +619,144 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
     final provider = context.watch<TimetableProvider>();
     final isActive = provider.activeTimeScheme?.id == widget.schemeId;
     final usage = _buildUsageSummary(provider, widget.schemeId);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.editTimeSchemeTitle),
-        actions: [
-          TextButton(
-            onPressed: _save,
-            child: Text(l10n.saveAction),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.timeSchemeNameLabel,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: l10n.timeSchemeNameLabel,
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      resizeToAvoidBottomInset: true,
+      title: Text(l10n.editTimeSchemeTitle),
+      suffixes: [
+        FHeaderAction(
+          icon: const Icon(Icons.check_rounded),
+          semanticsLabel: l10n.saveAction,
+          onPress: _save,
+        ),
+      ],
+      child: HyperosBlurredBodyInset(
+        child: HyperosListView(
+          includeHeaderInset: false,
+          children: [
+            HyperosControlCard(
+              title: l10n.timeSchemeNameLabel,
+              child: HyperosControlCardInset(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    HyperosTextField(
+                      controller: _nameController,
+                      hint: l10n.timeSchemeNameHint,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (isActive)
-                        _TimeSchemeBadge(
-                          text: l10n.currentInUse,
-                          icon: Icons.check_circle_outline_rounded,
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (isActive) _TimeSchemeBadge(text: l10n.currentInUse),
+                        _TimeSchemeInfoChip(
+                          label: l10n.profileCountLabel,
+                          value: l10n.profileCountValue(usage.profileCount),
                         ),
-                      _TimeSchemeInfoChip(
-                        label: l10n.profileCountLabel,
-                        value: l10n.profileCountValue(usage.profileCount),
-                      ),
-                      _TimeSchemeInfoChip(
-                        label: l10n.courseCountLabel,
-                        value: l10n.courseSectionCountValue(usage.courseCount),
-                      ),
-                      _TimeSchemeInfoChip(
-                        label: l10n.overrideTimeSchemeLabel,
-                        value: l10n.courseSectionCountValue(usage.overrideCourseCount),
+                        _TimeSchemeInfoChip(
+                          label: l10n.courseCountLabel,
+                          value: l10n.courseSectionCountValue(
+                            usage.courseCount,
+                          ),
+                        ),
+                        _TimeSchemeInfoChip(
+                          label: l10n.overrideTimeSchemeLabel,
+                          value: l10n.courseSectionCountValue(
+                            usage.overrideCourseCount,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (isActive || usage.courseCount > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        isActive && usage.courseCount > 0
+                            ? l10n.timeSchemeEditorActiveAndCoursesHint
+                            : isActive
+                            ? l10n.timeSchemeEditorActiveHint
+                            : l10n.timeSchemeEditorOverrideHint,
+                        style: HyperosTypography.sectionDescription(context),
                       ),
                     ],
+                    if (usage.previewText != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        usage.previewText!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: HyperosTypography.sectionDescription(context),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const HyperosSectionGap(),
+            HyperosControlCard(
+              title: l10n.sectionTimesTitle,
+              subtitle: l10n.sectionTimesSubtitle,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  HyperosControlCardInset(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        HyperosButton(
+                          label: l10n.quickGenerateAction,
+                          variant: HyperosButtonVariant.secondary,
+                          onPressed: _openQuickGenerate,
+                        ),
+                        HyperosButton(
+                          label: l10n.addSectionAction,
+                          variant: HyperosButtonVariant.secondary,
+                          onPressed: _sections.length >= 20
+                              ? null
+                              : _addSection,
+                        ),
+                        HyperosButton(
+                          label: l10n.removeLastSectionAction,
+                          variant: HyperosButtonVariant.secondary,
+                          onPressed: _sections.length <= 1
+                              ? null
+                              : _removeSection,
+                        ),
+                        HyperosButton(
+                          label: l10n.resetDefaultAction,
+                          variant: HyperosButtonVariant.secondary,
+                          onPressed: _resetSections,
+                        ),
+                      ],
+                    ),
                   ),
-                  if (isActive || usage.courseCount > 0) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      isActive && usage.courseCount > 0
-                          ? l10n.timeSchemeEditorActiveAndCoursesHint
-                          : isActive
-                              ? l10n.timeSchemeEditorActiveHint
-                              : l10n.timeSchemeEditorOverrideHint,
-                      style: theme.textTheme.bodySmall,
+                  if (_sections.isNotEmpty)
+                    HyperosControlCardRows(
+                      children: [
+                        for (var index = 0; index < _sections.length; index++)
+                          HyperosListTile(
+                            icon: Icons.access_time_rounded,
+                            iconAccent: HyperosIconColors.teal,
+                            title: l10n.sectionLabel(index + 1),
+                            details:
+                                '${_sections[index].startTime} - ${_sections[index].endTime}',
+                            onTap: () => _editSectionTime(index),
+                          ),
+                      ],
                     ),
-                  ],
-                  if (usage.previewText != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      usage.previewText!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.sectionTimesTitle,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.sectionTimesSubtitle,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.tonalIcon(
-                        onPressed: _openQuickGenerate,
-                        icon: const Icon(Icons.auto_fix_high_rounded),
-                        label: Text(l10n.quickGenerateAction),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: _sections.length >= 20 ? null : _addSection,
-                        icon: const Icon(Icons.add),
-                        label: Text(l10n.addSectionAction),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed:
-                            _sections.length <= 1 ? null : _removeSection,
-                        icon: const Icon(Icons.remove),
-                        label: Text(l10n.removeLastSectionAction),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: _resetSections,
-                        icon: const Icon(Icons.restart_alt),
-                        label: Text(l10n.resetDefaultAction),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ...List.generate(_sections.length, (index) {
-                    final section = _sections[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '${index + 1}',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.sectionLabel(index + 1),
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${section.startTime} - ${section.endTime}',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: l10n.editTimeAction,
-                            onPressed: () => _editSectionTime(index),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _editSectionTime(int index) async {
+    final l10n = AppLocalizations.of(context)!;
     final start = await showTimePicker(
       context: context,
       initialTime: _parseTimeOfDay(_sections[index].startTime),
@@ -872,9 +780,10 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
     final startMinutes = _parseTimeMinutes(editedSection.startTime);
     final endMinutes = _parseTimeMinutes(editedSection.endTime);
     if (endMinutes <= startMinutes) {
-      final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.timeRangeValidationNoCrossDay)),
+      showAppToast(
+        context,
+        message: l10n.timeRangeValidationNoCrossDay,
+        kind: AppToastKind.warning,
       );
       return;
     }
@@ -883,8 +792,10 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
     nextSections[index] = editedSection;
     final validationMessage = validateSectionTimes(nextSections);
     if (validationMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(validationMessage)),
+      showAppToast(
+        context,
+        message: localizeServiceMessage(l10n, validationMessage),
+        kind: AppToastKind.warning,
       );
       return;
     }
@@ -922,16 +833,17 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
         .map((profile) => profile.name)
         .toList(growable: false);
     final references = provider.getTimeSchemeCourseUsages(schemeId);
-    final overrideReferences =
-        references.where((item) => item.usesOverride).toList(growable: false);
+    final overrideReferences = references
+        .where((item) => item.usesOverride)
+        .toList(growable: false);
     final previewText = references.isEmpty
         ? null
         : references.length == 1
-            ? _formatUsageReference(l10n, references.first)
-            : l10n.timeSchemeBottomUsageMulti(
-                _formatUsageReference(l10n, references.first),
-                references.length,
-              );
+        ? _formatUsageReference(l10n, references.first)
+        : l10n.timeSchemeBottomUsageMulti(
+            _formatUsageReference(l10n, references.first),
+            references.length,
+          );
     return _TimeSchemeUsageSummary(
       profileNames: profileNames,
       courseReferences: references,
@@ -980,11 +892,11 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
   }
 
   Future<void> _openQuickGenerate() async {
+    final l10n = AppLocalizations.of(context)!;
     final preset = await showDialog<_QuickGeneratePreset>(
       context: context,
-      builder: (context) => _QuickGenerateDialog(
-        initialPreset: _lastQuickGeneratePreset,
-      ),
+      builder: (ctx) =>
+          _QuickGenerateDialog(initialPreset: _lastQuickGeneratePreset),
     );
     if (preset == null || !mounted) {
       return;
@@ -1010,25 +922,26 @@ class _TimeSchemeEditorScreenState extends State<_TimeSchemeEditorScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
+      showAppToast(
+        context,
+        message: localizeServiceMessage(l10n, error.message),
+        kind: AppToastKind.error,
       );
     }
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
     final message = await context.read<TimetableProvider>().updateTimeScheme(
-          schemeId: widget.schemeId,
-          name: _nameController.text.trim(),
-          sections: _sections,
-        );
+      schemeId: widget.schemeId,
+      name: _nameController.text.trim(),
+      sections: _sections,
+    );
     if (!mounted) {
       return;
     }
     if (message != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      showAppToast(context, message: localizeServiceMessage(l10n, message));
       return;
     }
     Navigator.pop(context);
@@ -1052,7 +965,9 @@ class _TimeSchemeUsageSummary {
   int get courseCount => courseReferences.length;
   int get overrideCourseCount => overrideReferences.length;
   List<TimeSchemeCourseUsageReference> get directCourseReferences =>
-      courseReferences.where((item) => !item.usesOverride).toList(growable: false);
+      courseReferences
+          .where((item) => !item.usesOverride)
+          .toList(growable: false);
   bool get isUnused => profileCount == 0 && courseCount == 0;
 }
 
@@ -1117,10 +1032,7 @@ class _UsageLine extends StatelessWidget {
   final String primary;
   final String? secondary;
 
-  const _UsageLine({
-    required this.primary,
-    this.secondary,
-  });
+  const _UsageLine({required this.primary, this.secondary});
 
   @override
   Widget build(BuildContext context) {
@@ -1170,64 +1082,29 @@ class _TimeSchemeInfoChip extends StatelessWidget {
   final String label;
   final String value;
 
-  const _TimeSchemeInfoChip({
-    required this.label,
-    required this.value,
-  });
+  const _TimeSchemeInfoChip({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label $value',
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+    return HyperosTag(label: '$label $value');
   }
 }
 
 class _TimeSchemeBadge extends StatelessWidget {
   final String text;
-  final IconData icon;
 
-  const _TimeSchemeBadge({
-    required this.text,
-    required this.icon,
-  });
+  const _TimeSchemeBadge({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: colorScheme.primary),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+    final primary = HyperosColors.primary(context);
+    return HyperosTag(
+      label: text,
+      backgroundColor: primary.withValues(alpha: 0.12),
+      textStyle: TextStyle(
+        fontSize: HyperosMiuixTypography.footnote2,
+        fontWeight: FontWeight.w700,
+        color: primary,
       ),
     );
   }
@@ -1235,10 +1112,7 @@ class _TimeSchemeBadge extends StatelessWidget {
 
 TimeOfDay _parseTimeOfDay(String value) {
   final parts = value.split(':');
-  return TimeOfDay(
-    hour: int.parse(parts[0]),
-    minute: int.parse(parts[1]),
-  );
+  return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
 }
 
 String _formatTimeOfDay(TimeOfDay time) {
@@ -1294,9 +1168,7 @@ class _QuickGeneratePreset {
 class _QuickGenerateDialog extends StatefulWidget {
   final _QuickGeneratePreset initialPreset;
 
-  const _QuickGenerateDialog({
-    required this.initialPreset,
-  });
+  const _QuickGenerateDialog({required this.initialPreset});
 
   @override
   State<_QuickGenerateDialog> createState() => _QuickGenerateDialogState();
@@ -1308,9 +1180,7 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
   late final TextEditingController _eveningCountController;
   late final TextEditingController _classDurationController;
   late final TextEditingController _breakDurationController;
-  final List<_BreakOverrideDraft> _breakOverrides = [
-    _BreakOverrideDraft(afterSection: 2, breakDurationMinutes: 20),
-  ];
+  final List<_BreakOverrideDraft> _breakOverrides = [];
   String _morningStartTime = '08:00';
   String _afternoonStartTime = '14:00';
   String _eveningStartTime = '19:00';
@@ -1319,16 +1189,21 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
   void initState() {
     super.initState();
     final preset = widget.initialPreset;
-    _morningCountController =
-        TextEditingController(text: '${preset.morningCount}');
-    _afternoonCountController =
-        TextEditingController(text: '${preset.afternoonCount}');
-    _eveningCountController =
-        TextEditingController(text: '${preset.eveningCount}');
-    _classDurationController =
-        TextEditingController(text: '${preset.classDurationMinutes}');
-    _breakDurationController =
-        TextEditingController(text: '${preset.breakDurationMinutes}');
+    _morningCountController = TextEditingController(
+      text: '${preset.morningCount}',
+    );
+    _afternoonCountController = TextEditingController(
+      text: '${preset.afternoonCount}',
+    );
+    _eveningCountController = TextEditingController(
+      text: '${preset.eveningCount}',
+    );
+    _classDurationController = TextEditingController(
+      text: '${preset.classDurationMinutes}',
+    );
+    _breakDurationController = TextEditingController(
+      text: '${preset.breakDurationMinutes}',
+    );
     _morningStartTime = preset.morningStartTime ?? '08:00';
     _afternoonStartTime = preset.afternoonStartTime ?? '14:00';
     _eveningStartTime = preset.eveningStartTime ?? '19:00';
@@ -1342,6 +1217,11 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
           ),
         ),
       );
+    if (_breakOverrides.isEmpty) {
+      _breakOverrides.add(
+        _BreakOverrideDraft(afterSection: 2, breakDurationMinutes: 20),
+      );
+    }
   }
 
   @override
@@ -1351,134 +1231,123 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
     _eveningCountController.dispose();
     _classDurationController.dispose();
     _breakDurationController.dispose();
+    for (final item in _breakOverrides) {
+      item.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return AlertDialog(
-      title: Text(l10n.quickGenerateTimeSchemeTitle),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildNumberField(
-              _morningCountController,
-              l10n.morningSectionCountLabel,
+    return HyperosDialog(
+      title: l10n.quickGenerateTimeSchemeTitle,
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildNumberField(
+            _morningCountController,
+            l10n.morningSectionCountLabel,
+          ),
+          const SizedBox(height: 12),
+          _buildTimeTile(
+            label: l10n.morningFirstSectionTimeLabel,
+            value: _morningStartTime,
+            onTap: () => _pickTime(
+              currentValue: _morningStartTime,
+              onSelected: (value) {
+                setState(() {
+                  _morningStartTime = value;
+                });
+              },
             ),
-            const SizedBox(height: 12),
-            _buildTimeTile(
-              label: l10n.morningFirstSectionTimeLabel,
-              value: _morningStartTime,
-              onTap: () => _pickTime(
-                currentValue: _morningStartTime,
-                onSelected: (value) {
-                  setState(() {
-                    _morningStartTime = value;
-                  });
-                },
-              ),
+          ),
+          const SizedBox(height: 12),
+          _buildNumberField(
+            _afternoonCountController,
+            l10n.afternoonSectionCountLabel,
+          ),
+          const SizedBox(height: 12),
+          _buildTimeTile(
+            label: l10n.afternoonFirstSectionTimeLabel,
+            value: _afternoonStartTime,
+            onTap: () => _pickTime(
+              currentValue: _afternoonStartTime,
+              onSelected: (value) {
+                setState(() {
+                  _afternoonStartTime = value;
+                });
+              },
             ),
-            const SizedBox(height: 12),
-            _buildNumberField(
-              _afternoonCountController,
-              l10n.afternoonSectionCountLabel,
+          ),
+          const SizedBox(height: 12),
+          _buildNumberField(
+            _eveningCountController,
+            l10n.eveningSectionCountLabel,
+          ),
+          const SizedBox(height: 12),
+          _buildTimeTile(
+            label: l10n.eveningFirstSectionTimeLabel,
+            value: _eveningStartTime,
+            onTap: () => _pickTime(
+              currentValue: _eveningStartTime,
+              onSelected: (value) {
+                setState(() {
+                  _eveningStartTime = value;
+                });
+              },
             ),
-            const SizedBox(height: 12),
-            _buildTimeTile(
-              label: l10n.afternoonFirstSectionTimeLabel,
-              value: _afternoonStartTime,
-              onTap: () => _pickTime(
-                currentValue: _afternoonStartTime,
-                onSelected: (value) {
-                  setState(() {
-                    _afternoonStartTime = value;
-                  });
-                },
-              ),
+          ),
+          const SizedBox(height: 12),
+          _buildNumberField(
+            _classDurationController,
+            l10n.classDurationMinutesLabel,
+          ),
+          const SizedBox(height: 12),
+          _buildNumberField(
+            _breakDurationController,
+            l10n.smallBreakDurationMinutesLabel,
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              l10n.largeBreakRulesTitle,
+              style: HyperosTypography.listTitle(context),
             ),
-            const SizedBox(height: 12),
-            _buildNumberField(
-              _eveningCountController,
-              l10n.eveningSectionCountLabel,
+          ),
+          const SizedBox(height: 8),
+          ..._buildBreakOverrideRows(),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: HyperosButton(
+              label: l10n.addBreakRuleAction,
+              variant: HyperosButtonVariant.secondary,
+              onPressed: _addBreakOverride,
             ),
-            const SizedBox(height: 12),
-            _buildTimeTile(
-              label: l10n.eveningFirstSectionTimeLabel,
-              value: _eveningStartTime,
-              onTap: () => _pickTime(
-                currentValue: _eveningStartTime,
-                onSelected: (value) {
-                  setState(() {
-                    _eveningStartTime = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildNumberField(
-              _classDurationController,
-              l10n.classDurationMinutesLabel,
-            ),
-            const SizedBox(height: 12),
-            _buildNumberField(
-              _breakDurationController,
-              l10n.smallBreakDurationMinutesLabel,
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                l10n.largeBreakRulesTitle,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ..._buildBreakOverrideRows(),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _addBreakOverride,
-                icon: const Icon(Icons.add_rounded),
-                label: Text(l10n.addBreakRuleAction),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       actions: [
-        TextButton(
+        HyperosDialogAction(
+          label: l10n.cancelAction,
           onPressed: () => Navigator.pop(context),
-          child: Text(l10n.cancelAction),
         ),
-        TextButton(
+        HyperosDialogAction(
+          label: l10n.generateAction,
+          isPrimary: true,
           onPressed: _submit,
-          child: Text(l10n.generateAction),
         ),
       ],
     );
   }
 
   Widget _buildNumberField(TextEditingController controller, String label) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-          ),
-        ),
-      ],
+    return HyperosTextField(
+      controller: controller,
+      label: label,
+      keyboardType: TextInputType.number,
     );
   }
 
@@ -1487,11 +1356,10 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
     required String value,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(label),
-      subtitle: Text(value),
-      trailing: const Icon(Icons.schedule_outlined),
+    return HyperosListTile(
+      icon: Icons.schedule_outlined,
+      title: label,
+      details: value,
       onTap: onTap,
     );
   }
@@ -1502,7 +1370,7 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
       return [
         Text(
           l10n.noLargeBreakRulesHint,
-          style: Theme.of(context).textTheme.bodySmall,
+          style: HyperosTypography.sectionDescription(context),
         ),
       ];
     }
@@ -1512,42 +1380,31 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
-                initialValue: '${item.afterSection}',
+              child: HyperosTextField(
+                controller: item.afterController,
+                label: l10n.afterSectionLabel,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: l10n.afterSectionLabel,
-                ),
-                onChanged: (value) {
-                  item.afterSection = int.tryParse(value) ?? 0;
-                },
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: TextFormField(
-                initialValue: '${item.breakDurationMinutes}',
+              child: HyperosTextField(
+                controller: item.durationController,
+                label: l10n.breakDurationMinutesLabel,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: l10n.breakDurationMinutesLabel,
-                ),
-                onChanged: (value) {
-                  item.breakDurationMinutes = int.tryParse(value) ?? 0;
-                },
               ),
             ),
-            IconButton(
+            HyperosIconButton(
+              icon: Icons.delete_outline_rounded,
               tooltip: l10n.deleteRuleTooltip,
               onPressed: () {
                 setState(() {
-                  _breakOverrides.removeAt(index);
+                  _breakOverrides.removeAt(index).dispose();
                 });
               },
-              icon: const Icon(Icons.delete_outline_rounded),
             ),
           ],
         ),
@@ -1582,15 +1439,18 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
         eveningCount == null ||
         classDuration == null ||
         breakDuration == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.fillNumbersValidationMessage)),
+      showAppToast(
+        context,
+        message: l10n.fillNumbersValidationMessage,
+        kind: AppToastKind.warning,
       );
       return;
     }
 
     final breakOverrideRules = _breakOverrides
         .where(
-            (item) => item.afterSection > 0 && item.breakDurationMinutes >= 0)
+          (item) => item.afterSection > 0 && item.breakDurationMinutes >= 0,
+        )
         .map(
           (item) => BreakOverrideRule(
             afterSection: item.afterSection,
@@ -1625,12 +1485,24 @@ class _QuickGenerateDialogState extends State<_QuickGenerateDialog> {
 }
 
 class _BreakOverrideDraft {
-  int afterSection;
-  int breakDurationMinutes;
-
   _BreakOverrideDraft({
-    required this.afterSection,
-    required this.breakDurationMinutes,
-  });
-}
+    required int afterSection,
+    required int breakDurationMinutes,
+  }) : afterController = TextEditingController(text: '$afterSection'),
+       durationController = TextEditingController(
+         text: '$breakDurationMinutes',
+       );
 
+  final TextEditingController afterController;
+  final TextEditingController durationController;
+
+  int get afterSection => int.tryParse(afterController.text.trim()) ?? 0;
+
+  int get breakDurationMinutes =>
+      int.tryParse(durationController.text.trim()) ?? 0;
+
+  void dispose() {
+    afterController.dispose();
+    durationController.dispose();
+  }
+}

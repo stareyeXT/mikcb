@@ -1,20 +1,15 @@
 import 'dart:convert';
 
-enum CourseNature {
-  required,
-  elective,
-}
+import '../l10n/app_localizations.dart';
+import '../l10n/course_week_localizations.dart';
+
+enum CourseNature { required, elective }
 
 extension CourseNatureX on CourseNature {
   String get value => switch (this) {
-        CourseNature.required => 'required',
-        CourseNature.elective => 'elective',
-      };
-
-  String get label => switch (this) {
-        CourseNature.required => '必修',
-        CourseNature.elective => '选修',
-      };
+    CourseNature.required => 'required',
+    CourseNature.elective => 'elective',
+  };
 
   static CourseNature fromValue(String? value) {
     return CourseNature.values.firstWhere(
@@ -43,6 +38,7 @@ class Course {
   final bool isOddWeek; // 是否单周
   final bool isEvenWeek; // 是否双周
   final List<int>? customWeeks; // 自定义周次
+  final List<int>? suspendedWeeks; // 停课周次
   final CourseNature courseNature; // 课程性质
   final String? description; // 课程简介（同名课程共享）
   final String? note; // 备注/备忘录
@@ -65,11 +61,47 @@ class Course {
     this.isOddWeek = false,
     this.isEvenWeek = false,
     this.customWeeks,
+    this.suspendedWeeks,
     this.courseNature = CourseNature.required,
     this.description,
     this.note,
     this.timeSchemeIdOverride,
   });
+
+  /// Clamps [dayOfWeek] to Monday–Sunday (1–7).
+  static int normalizeDayOfWeek(int dayOfWeek) {
+    if (dayOfWeek < 1) {
+      return 1;
+    }
+    if (dayOfWeek > 7) {
+      return 7;
+    }
+    return dayOfWeek;
+  }
+
+  /// Clamps section indexes so both stay in range and end >= start.
+  static ({int startSection, int endSection}) normalizeSections({
+    required int startSection,
+    required int endSection,
+    int maxSection = 24,
+  }) {
+    final safeMaxSection = maxSection < 1 ? 1 : maxSection;
+    final normalizedStart = startSection.clamp(1, safeMaxSection);
+    final normalizedEnd = endSection.clamp(normalizedStart, safeMaxSection);
+    return (startSection: normalizedStart, endSection: normalizedEnd);
+  }
+
+  /// Clamps week range so both stay in range and end >= start.
+  static ({int startWeek, int endWeek}) normalizeWeeks({
+    required int startWeek,
+    required int endWeek,
+    int maxWeek = 30,
+  }) {
+    final safeMaxWeek = maxWeek < 1 ? 1 : maxWeek;
+    final normalizedStart = startWeek.clamp(1, safeMaxWeek);
+    final normalizedEnd = endWeek.clamp(normalizedStart, safeMaxWeek);
+    return (startWeek: normalizedStart, endWeek: normalizedEnd);
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -89,6 +121,7 @@ class Course {
       'isOddWeek': isOddWeek,
       'isEvenWeek': isEvenWeek,
       'customWeeks': customWeeks,
+      'suspendedWeeks': suspendedWeeks,
       'courseNature': courseNature.value,
       'description': description,
       'note': note,
@@ -97,25 +130,63 @@ class Course {
   }
 
   factory Course.fromJson(Map<String, dynamic> json) {
+    int readInt(String key, {int? fallback}) {
+      final raw = json[key];
+      if (raw is num) {
+        return raw.toInt();
+      }
+      if (raw is String) {
+        return int.tryParse(raw) ?? fallback ?? 0;
+      }
+      if (fallback != null) {
+        return fallback;
+      }
+      throw FormatException('Course.$key must be a number');
+    }
+
+    List<int>? readIntList(String key) {
+      final raw = json[key];
+      if (raw is! List) {
+        return null;
+      }
+      return raw.map((item) {
+        if (item is num) {
+          return item.toInt();
+        }
+        if (item is String) {
+          return int.tryParse(item) ?? 0;
+        }
+        return 0;
+      }).toList();
+    }
+
+    final sections = normalizeSections(
+      startSection: readInt('startSection', fallback: 1),
+      endSection: readInt('endSection', fallback: 1),
+    );
+    final weeks = normalizeWeeks(
+      startWeek: readInt('startWeek', fallback: 1),
+      endWeek: readInt('endWeek', fallback: 16),
+    );
+
     return Course(
       id: json['id'] as String,
       name: json['name'] as String,
       shortName: json['shortName'] as String?,
       teacher: json['teacher'] as String,
       location: json['location'] as String,
-      dayOfWeek: json['dayOfWeek'] as int,
-      startSection: json['startSection'] as int,
-      endSection: json['endSection'] as int,
+      dayOfWeek: normalizeDayOfWeek(readInt('dayOfWeek', fallback: 1)),
+      startSection: sections.startSection,
+      endSection: sections.endSection,
       startTime: json['startTime'] as String,
       endTime: json['endTime'] as String,
       color: json['color'] as String? ?? '#2196F3',
-      startWeek: json['startWeek'] as int? ?? 1,
-      endWeek: json['endWeek'] as int? ?? 16,
+      startWeek: weeks.startWeek,
+      endWeek: weeks.endWeek,
       isOddWeek: json['isOddWeek'] as bool? ?? false,
       isEvenWeek: json['isEvenWeek'] as bool? ?? false,
-      customWeeks: (json['customWeeks'] as List<dynamic>?)
-          ?.map((item) => item as int)
-          .toList(),
+      customWeeks: readIntList('customWeeks'),
+      suspendedWeeks: readIntList('suspendedWeeks'),
       courseNature: CourseNatureX.fromValue(json['courseNature'] as String?),
       description: json['description'] as String? ?? json['note'] as String?,
       note: json['note'] as String?,
@@ -146,6 +217,7 @@ class Course {
     bool? isOddWeek,
     bool? isEvenWeek,
     Object? customWeeks = _unset,
+    Object? suspendedWeeks = _unset,
     CourseNature? courseNature,
     Object? description = _unset,
     Object? note = _unset,
@@ -154,8 +226,9 @@ class Course {
     return Course(
       id: id ?? this.id,
       name: name ?? this.name,
-      shortName:
-          identical(shortName, _unset) ? this.shortName : shortName as String?,
+      shortName: identical(shortName, _unset)
+          ? this.shortName
+          : shortName as String?,
       teacher: teacher ?? this.teacher,
       location: location ?? this.location,
       dayOfWeek: dayOfWeek ?? this.dayOfWeek,
@@ -171,6 +244,9 @@ class Course {
       customWeeks: identical(customWeeks, _unset)
           ? this.customWeeks
           : (customWeeks as List<int>?),
+      suspendedWeeks: identical(suspendedWeeks, _unset)
+          ? this.suspendedWeeks
+          : (suspendedWeeks as List<int>?),
       courseNature: courseNature ?? this.courseNature,
       description: identical(description, _unset)
           ? this.description
@@ -195,38 +271,45 @@ class Course {
 
   bool get hasCustomWeeks => normalizedCustomWeeks != null;
 
+  List<int>? get normalizedSuspendedWeeks {
+    final source = suspendedWeeks;
+    if (source == null || source.isEmpty) {
+      return null;
+    }
+    final normalized = source.toSet().toList()..sort();
+    return normalized;
+  }
+
+  bool isSuspendedInWeek(int week) => suspendedWeeks?.contains(week) ?? false;
+
   List<int> get activeWeeks {
     final custom = normalizedCustomWeeks;
-    if (custom != null) {
-      return custom;
-    }
-
     final weeks = <int>[];
-    for (var week = startWeek; week <= endWeek; week++) {
-      if (isOddWeek && week.isEven) {
-        continue;
-      }
-      if (isEvenWeek && week.isOdd) {
-        continue;
-      }
-      weeks.add(week);
-    }
-    return weeks;
-  }
-
-  String get weekDescription {
-    final custom = normalizedCustomWeeks;
     if (custom != null) {
-      return '第${_formatWeekList(custom)}周';
+      weeks.addAll(custom);
+    } else {
+      for (var week = startWeek; week <= endWeek; week++) {
+        if (isOddWeek && week.isEven) {
+          continue;
+        }
+        if (isEvenWeek && week.isOdd) {
+          continue;
+        }
+        weeks.add(week);
+      }
     }
-
-    final mode = isOddWeek
-        ? ' 单周'
-        : isEvenWeek
-            ? ' 双周'
-            : '';
-    return '第$startWeek-$endWeek周$mode';
+    final suspended = normalizedSuspendedWeeks;
+    if (suspended == null || suspended.isEmpty) {
+      return weeks;
+    }
+    return weeks.where((week) => !suspended.contains(week)).toList();
   }
+
+  String weekDescription(AppLocalizations l10n) =>
+      courseWeekDescription(l10n, this);
+
+  String? suspensionDescription(AppLocalizations l10n) =>
+      courseSuspensionDescription(l10n, this);
 
   bool isInWeek(int week) {
     final custom = normalizedCustomWeeks;
@@ -239,30 +322,9 @@ class Course {
     return true;
   }
 
-  String _formatWeekList(List<int> weeks) {
-    if (weeks.isEmpty) {
-      return '';
-    }
-    final ranges = <String>[];
-    var rangeStart = weeks.first;
-    var previous = weeks.first;
-
-    for (var index = 1; index < weeks.length; index++) {
-      final current = weeks[index];
-      if (current == previous + 1) {
-        previous = current;
-        continue;
-      }
-      ranges.add(
-        rangeStart == previous ? '$rangeStart' : '$rangeStart-$previous',
-      );
-      rangeStart = current;
-      previous = current;
-    }
-
-    ranges.add(
-      rangeStart == previous ? '$rangeStart' : '$rangeStart-$previous',
-    );
-    return ranges.join('、');
+  /// 是否在指定周次有效（排除停课）
+  bool isActiveInWeek(int week) {
+    if (suspendedWeeks?.contains(week) == true) return false;
+    return isInWeek(week);
   }
 }

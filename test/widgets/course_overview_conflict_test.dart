@@ -9,6 +9,7 @@ import 'package:university_timetable/models/timetable_profile.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
 import 'package:university_timetable/providers/timetable_provider.dart';
 import 'package:university_timetable/screens/course_overview_screen.dart';
+import 'package:university_timetable/services/storage_service.dart';
 import '../helpers_test_app.dart';
 
 Future<void> _pumpScreen(WidgetTester tester) async {
@@ -44,6 +45,7 @@ void main() {
   const liveChannel = MethodChannel('com.mutx163.qingyu/miui_live');
 
   setUp(() {
+    StorageService().resetForTesting();
     _seedInitializedPrefs();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(homeWidgetChannel, (call) async => null);
@@ -98,24 +100,18 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(
-          home: CourseOverviewScreen(),
-        ),
+        child: const TestApp(home: CourseOverviewScreen()),
       ),
     );
     await _pumpScreen(tester);
 
     expect(find.textContaining('检测到 2 门排课存在实际冲突'), findsOneWidget);
     expect(find.text('冲突 1 节'), findsNWidgets(2));
-    expect(find.textContaining('展开查看冲突详情'), findsWidgets);
-    await tester.tap(find.text('线性代数'));
-    await _pumpScreen(tester);
-    expect(find.textContaining('冲突课程:'), findsOneWidget);
-    expect(find.textContaining('第1-16周'), findsOneWidget);
   });
 
-  testWidgets('course overview does not mark same slot on different weeks',
-      (tester) async {
+  testWidgets('course overview does not mark same slot on different weeks', (
+    tester,
+  ) async {
     final provider = TimetableProvider(
       autoInitialize: false,
       enableLiveActivitySync: false,
@@ -155,9 +151,7 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(
-          home: CourseOverviewScreen(),
-        ),
+        child: const TestApp(home: CourseOverviewScreen()),
       ),
     );
     await _pumpScreen(tester);

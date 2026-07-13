@@ -1,0 +1,41 @@
+name: Update Docs Schools JSON
+
+on:
+  schedule:
+    # 每天 09:30（北京时间），与 release JSON 同步任务错开
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-schools-json:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Sync schools JSON from qingyu_warehouse
+        run: python tool/sync_schools_json.py
+
+      - name: Commit and Push changes
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
+        with:
+          branch: ${{ github.event.repository.default_branch }}
+          commit_message: "chore(docs): auto-update schools json"
+          file_pattern: docs/schools.json
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"

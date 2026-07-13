@@ -2,8 +2,11 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../l10n/service_message_localizer.dart';
+import '../logging/app_debug_log.dart';
 import '../models/warehouse_repository_models.dart';
 import '../models/timetable_settings.dart';
+import '../utils/async_utils.dart';
 
 class WarehouseFetchOptions {
   final AppUpdateDownloadSource downloadSource;
@@ -33,12 +36,17 @@ class WarehouseRepositoryService {
   final http.Client _client;
 
   WarehouseRepositoryService({http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
+
+  static void _log(String message) {
+    appDebugLog('WarehouseService', '${formatLogTimestamp()} $message');
+  }
 
   Future<WarehouseRootIndex> fetchRootIndex(
     WarehouseRepositorySource source, {
     WarehouseFetchOptions? options,
   }) async {
+    _log('获取学校列表...');
     final content = await _fetchText(
       source.buildRawFileUri('index/root_index.yaml'),
       options: options,
@@ -61,7 +69,7 @@ class WarehouseRepositoryService {
         )
         .toList(growable: false);
     if (schools.isEmpty) {
-      throw const WarehouseRepositoryException('未读取到任何学校或工具索引');
+      throw const WarehouseRepositoryException('warehouse_no_schools_index');
     }
     return WarehouseRootIndex(schools: schools);
   }
@@ -71,6 +79,7 @@ class WarehouseRepositoryService {
     WarehouseSchoolEntry school, {
     WarehouseFetchOptions? options,
   }) async {
+    _log('获取 ${school.name} 适配器列表...');
     final path = 'resources/${school.resourceFolder}/adapters.yaml';
     final content = await _fetchText(
       source.buildRawFileUri(path),
@@ -89,10 +98,17 @@ class WarehouseRepositoryService {
             description: item['description'] ?? '',
           ),
         )
-        .where((item) => item.adapterId.isNotEmpty && item.assetJsPath.isNotEmpty)
+        .where(
+          (item) => item.adapterId.isNotEmpty && item.assetJsPath.isNotEmpty,
+        )
         .toList(growable: false);
     if (adapters.isEmpty) {
-      throw WarehouseRepositoryException('未读取到 ${school.name} 的适配器信息');
+      throw WarehouseRepositoryException(
+        encodeServiceMessage(
+          'warehouse_no_adapters',
+          {'schoolName': school.name},
+        ),
+      );
     }
     return WarehouseAdaptersIndex(adapters: adapters);
   }
@@ -104,59 +120,67 @@ class WarehouseRepositoryService {
     WarehouseFetchOptions? options,
   }) async {
     final path = 'resources/${school.resourceFolder}/${adapter.assetJsPath}';
-    return _fetchText(
-      source.buildRawFileUri(path),
-      options: options,
-    );
+    return _fetchText(source.buildRawFileUri(path), options: options);
   }
 
-  Future<String> _fetchText(
-    Uri uri, {
-    WarehouseFetchOptions? options,
-  }) async {
-    final candidates = _buildCandidateUris(
-      uri,
-      options ??
-          const WarehouseFetchOptions(
-            downloadSource: AppUpdateDownloadSource.mirror,
-            mirrorPreset: AppUpdateMirrorPreset.ghfast,
-            customMirrorUrlPrefix: defaultAppUpdateMirrorUrlPrefix,
-          ),
-    );
+  Future<String> _fetchText(Uri uri, {WarehouseFetchOptions? options}) async {
+    final effectiveOptions =
+        options ??
+        const WarehouseFetchOptions(
+          downloadSource: AppUpdateDownloadSource.mirror,
+          mirrorPreset: AppUpdateMirrorPreset.ghfast,
+          customMirrorUrlPrefix: defaultAppUpdateMirrorUrlPrefix,
+        );
+    final candidates = _buildCandidateUris(uri, effectiveOptions);
+    _log('请求 $uri,候选 ${candidates.length} 个');
 
-    Object? lastError;
-    for (final candidate in candidates) {
-      try {
-        final response = await _client.get(
+    // 所有候选并行竞争,谁先返回 200 用谁
+    final result = await raceFutures<http.Response, String>(
+      candidates.map((candidate) {
+        return _client.get(
           candidate,
           headers: const {
             'Accept': 'text/plain, */*',
             'User-Agent': 'mikcb-warehouse-client',
           },
         );
+      }).toList(),
+      (response) {
         if (response.statusCode == 200) {
           return utf8.decode(response.bodyBytes);
         }
-        lastError = 'HTTP ${response.statusCode}';
-      } catch (error) {
-        lastError = error;
-      }
+        return null;
+      },
+    );
+
+    if (result.winner != null) {
+      return result.winner!;
     }
 
+    final lastError = result.errors.isNotEmpty ? result.errors.last : null;
+    final candidatesCount = candidates.length;
+    throw _buildFetchError(
+      effectiveOptions,
+      lastError,
+      candidatesCount: candidatesCount,
+    );
+  }
+
+  WarehouseRepositoryException _buildFetchError(
+    WarehouseFetchOptions options,
+    Object? lastError, {
+    int candidatesCount = 0,
+  }) {
     final usingMirror =
-        (options ?? const WarehouseFetchOptions(
-              downloadSource: AppUpdateDownloadSource.mirror,
-              mirrorPreset: AppUpdateMirrorPreset.ghfast,
-              customMirrorUrlPrefix: defaultAppUpdateMirrorUrlPrefix,
-            ))
-            .downloadSource ==
-            AppUpdateDownloadSource.mirror;
-    throw WarehouseRepositoryException(
-      usingMirror
-          ? '暂时无法读取适配仓。当前已按“版本更新”里的国内镜像线路尝试读取，请检查网络，或切到其他镜像线路后重试。'
-              '${lastError == null ? "" : " 原始错误：$lastError"}'
-          : '暂时无法读取适配仓。当前正在使用 GitHub 原始线路，请检查网络，或在“版本更新”里切到国内镜像后重试。'
-              '${lastError == null ? "" : " 原始错误：$lastError"}',
+        options.downloadSource == AppUpdateDownloadSource.mirror;
+    final code = usingMirror
+        ? 'warehouse_fetch_failed_mirror'
+        : 'warehouse_fetch_failed_github';
+    return WarehouseRepositoryException(
+      encodeServiceMessage(
+        code,
+        usingMirror ? {'candidatesCount': '$candidatesCount'} : const {},
+      ),
     );
   }
 
@@ -168,29 +192,15 @@ class WarehouseRepositoryService {
       return [originalUri];
     }
 
-    final orderedPresets = <AppUpdateMirrorPreset>[
-      options.mirrorPreset,
-      AppUpdateMirrorPreset.ghfast,
-      AppUpdateMirrorPreset.ghproxyCn,
-      AppUpdateMirrorPreset.ghLlkk,
-      if (options.customMirrorUrlPrefix.trim().isNotEmpty)
-        AppUpdateMirrorPreset.custom,
-    ];
-    final seen = <String>{};
-    final uris = <Uri>[];
-    for (final preset in orderedPresets) {
-      final prefix = resolveAppUpdateMirrorUrlPrefix(
-        preset: preset,
-        customUrlPrefix: options.customMirrorUrlPrefix,
-      );
-      final separator = prefix.endsWith('/') ? '' : '/';
-      final candidate = Uri.parse('$prefix$separator$originalUri');
-      final key = candidate.toString();
-      if (seen.add(key)) {
-        uris.add(candidate);
-      }
-    }
-    return uris;
+    final selectedPrefix = resolveAppUpdateMirrorUrlPrefix(
+      preset: options.mirrorPreset,
+      customUrlPrefix: options.customMirrorUrlPrefix,
+    );
+    final urls = buildMirrorCandidateUrls(
+      originalUri.toString(),
+      selectedMirrorPrefix: selectedPrefix,
+    );
+    return urls.map(Uri.parse).toList();
   }
 }
 
@@ -253,12 +263,12 @@ List<Map<String, String>> _parseYamlListMaps(
 }
 
 MapEntry<String, String>? _parseYamlPair(String line) {
-  final separatorIndex = line.indexOf(':');
+  final separatorIndex = line.indexOf(': ');
   if (separatorIndex <= 0) {
     return null;
   }
   final key = line.substring(0, separatorIndex).trim();
-  var value = line.substring(separatorIndex + 1).trim();
+  var value = line.substring(separatorIndex + 2).trim();
   value = _stripInlineComment(value);
   if ((value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))) {

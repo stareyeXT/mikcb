@@ -1,23 +1,28 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:university_timetable/screens/live_diagnostics_log_viewer_screen.dart';
 
 import '../helpers_test_app.dart';
 
 void main() {
-  const sampleLog = '''轻屿课表 - 超级岛诊断日志
+  const sampleLog = '''轻屿课表 - 应用日志
 exportedAt=1744166400000
 brand=Xiaomi
 ----
 time=1744166400000
 level=error
+source=native
 category=render_failed
-message=Render failed
+message=渲染失败
 stackTrace=
   line 1
 
 time=1744166500000
+source=app
 category=debug_snapshot
-message=Snapshot payload captured
+message=已捕获快照负载
 extras=
   step=refresh
 ''';
@@ -25,6 +30,9 @@ extras=
   testWidgets('viewer can filter logs by level and raw tab follows filter', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     var exported = 0;
     var cleared = 0;
     await tester.pumpWidget(
@@ -45,32 +53,112 @@ extras=
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('正在记录应用日志'), findsOneWidget);
-    expect(find.text('Render failed'), findsOneWidget);
-    expect(find.text('Snapshot payload captured'), findsOneWidget);
-    expect(find.text('显示 2 / 2 条日志'), findsOneWidget);
+    expect(find.text('查看与排序'), findsOneWidget);
+    expect(find.textContaining('结构化 · 正序'), findsOneWidget);
+    expect(find.textContaining('渲染失败'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.textContaining('已捕获快照负载'),
+      48,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('已捕获快照负载'), findsOneWidget);
+
+    await tester.tap(find.textContaining('渲染失败').first);
+    await tester.pumpAndSettle();
+    expect(find.text('超级岛'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.textContaining('已捕获快照负载'),
+      48,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.textContaining('已捕获快照负载').first);
+    await tester.pumpAndSettle();
+    expect(find.text('应用'), findsOneWidget);
 
     await tester.tap(find.text('错误 1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Render failed'), findsOneWidget);
-    expect(find.text('Snapshot payload captured'), findsNothing);
-    expect(find.text('显示 1 / 2 条日志'), findsOneWidget);
+    expect(find.textContaining('渲染失败'), findsWidgets);
+    expect(find.textContaining('已捕获快照负载'), findsNothing);
 
+    await tester.tap(find.text('查看与排序'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('原文'));
     await tester.pumpAndSettle();
 
-    expect(find.text('原文视图会跟随当前等级筛选，只显示对应日志块。'), findsOneWidget);
-    expect(find.textContaining('Render failed'), findsOneWidget);
-    expect(find.textContaining('Snapshot payload captured'), findsNothing);
+    expect(find.textContaining('渲染失败'), findsOneWidget);
+    expect(find.textContaining('已捕获快照负载'), findsNothing);
 
-    await tester.tap(find.byTooltip('导出日志'));
+    await tester.tap(find.bySemanticsLabel('导出日志'));
     await tester.pumpAndSettle();
     expect(exported, 1);
 
-    await tester.tap(find.byTooltip('清空日志'));
+    await tester.tap(find.bySemanticsLabel('清空日志'));
     await tester.pumpAndSettle();
     expect(cleared, 1);
-    expect(find.text('已清空应用日志'), findsOneWidget);
+  });
+
+  testWidgets('viewer can sort logs by time ascending and descending', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      TestApp(
+        home: LiveDiagnosticsLogViewerScreen(
+          title: '日志中心',
+          rawLog: sampleLog,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('渲染失败'), findsWidgets);
+
+    await tester.tap(find.text('查看与排序'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('倒序'));
+    await tester.pumpAndSettle();
+
+    final descending = find.textContaining('已捕获快照负载');
+    expect(descending, findsWidgets);
+    expect(
+      tester.getTopLeft(descending.first).dy <
+          tester.getTopLeft(find.textContaining('渲染失败').first).dy,
+      isTrue,
+    );
+
+    await tester.tap(find.text('正序'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.textContaining('渲染失败').first).dy <
+          tester.getTopLeft(find.textContaining('已捕获快照负载').first).dy,
+      isTrue,
+    );
+  });
+
+  testWidgets('viewer updates when watchRawLog emits new content', (
+    tester,
+  ) async {
+    final controller = StreamController<String>();
+    addTearDown(controller.close);
+
+    await tester.pumpWidget(
+      TestApp(
+        home: LiveDiagnosticsLogViewerScreen(
+          title: '日志中心',
+          watchRawLog: () => controller.stream,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.add(sampleLog);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('渲染失败'), findsWidgets);
   });
 }

@@ -4,34 +4,36 @@ class IcsImportResult {
   final List<Course> courses;
   final DateTime semesterStart;
 
-  const IcsImportResult({
-    required this.courses,
-    required this.semesterStart,
-  });
+  const IcsImportResult({required this.courses, required this.semesterStart});
 }
 
 class IcsImportService {
   IcsImportResult parseWakeUpSchedule(String content) {
     final events = _parseEvents(content);
     if (events.isEmpty) {
-      return IcsImportResult(
-        courses: const [],
-        semesterStart: DateTime.now(),
-      );
+      return IcsImportResult(courses: const [], semesterStart: DateTime.now());
     }
 
-    final startDates = events
-        .map((event) => _parseLocalDateTime(event['DTSTART']))
-        .whereType<DateTime>()
-        .toList()
-      ..sort();
+    final startDates =
+        events
+            .map((event) => _parseLocalDateTime(event['DTSTART']))
+            .whereType<DateTime>()
+            .toList()
+          ..sort();
+
+    if (startDates.isEmpty) {
+      return IcsImportResult(courses: const [], semesterStart: DateTime.now());
+    }
 
     final semesterStart = _startOfWeek(startDates.first);
     final rawCourses = <Course>[];
 
     for (final event in events) {
-      final course =
-          _buildCourseFromEvent(event, semesterStart, rawCourses.length);
+      final course = _buildCourseFromEvent(
+        event,
+        semesterStart,
+        rawCourses.length,
+      );
       if (course != null) {
         rawCourses.add(course);
       }
@@ -39,10 +41,7 @@ class IcsImportService {
 
     final courses = _mergeAlternatingWeekCourses(rawCourses);
 
-    return IcsImportResult(
-      courses: courses,
-      semesterStart: semesterStart,
-    );
+    return IcsImportResult(courses: courses, semesterStart: semesterStart);
   }
 
   List<Map<String, String>> _parseEvents(String content) {
@@ -98,7 +97,8 @@ class IcsImportService {
     final unfolded = <String>[];
 
     for (final line in lines) {
-      if ((line.startsWith(' ') || line.startsWith('\t')) && unfolded.isNotEmpty) {
+      if ((line.startsWith(' ') || line.startsWith('\t')) &&
+          unfolded.isNotEmpty) {
         unfolded[unfolded.length - 1] += line.substring(1);
       } else {
         unfolded.add(line);
@@ -117,7 +117,10 @@ class IcsImportService {
     final description = event['DESCRIPTION'];
     final startDateTime = _parseLocalDateTime(event['DTSTART']);
     final endDateTime = _parseLocalDateTime(event['DTEND']);
-    if (summary == null || description == null || startDateTime == null || endDateTime == null) {
+    if (summary == null ||
+        description == null ||
+        startDateTime == null ||
+        endDateTime == null) {
       return null;
     }
 
@@ -131,26 +134,66 @@ class IcsImportService {
       return null;
     }
 
-    final sectionMatch = RegExp(r'第\s*(\d+)\s*-\s*(\d+)\s*节').firstMatch(descriptionLines.first);
+    final sectionMatch = RegExp(
+      r'第\s*(\d+)\s*-\s*(\d+)\s*节',
+    ).firstMatch(descriptionLines.first);
     if (sectionMatch == null) {
       return null;
     }
 
-    final startSection = int.parse(sectionMatch.group(1)!);
-    final endSection = int.parse(sectionMatch.group(2)!);
+    final startSection = int.tryParse(sectionMatch.group(1)!);
+    final endSection = int.tryParse(sectionMatch.group(2)!);
+    if (startSection == null || endSection == null) {
+      return null;
+    }
     final hasStructuredLocation = descriptionLines.length >= 2;
-    final rawLocation = hasStructuredLocation
-        ? descriptionLines[1]
-        : (event['LOCATION'] ?? '');
-    final teacher = descriptionLines.length >= 3
-        ? descriptionLines[2]
-        : _extractTeacherFromCombinedLocation(event['LOCATION'] ?? '');
-    final endWeek = _parseEndWeek(
-          event['RRULE'],
-          semesterStart,
-          startDateTime,
-        ) ??
-        _weekIndex(startDateTime, semesterStart);
+
+    // ICS DESCRIPTION has two known formats after line[0] (section info):
+    //   Format A: line[1]=location, line[2]=teacher
+    //   Format B: line[1]=teacher,   line[2]=location
+    // We use the independent LOCATION field from the ICS event as a
+    // tie-breaker: whichever description line matches LOCATION is the
+    // location line, and the other is the teacher line.
+    String rawLocation;
+    String teacher;
+    if (!hasStructuredLocation) {
+      rawLocation = event['LOCATION'] ?? '';
+      teacher = _extractTeacherFromCombinedLocation(rawLocation);
+    } else if (descriptionLines.length < 3) {
+      // Only one extra line — fall back to LOCATION field.
+      rawLocation = descriptionLines[1];
+      teacher = _extractTeacherFromCombinedLocation(event['LOCATION'] ?? '');
+    } else {
+      final icsLocation = (event['LOCATION'] ?? '').trim();
+      final line1 = descriptionLines[1].trim();
+      final line2 = descriptionLines[2].trim();
+
+      final line1MatchesLocation =
+          icsLocation.isNotEmpty &&
+          (line1.contains(icsLocation) || icsLocation.contains(line1));
+      final line2MatchesLocation =
+          icsLocation.isNotEmpty &&
+          (line2.contains(icsLocation) || icsLocation.contains(line2));
+
+      if (line2MatchesLocation && !line1MatchesLocation) {
+        // Format B: line[1]=teacher, line[2]=location
+        teacher = line1;
+        rawLocation = line2;
+      } else {
+        // Format A (default): line[1]=location, line[2]=teacher
+        rawLocation = line1;
+        teacher = line2;
+      }
+    }
+    final startWeek = _weekIndex(startDateTime, semesterStart);
+    final endWeek =
+        _parseEndWeek(event['RRULE'], semesterStart, startDateTime) ??
+        startWeek;
+    final weeklyInterval = _parseWeeklyInterval(event['RRULE'] ?? '');
+    // INTERVAL=2 means every other week; mark odd/even from the first week.
+    final isBiweekly = weeklyInterval == 2;
+    final isOddWeek = isBiweekly && startWeek.isOdd;
+    final isEvenWeek = isBiweekly && startWeek.isEven;
 
     return Course(
       id: 'ics-${startDateTime.millisecondsSinceEpoch}-$index',
@@ -164,8 +207,10 @@ class IcsImportService {
       endSection: endSection,
       startTime: _formatTime(startDateTime),
       endTime: _formatTime(endDateTime),
-      startWeek: _weekIndex(startDateTime, semesterStart),
+      startWeek: startWeek,
       endWeek: endWeek,
+      isOddWeek: isOddWeek,
+      isEvenWeek: isEvenWeek,
     );
   }
 
@@ -204,7 +249,8 @@ class IcsImportService {
             continue;
           }
           final previous = run.last;
-          if (!_isSingleWeekCourse(previous) || !_isSingleWeekCourse(candidate)) {
+          if (!_isSingleWeekCourse(previous) ||
+              !_isSingleWeekCourse(candidate)) {
             break;
           }
           if (candidate.startWeek - previous.startWeek != 2) {
@@ -291,12 +337,20 @@ class IcsImportService {
 
     final date = match.group(1)!;
     final time = match.group(2)!;
-    final year = int.parse(date.substring(0, 4));
-    final month = int.parse(date.substring(4, 6));
-    final day = int.parse(date.substring(6, 8));
-    final hour = int.parse(time.substring(0, 2));
-    final minute = int.parse(time.substring(2, 4));
-    final second = time.length >= 6 ? int.parse(time.substring(4, 6)) : 0;
+    final year = int.tryParse(date.substring(0, 4));
+    final month = int.tryParse(date.substring(4, 6));
+    final day = int.tryParse(date.substring(6, 8));
+    final hour = int.tryParse(time.substring(0, 2));
+    final minute = int.tryParse(time.substring(2, 4));
+    final second = time.length >= 6 ? int.tryParse(time.substring(4, 6)) : 0;
+    if (year == null ||
+        month == null ||
+        day == null ||
+        hour == null ||
+        minute == null ||
+        second == null) {
+      return null;
+    }
 
     return DateTime(year, month, day, hour, minute, second);
   }
@@ -311,8 +365,9 @@ class IcsImportService {
     if (untilDateTime == null) return null;
 
     final intervalWeeks = _parseWeeklyInterval(rrule);
-    final repeatDuration =
-        Duration(days: 7 * (intervalWeeks <= 0 ? 1 : intervalWeeks));
+    final repeatDuration = Duration(
+      days: 7 * (intervalWeeks <= 0 ? 1 : intervalWeeks),
+    );
     final difference = untilDateTime.difference(startDateTime);
     if (difference.isNegative) {
       return _weekIndex(startDateTime, semesterStart);
@@ -327,8 +382,9 @@ class IcsImportService {
   }
 
   DateTime? _parseUntilDateTime(String rrule) {
-    final dateTimeMatch =
-        RegExp(r'UNTIL=(\d{8})T(\d{6})(Z)?').firstMatch(rrule);
+    final dateTimeMatch = RegExp(
+      r'UNTIL=(\d{8})T(\d{6})(Z)?',
+    ).firstMatch(rrule);
     if (dateTimeMatch != null) {
       final date = dateTimeMatch.group(1)!;
       final time = dateTimeMatch.group(2)!;
@@ -362,12 +418,17 @@ class IcsImportService {
   }
 
   DateTime _startOfWeek(DateTime date) {
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: date.weekday - 1));
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: date.weekday - 1));
   }
 
   int _weekIndex(DateTime date, DateTime semesterStart) {
-    final days = _startOfWeek(date).difference(_startOfWeek(semesterStart)).inDays;
+    final days = _startOfWeek(
+      date,
+    ).difference(_startOfWeek(semesterStart)).inDays;
     return days ~/ 7 + 1;
   }
 

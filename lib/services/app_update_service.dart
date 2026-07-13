@@ -2,13 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../logging/app_debug_log.dart';
+import '../l10n/service_message_localizer.dart';
 import '../models/timetable_settings.dart';
+import '../utils/async_utils.dart';
 
 /// A single log entry from the update process.
 class UpdateLogEntry {
@@ -31,6 +32,7 @@ class AppReleaseInfo {
   final String body;
   final String releaseUrl;
   final String? downloadUrl;
+  final String? pgyerDownloadUrl; // 蒲公英下载页面（来自蒲公英 API 时有值）
   final DateTime? updatedAt;
   final bool isPrerelease;
 
@@ -40,6 +42,7 @@ class AppReleaseInfo {
     required this.body,
     required this.releaseUrl,
     required this.downloadUrl,
+    this.pgyerDownloadUrl,
     required this.updatedAt,
     required this.isPrerelease,
   });
@@ -103,24 +106,26 @@ class _AppUpdateFetchOutcome {
 }
 
 class AppUpdateService {
-  static const String repositoryUrl = 'https://github.com/stareyeXT/mikcb-for-ECJTU';
+  static const String repositoryUrl = 'https://github.com/Mutx163/mikcb';
 
   /// Update process logs (most recent first, capped at 50).
   final List<UpdateLogEntry> logs = [];
 
   void _log(String message) {
-    final entry = UpdateLogEntry(DateTime.now(), message);
+    final now = DateTime.now();
+    final entry = UpdateLogEntry(now, message);
     logs.insert(0, entry);
     if (logs.length > 50) logs.removeLast();
-    debugPrint('[AppUpdateService] $message');
+    appDebugLog('AppUpdateService', '${formatLogTimestamp(now)} $message');
   }
+
   static const String latestReleaseApiUrl =
-      'https://api.github.com/repos/stareyeXT/mikcb-for-ECJTU/releases/latest';
+      'https://api.github.com/repos/Mutx163/mikcb/releases/latest';
   static const String releasesApiUrl =
-      'https://api.github.com/repos/stareyeXT/mikcb-for-ECJTU/releases';
+      'https://api.github.com/repos/Mutx163/mikcb/releases';
   static const String releasesPageUrl = '$repositoryUrl/releases';
   static const String defaultMirrorUrlPrefix = defaultAppUpdateMirrorUrlPrefix;
-  static const String downloadCancelledMessage = '下载已取消';
+  static const String downloadCancelledMessage = 'download_cancelled';
   static const Duration _releaseRequestTimeout = Duration(seconds: 4);
   static const Duration _releasesPageRequestTimeout = Duration(seconds: 6);
 
@@ -130,11 +135,11 @@ class AppUpdateService {
     dotAll: true,
   );
   static final RegExp _releaseTagPattern = RegExp(
-    r'href="/stareyeXT/mikcb-for-ECJTU/releases/tag/([^"#?]+)"',
+    r'href="/Mutx163/mikcb/releases/tag/([^"#?]+)"',
     caseSensitive: false,
   );
   static final RegExp _releaseTitlePattern = RegExp(
-    r'<a[^>]*href="/stareyeXT/mikcb-for-ECJTU/releases/tag/[^"]+"[^>]*>(.*?)</a>',
+    r'<a[^>]*href="/Mutx163/mikcb/releases/tag/[^"]+"[^>]*>(.*?)</a>',
     caseSensitive: false,
     dotAll: true,
   );
@@ -152,7 +157,7 @@ class AppUpdateService {
     caseSensitive: false,
   );
   static final RegExp _apkDownloadPattern = RegExp(
-    r'href="(/stareyeXT/mikcb-for-ECJTU/releases/download/[^"]+?\.apk)"',
+    r'href="(/Mutx163/mikcb/releases/download/[^"]+?\.apk)"',
     caseSensitive: false,
   );
 
@@ -166,9 +171,6 @@ class AppUpdateService {
     'User-Agent': 'mikcb-app',
   };
 
-  static const MethodChannel supportChannel =
-      MethodChannel('com.mutx163.qingyu/support');
-
   final http.Client _client;
   final AppUpdateTempDirectoryProvider _temporaryDirectoryProvider;
   final AppUpdateOpenInstaller _openInstaller;
@@ -179,11 +181,11 @@ class AppUpdateService {
     AppUpdateTempDirectoryProvider? temporaryDirectoryProvider,
     AppUpdateOpenInstaller? openInstaller,
     Duration releaseApiRequestTimeout = _releaseRequestTimeout,
-  })  : _client = client ?? http.Client(),
-        _temporaryDirectoryProvider =
-            temporaryDirectoryProvider ?? getTemporaryDirectory,
-        _openInstaller = openInstaller ?? OpenFilex.open,
-        _releaseApiRequestTimeout = releaseApiRequestTimeout;
+  }) : _client = client ?? http.Client(),
+       _temporaryDirectoryProvider =
+           temporaryDirectoryProvider ?? getTemporaryDirectory,
+       _openInstaller = openInstaller ?? OpenFilex.open,
+       _releaseApiRequestTimeout = releaseApiRequestTimeout;
 
   Future<AppUpdateCheckResult> checkForUpdates({
     required String currentVersion,
@@ -193,66 +195,64 @@ class AppUpdateService {
   }) async {
     _log('开始检查更新（当前版本 $currentVersion，含预发布: $includePrerelease）');
 
-    _AppUpdateFetchOutcome apiOutcome;
-    try {
-      _log('策略1：GitHub API…');
-      apiOutcome = await _fetchFromGitHubApi(
+    // 两个策略并行竞争，谁先有结果用谁
+    _AppUpdateFetchOutcome? apiOutcome;
+    _AppUpdateFetchOutcome? pageOutcome;
+
+    final result = await raceFutures<_AppUpdateFetchOutcome, _AppUpdateFetchOutcome>([
+      _fetchFromGitHubApi(
         includePrerelease: includePrerelease,
         preferredSource: preferredSource,
         mirrorUrlPrefix: mirrorUrlPrefix,
-      );
-    } catch (e) {
-      _log('GitHub API 异常：$e');
-      apiOutcome = const _AppUpdateFetchOutcome(hadRetryableFailure: true);
-    }
-    if (apiOutcome.release != null) {
-      _log('GitHub API 成功，版本 ${apiOutcome.release!.version}');
-      return _buildCheckResult(
-        currentVersion: currentVersion,
-        release: apiOutcome.release!,
-      );
-    }
-    _log('GitHub API 未获取到版本，状态码: ${apiOutcome.statusCode}');
-
-    var saw404 = apiOutcome.saw404;
-    int? lastStatusCode;
-    var hadRetryableFailure = apiOutcome.hadRetryableFailure;
-    if (apiOutcome.statusCode != null && apiOutcome.statusCode != 404) {
-      lastStatusCode = apiOutcome.statusCode;
-    }
-
-    _AppUpdateFetchOutcome pageOutcome;
-    try {
-      _log('策略2：Release 页面抓取…');
-      pageOutcome = await _fetchFromReleasesPage(
+      ).then((outcome) {
+        apiOutcome = outcome;
+        _log(
+          'GitHub API 完成，有结果: ${outcome.release != null}，状态码: ${outcome.statusCode}',
+        );
+        return outcome;
+      }),
+      _fetchFromReleasesPage(
         includePrerelease: includePrerelease,
-      );
-    } catch (e) {
-      _log('Release 页面异常：$e');
-      pageOutcome = const _AppUpdateFetchOutcome(hadRetryableFailure: true);
-    }
-    if (pageOutcome.release != null) {
-      _log('Release 页面成功，版本 ${pageOutcome.release!.version}');
+        mirrorUrlPrefix: mirrorUrlPrefix,
+      ).then((outcome) {
+        pageOutcome = outcome;
+        _log(
+          'Release 页面 完成，有结果: ${outcome.release != null}，状态码: ${outcome.statusCode}',
+        );
+        return outcome;
+      }),
+    ], (outcome) => outcome.release != null ? outcome : null);
+
+    final winner = result.winner;
+
+    if (winner != null) {
+      _log('竞争胜出，版本 ${winner.release!.version}');
       return _buildCheckResult(
         currentVersion: currentVersion,
-        release: pageOutcome.release!,
+        release: winner.release!,
       );
     }
-    _log('Release 页面未获取到版本，状态码: ${pageOutcome.statusCode}');
-    saw404 = saw404 || pageOutcome.saw404;
-    hadRetryableFailure =
-        hadRetryableFailure || pageOutcome.hadRetryableFailure;
-    if (pageOutcome.statusCode != null && pageOutcome.statusCode != 404) {
-      lastStatusCode = pageOutcome.statusCode;
-    }
+
+    // 两个策略都没有结果，汇总错误信息
+    final saw404 =
+        (apiOutcome?.saw404 ?? false) || (pageOutcome?.saw404 ?? false);
+    final hadRetryableFailure =
+        (apiOutcome?.hadRetryableFailure ?? false) ||
+        (pageOutcome?.hadRetryableFailure ?? false);
+    final lastStatusCode = _pickLastNon404StatusCode(
+      apiOutcome?.statusCode,
+      pageOutcome?.statusCode,
+    );
 
     if (saw404 && !hadRetryableFailure && lastStatusCode == null) {
-      _log('两种策略均返回 404，仓库尚无 Release');
+      _log('所有策略均未获取到版本');
       return AppUpdateCheckResult(
         hasRelease: false,
         hasUpdate: false,
         currentVersion: currentVersion,
-        message: includePrerelease ? '还没有可用的正式版或预发布版本。' : '仓库还没有发布 Release。',
+        message: includePrerelease
+            ? 'no_release_with_prerelease'
+            : 'no_release_available',
       );
     }
 
@@ -262,7 +262,9 @@ class AppUpdateService {
         hasRelease: false,
         hasUpdate: false,
         currentVersion: currentVersion,
-        message: '检查更新失败（HTTP $lastStatusCode）。',
+        message: encodeServiceMessage('update_check_http_failed', {
+          'statusCode': lastStatusCode,
+        }),
       );
     }
 
@@ -271,15 +273,26 @@ class AppUpdateService {
       hasRelease: false,
       hasUpdate: false,
       currentVersion: currentVersion,
-      message: '网络异常，暂时无法检查更新。',
+      message: 'update_check_network_failed',
     );
+  }
+
+  static int? _pickLastNon404StatusCode(int? a, int? b) {
+    if (a != null && a != 404) return a;
+    if (b != null && b != 404) return b;
+    return null;
   }
 
   Future<String?> downloadAndInstallUpdate(
     String url,
     void Function(int downloadedBytes, int? totalBytes) onProgress,
-    AppUpdateDownloadController? controller,
-  ) async {
+    AppUpdateDownloadController? controller, {
+    String? mirrorUrlPrefix,
+  }) async {
+    if (!isTrustedApkDownloadUrl(url, mirrorUrlPrefix: mirrorUrlPrefix)) {
+      _log('拒绝不受信任的更新下载地址：$url');
+      return 'update_download_url_untrusted';
+    }
     _log('开始下载更新：$url');
     HttpClient? client;
     IOSink? sink;
@@ -297,11 +310,15 @@ class AppUpdateService {
 
       if (response.statusCode != 200) {
         _log('下载失败，HTTP ${response.statusCode}');
-        return '下载失败（HTTP ${response.statusCode}）';
+        return encodeServiceMessage('update_download_http_failed', {
+          'statusCode': response.statusCode,
+        });
       }
 
       final total = response.contentLength;
-      _log('下载响应 OK，文件大小: ${total > 0 ? '${(total / 1024 / 1024).toStringAsFixed(1)} MB' : '未知'}');
+      _log(
+        '下载响应 OK，文件大小: ${total > 0 ? '${(total / 1024 / 1024).toStringAsFixed(1)} MB' : '未知'}',
+      );
       int downloaded = 0;
       sink = file.openWrite();
 
@@ -327,7 +344,9 @@ class AppUpdateService {
       final result = await _openInstaller(savePath);
       if (result.type != ResultType.done) {
         _log('打开安装包失败: ${result.message}');
-        return '打开安装包失败: ${result.message}';
+        return encodeServiceMessage('update_open_installer_failed', {
+          'detail': result.message,
+        });
       }
       _log('安装包已打开');
       return null;
@@ -337,7 +356,9 @@ class AppUpdateService {
         return downloadCancelledMessage;
       }
       _log('下载或安装异常：$e');
-      return '下载或安装过程中出现错误: $e';
+      return encodeServiceMessage('update_download_install_error', {
+        'detail': '$e',
+      });
     } finally {
       try {
         await sink?.close();
@@ -357,8 +378,9 @@ class AppUpdateService {
       if (entity is! File) {
         continue;
       }
-      final name =
-          entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      final name = entity.uri.pathSegments.isEmpty
+          ? ''
+          : entity.uri.pathSegments.last;
       final normalized = name.toLowerCase();
       if (!normalized.startsWith('mikcb_update') ||
           !normalized.endsWith('.apk')) {
@@ -378,19 +400,16 @@ class AppUpdateService {
       return const AppUpdateDownloadProbeResult(
         isSuccess: false,
         elapsed: Duration.zero,
-        message: '地址无效',
+        message: 'invalid_url',
       );
     }
 
     _log('测速 $url …');
     final stopwatch = Stopwatch()..start();
     try {
-      var response = await _client.head(
-        uri,
-        headers: const {
-          'User-Agent': 'mikcb-app',
-        },
-      ).timeout(timeout);
+      var response = await _client
+          .head(uri, headers: const {'User-Agent': 'mikcb-app'})
+          .timeout(timeout);
 
       if (response.statusCode == 405 || response.statusCode == 403) {
         response = http.Response(
@@ -401,7 +420,9 @@ class AppUpdateService {
 
       stopwatch.stop();
       final isSuccess = response.statusCode >= 200 && response.statusCode < 400;
-      _log('测速结果：${isSuccess ? '成功' : '失败'} HTTP ${response.statusCode}，耗时 ${stopwatch.elapsedMilliseconds} ms');
+      _log(
+        '测速结果：${isSuccess ? '成功' : '失败'} HTTP ${response.statusCode}，耗时 ${stopwatch.elapsedMilliseconds} ms',
+      );
       return AppUpdateDownloadProbeResult(
         isSuccess: isSuccess,
         elapsed: stopwatch.elapsed,
@@ -424,10 +445,7 @@ class AppUpdateService {
     required Duration timeout,
   }) async {
     final request = http.Request('GET', uri)
-      ..headers.addAll(const {
-        'User-Agent': 'mikcb-app',
-        'Range': 'bytes=0-0',
-      });
+      ..headers.addAll(const {'User-Agent': 'mikcb-app', 'Range': 'bytes=0-0'});
     final response = await _client.send(request).timeout(timeout);
     final subscription = response.stream.listen(null);
     try {
@@ -455,16 +473,87 @@ class AppUpdateService {
     return '$normalizedPrefix$separator$originalUrl';
   }
 
+  /// 获取下载链接（根据下载渠道）
+  String? getEffectiveDownloadUrl({
+    required AppReleaseInfo? release,
+    required AppUpdateDownloadChannel channel,
+    required AppUpdateDownloadSource source,
+    required String mirrorUrlPrefix,
+  }) {
+    if (channel == AppUpdateDownloadChannel.pgyer) {
+      // 蒲公英渠道：优先返回蒲公英下载页面，兜底用固定地址
+      return release?.pgyerDownloadUrl ?? 'https://www.pgyer.com/qingyu';
+    } else {
+      // GitHub 渠道：返回 GitHub 下载链接（可能经过镜像加速）
+      final originalUrl = release?.downloadUrl;
+      if (originalUrl == null) return null;
+      return buildDownloadUrl(
+        originalUrl: originalUrl,
+        source: source,
+        mirrorUrlPrefix: mirrorUrlPrefix,
+      );
+    }
+  }
+
   Future<_AppUpdateFetchOutcome> _fetchFromReleasesPage({
     required bool includePrerelease,
+    required String? mirrorUrlPrefix,
+  }) async {
+    final pageCandidates = buildMirrorCandidateUrls(
+      releasesPageUrl,
+      selectedMirrorPrefix: mirrorUrlPrefix,
+    );
+    _log('Release 页面候选地址 ${pageCandidates.length} 个，并行竞争');
+
+    final outcomes = <_AppUpdateFetchOutcome>[];
+    final result =
+        await raceFutures<_AppUpdateFetchOutcome, _AppUpdateFetchOutcome>(
+          pageCandidates.map((candidate) {
+            return _fetchReleasesPageCandidate(
+              candidate,
+              includePrerelease: includePrerelease,
+              mirrorUrlPrefix: mirrorUrlPrefix,
+            ).then((outcome) {
+              outcomes.add(outcome);
+              return outcome;
+            });
+          }).toList(),
+          (outcome) => outcome.release != null ? outcome : null,
+        );
+
+    if (result.winner != null) {
+      return result.winner!;
+    }
+
+    var saw404 = false;
+    var hadRetryableFailure = false;
+    int? lastStatusCode;
+    for (final outcome in outcomes) {
+      saw404 = saw404 || outcome.saw404;
+      hadRetryableFailure = hadRetryableFailure || outcome.hadRetryableFailure;
+      lastStatusCode = outcome.statusCode ?? lastStatusCode;
+    }
+    for (final error in result.errors) {
+      hadRetryableFailure = true;
+      _log('页面候选异常：$error');
+    }
+
+    return _AppUpdateFetchOutcome(
+      saw404: saw404,
+      statusCode: lastStatusCode,
+      hadRetryableFailure: hadRetryableFailure,
+    );
+  }
+
+  Future<_AppUpdateFetchOutcome> _fetchReleasesPageCandidate(
+    String candidate, {
+    required bool includePrerelease,
+    required String? mirrorUrlPrefix,
   }) async {
     try {
-      _log('请求 $releasesPageUrl');
+      _log('请求 $candidate');
       final response = await _client
-          .get(
-            Uri.parse(releasesPageUrl),
-            headers: _releasePageHeaders,
-          )
+          .get(Uri.parse(candidate), headers: _releasePageHeaders)
           .timeout(_releasesPageRequestTimeout);
       if (response.statusCode == 404) {
         _log('页面响应 404');
@@ -482,6 +571,7 @@ class AppUpdateService {
       final release = await _pickLatestEligibleReleaseFromPage(
         html,
         includePrerelease: includePrerelease,
+        mirrorUrlPrefix: mirrorUrlPrefix,
       );
       if (release != null) {
         return _AppUpdateFetchOutcome(release: release);
@@ -500,28 +590,45 @@ class AppUpdateService {
     required AppUpdateDownloadSource preferredSource,
     String? mirrorUrlPrefix,
   }) async {
-    var saw404 = false;
-    int? lastStatusCode;
-    var hadRetryableFailure = false;
     final candidates = _buildGitHubApiCandidates(
       releasesApiUrl,
       preferredSource: preferredSource,
       mirrorUrlPrefix: mirrorUrlPrefix,
     );
-    _log('GitHub API 候选地址 ${candidates.length} 个');
+    _log('GitHub API 候选地址 ${candidates.length} 个，并行竞争');
 
-    for (final candidate in candidates) {
-      final outcome = await _fetchGitHubApiCandidate(
-        candidate,
-        includePrerelease: includePrerelease,
-      );
-      if (outcome.release != null) {
-        return outcome;
-      }
+    // 所有镜像并行竞争，谁先有结果用谁
+    final outcomes = <_AppUpdateFetchOutcome>[];
+    final result =
+        await raceFutures<_AppUpdateFetchOutcome, _AppUpdateFetchOutcome>(
+          candidates.map((candidate) {
+            return _fetchGitHubApiCandidate(
+              candidate,
+              includePrerelease: includePrerelease,
+            ).then((outcome) {
+              outcomes.add(outcome);
+              return outcome;
+            });
+          }).toList(),
+          (outcome) => outcome.release != null ? outcome : null,
+        );
+
+    if (result.winner != null) {
+      return result.winner!;
+    }
+
+    // 所有候选均无结果，汇总错误信息
+    var saw404 = false;
+    var hadRetryableFailure = false;
+    int? lastStatusCode;
+    for (final outcome in outcomes) {
       saw404 = saw404 || outcome.saw404;
-      hadRetryableFailure =
-          hadRetryableFailure || outcome.hadRetryableFailure;
+      hadRetryableFailure = hadRetryableFailure || outcome.hadRetryableFailure;
       lastStatusCode = outcome.statusCode ?? lastStatusCode;
+    }
+    for (final error in result.errors) {
+      hadRetryableFailure = true;
+      _log('候选异常：$error');
     }
 
     return _AppUpdateFetchOutcome(
@@ -538,10 +645,7 @@ class AppUpdateService {
     try {
       _log('请求 $candidate');
       final response = await _client
-          .get(
-            Uri.parse(candidate),
-            headers: _releaseHeaders,
-          )
+          .get(Uri.parse(candidate), headers: _releaseHeaders)
           .timeout(_releaseApiRequestTimeout);
       if (response.statusCode == 404) {
         _log('API 响应 404');
@@ -586,44 +690,20 @@ class AppUpdateService {
     String? mirrorUrlPrefix,
   }) {
     final normalizedSelectedMirror = _normalizeMirrorUrlPrefix(mirrorUrlPrefix);
-    final fallbackMirrorUrls = <String?>[
-      _normalizeMirrorUrlPrefix(defaultAppUpdateMirrorUrlPrefix),
-      _normalizeMirrorUrlPrefix(ghproxyCnMirrorUrlPrefix),
-      _normalizeMirrorUrlPrefix(ghLlkkMirrorUrlPrefix),
-    ];
+    final mirrorCandidates = buildMirrorCandidateUrls(
+      apiUrl,
+      selectedMirrorPrefix: normalizedSelectedMirror,
+    );
 
-    final originalCandidates = <String>[apiUrl];
-    final mirrorCandidates = <String>[
-      if (normalizedSelectedMirror != null)
-        buildDownloadUrl(
-          originalUrl: apiUrl,
-          source: AppUpdateDownloadSource.mirror,
-          mirrorUrlPrefix: normalizedSelectedMirror,
-        ),
-      ...fallbackMirrorUrls.whereType<String>().map(
-            (prefix) => buildDownloadUrl(
-              originalUrl: apiUrl,
-              source: AppUpdateDownloadSource.mirror,
-              mirrorUrlPrefix: prefix,
-            ),
-          ),
-    ];
-
-    final ordered = <String>[
-      if (preferredSource == AppUpdateDownloadSource.mirror) ...[
-        ...mirrorCandidates,
-        ...originalCandidates,
-      ] else ...[
-        ...originalCandidates,
-        ...mirrorCandidates,
-      ],
-    ];
-
-    final seen = <String>{};
-    return ordered.where((candidate) {
-      final normalized = candidate.trim();
-      return normalized.isNotEmpty && seen.add(normalized);
-    }).toList(growable: false);
+    // 按 preferredSource 决定顺序
+    if (preferredSource == AppUpdateDownloadSource.mirror) {
+      return mirrorCandidates;
+    } else {
+      // 直连优先，镜像兜底
+      final direct = mirrorCandidates.last; // 原始 URL 在最后
+      final mirrors = mirrorCandidates.sublist(0, mirrorCandidates.length - 1);
+      return [direct, ...mirrors];
+    }
   }
 
   AppUpdateCheckResult _buildCheckResult({
@@ -631,15 +711,19 @@ class AppUpdateService {
     required AppReleaseInfo release,
   }) {
     final hasUpdate = _compareVersions(release.version, currentVersion) > 0;
-    _log('版本比较：最新 ${release.version} vs 当前 $currentVersion → ${hasUpdate ? '有更新' : '已是最新'}');
+    _log(
+      '版本比较：最新 ${release.version} vs 当前 $currentVersion → ${hasUpdate ? '有更新' : '已是最新'}',
+    );
     return AppUpdateCheckResult(
       hasRelease: true,
       hasUpdate: hasUpdate,
       currentVersion: currentVersion,
       latestRelease: release,
       message: hasUpdate
-          ? (release.isPrerelease ? '发现新的预发布版本' : '发现新版本')
-          : '当前已经是最新版本',
+          ? (release.isPrerelease
+                ? 'update_available_prerelease'
+                : 'update_available')
+          : 'already_latest',
     );
   }
 
@@ -714,6 +798,7 @@ class AppUpdateService {
   Future<AppReleaseInfo?> _pickLatestEligibleReleaseFromPage(
     String html, {
     required bool includePrerelease,
+    required String? mirrorUrlPrefix,
   }) async {
     for (final match in _releaseSectionPattern.allMatches(html)) {
       final block = match.group(1);
@@ -731,21 +816,25 @@ class AppUpdateService {
         continue;
       }
 
-      final expandedAssetsUrl = _extractExpandedAssetsUrl(block, rawTag);
-      final downloadUrl = await _fetchApkDownloadUrlFromExpandedAssets(
-        expandedAssetsUrl,
-      );
+      // 优先从 tag 直接构造下载链接（APK 命名规律：mikcb-{version}-arm64-v8a.apk）
+      // 避免每次都发起 expanded_assets 子请求，国内用户常因该子请求超时/403 导致选错版本
+      final version = _normalizeVersion(rawTag);
+      final constructedUrl = _constructApkDownloadUrl(rawTag, version);
+      final downloadUrl = constructedUrl ??
+          await _fetchApkDownloadUrlFromExpandedAssets(
+            _extractExpandedAssetsUrl(block, rawTag),
+            mirrorUrlPrefix: mirrorUrlPrefix,
+          );
       if (downloadUrl == null) {
         continue;
       }
 
-      final version = _normalizeVersion(rawTag);
       final title = _extractReleaseTitle(block) ?? version;
       return AppReleaseInfo(
         version: version,
         title: title,
         body: _extractReleaseBody(block),
-        releaseUrl: _resolveGitHubUrl('/stareyeXT/mikcb-for-ECJTU/releases/tag/$rawTag'),
+        releaseUrl: _resolveGitHubUrl('/Mutx163/mikcb/releases/tag/$rawTag'),
         downloadUrl: downloadUrl,
         updatedAt: _extractReleaseUpdatedAt(block),
         isPrerelease: isPrerelease,
@@ -753,6 +842,23 @@ class AppUpdateService {
     }
 
     return null;
+  }
+
+  /// 根据 tag 和版本号构造 APK 下载链接。
+  ///
+  /// 本仓库所有历史 release 的 APK 命名遵循固定模式：
+  /// `mikcb-{version}-arm64-v8a.apk`，下载路径为
+  /// `https://github.com/Mutx163/mikcb/releases/download/{tag}/mikcb-{version}-arm64-v8a.apk`。
+  /// 只有极早期 v1.0.1 是 `mikcb-1.0.1.apk`（无 ABI 后缀），不在此构造路径覆盖范围。
+  /// 对于不匹配命名规律的 tag，返回 null，交由 expanded_assets 兜底。
+  String? _constructApkDownloadUrl(String rawTag, String version) {
+    final tagWithoutPrefix = rawTag.replaceFirst(RegExp(r'^[vV]'), '');
+    if (tagWithoutPrefix.isEmpty) {
+      return null;
+    }
+    final fileName = 'mikcb-$version-arm64-v8a.apk';
+    final encodedTag = Uri.encodeComponent(rawTag);
+    return '$repositoryUrl/releases/download/$encodedTag/$fileName';
   }
 
   String _extractExpandedAssetsUrl(String block, String tag) {
@@ -765,27 +871,34 @@ class AppUpdateService {
     return '$repositoryUrl/releases/expanded_assets/$encodedTag';
   }
 
-  Future<String?> _fetchApkDownloadUrlFromExpandedAssets(String url) async {
-    try {
-      final response = await _client
-          .get(
-            Uri.parse(url),
-            headers: _releasePageHeaders,
-          )
-          .timeout(_releasesPageRequestTimeout);
-      if (response.statusCode != 200) {
-        return null;
+  Future<String?> _fetchApkDownloadUrlFromExpandedAssets(
+    String url, {
+    String? mirrorUrlPrefix,
+  }) async {
+    final candidates = buildMirrorCandidateUrls(
+      url,
+      selectedMirrorPrefix: mirrorUrlPrefix,
+    );
+    for (final candidate in candidates) {
+      try {
+        final response = await _client
+            .get(Uri.parse(candidate), headers: _releasePageHeaders)
+            .timeout(_releasesPageRequestTimeout);
+        if (response.statusCode != 200) {
+          continue;
+        }
+        final html = utf8.decode(response.bodyBytes);
+        final match = _apkDownloadPattern.firstMatch(html);
+        final assetPath = match?.group(1);
+        if (assetPath == null || assetPath.isEmpty) {
+          continue;
+        }
+        return _resolveGitHubUrl(assetPath);
+      } catch (_) {
+        continue;
       }
-      final html = utf8.decode(response.bodyBytes);
-      final match = _apkDownloadPattern.firstMatch(html);
-      final assetPath = match?.group(1);
-      if (assetPath == null || assetPath.isEmpty) {
-        return null;
-      }
-      return _resolveGitHubUrl(assetPath);
-    } catch (_) {
-      return null;
     }
+    return null;
   }
 
   String? _extractReleaseTitle(String block) {
@@ -850,8 +963,8 @@ class AppUpdateService {
     final rightVersion = _parseVersion(right);
     final maxLength =
         leftVersion.mainParts.length > rightVersion.mainParts.length
-            ? leftVersion.mainParts.length
-            : rightVersion.mainParts.length;
+        ? leftVersion.mainParts.length
+        : rightVersion.mainParts.length;
 
     for (var index = 0; index < maxLength; index++) {
       final leftValue = index < leftVersion.mainParts.length
@@ -883,8 +996,9 @@ class AppUpdateService {
     final normalized = _normalizeVersion(version).split('+').first;
     final dashIndex = normalized.indexOf('-');
     final hasExplicitPrerelease = dashIndex != -1;
-    final base =
-        hasExplicitPrerelease ? normalized.substring(0, dashIndex) : normalized;
+    final base = hasExplicitPrerelease
+        ? normalized.substring(0, dashIndex)
+        : normalized;
     final explicitPrerelease = hasExplicitPrerelease
         ? normalized.substring(dashIndex + 1).trim()
         : null;
@@ -904,16 +1018,36 @@ class AppUpdateService {
         prerelease: null,
       );
     }
+    // 处理 "1.2.0-29-debug" 这类含数字前缀的预发布：
+    // 提取 "29" 作为构建号，剩余 "debug" 作为预发布标识
+    if (explicitPrerelease != null) {
+      final numericPrefix = _extractNumericPrefixParts(explicitPrerelease);
+      if (numericPrefix != null && numericPrefix.isNotEmpty) {
+        // "29-debug" -> mainParts append 29, prerelease null
+        return _ParsedVersion(
+          mainParts: [
+            ...baseParts.map(
+              (item) =>
+                  int.tryParse(item.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+            ),
+            ...numericPrefix,
+          ],
+          prerelease: null,
+        );
+      }
+    }
 
     final numericDottedSuffixParts =
         !hasExplicitPrerelease && baseParts.length > 3
-            ? _parseNumericParts(baseParts.skip(3).join('.'))
-            : null;
+        ? _parseNumericParts(baseParts.skip(3).join('.'))
+        : null;
     if (numericDottedSuffixParts != null &&
         numericDottedSuffixParts.isNotEmpty) {
       return _ParsedVersion(
         mainParts: [
-          ...baseParts.take(3).map(
+          ...baseParts
+              .take(3)
+              .map(
                 (item) =>
                     int.tryParse(item.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
               ),
@@ -928,8 +1062,8 @@ class AppUpdateService {
     final prerelease = hasExplicitPrerelease
         ? explicitPrerelease
         : hasDottedPrerelease
-            ? baseParts.skip(3).join('.')
-            : null;
+        ? baseParts.skip(3).join('.')
+        : null;
     return _ParsedVersion(
       mainParts: main
           .split('.')
@@ -961,6 +1095,30 @@ class AppUpdateService {
     return values;
   }
 
+  /// 提取 "29-debug" 中的数字前缀部分 [29]，
+  /// 或 "1.2.3-xxx" 中的 [1, 2, 3]。
+  List<int>? _extractNumericPrefixParts(String raw) {
+    final parts = raw.split('.');
+    final values = <int>[];
+    for (final part in parts) {
+      final value = int.tryParse(part);
+      if (value != null) {
+        values.add(value);
+        continue;
+      }
+      // 尝试提取段内的数字前缀，如 "29-debug" → 29
+      final match = RegExp(r'^\d+').firstMatch(part);
+      if (match != null) {
+        final prefixValue = int.tryParse(match.group(0)!);
+        if (prefixValue != null) {
+          values.add(prefixValue);
+        }
+      }
+      break; // 遇到非纯数字段就停止
+    }
+    return values.isEmpty ? null : values;
+  }
+
   int _comparePrerelease(String left, String right) {
     final leftParts = left.split('.');
     final rightParts = right.split('.');
@@ -979,6 +1137,16 @@ class AppUpdateService {
       if (leftNumber != null && rightNumber != null) {
         return leftNumber.compareTo(rightNumber);
       }
+      // 提取数字前缀处理 "29" vs "29-debug" 这类情况
+      final leftPrefix = leftNumber ?? _extractNumericPrefix(leftValue);
+      final rightPrefix = rightNumber ?? _extractNumericPrefix(rightValue);
+      if (leftPrefix != null && rightPrefix != null) {
+        if (leftPrefix != rightPrefix) {
+          return leftPrefix.compareTo(rightPrefix);
+        }
+        // 数字前缀相同，继续比较下一段
+        continue;
+      }
       if (leftNumber != null) {
         return -1;
       }
@@ -989,6 +1157,12 @@ class AppUpdateService {
     }
 
     return 0;
+  }
+
+  static int? _extractNumericPrefix(String value) {
+    final match = RegExp(r'^\d+').firstMatch(value);
+    if (match == null) return null;
+    return int.tryParse(match.group(0)!);
   }
 
   Map<String, dynamic>? _pickLatestEligibleRelease(
@@ -1036,27 +1210,5 @@ class _ParsedVersion {
   final List<int> mainParts;
   final String? prerelease;
 
-  const _ParsedVersion({
-    required this.mainParts,
-    required this.prerelease,
-  });
-}
-
-extension AppUpdateSystemDownload on AppUpdateService {
-  Future<int?> enqueueSystemDownload({
-    required String url,
-    String? fileName,
-    String? title,
-    String? description,
-  }) {
-    return AppUpdateService.supportChannel.invokeMethod<int>(
-      'enqueueSystemDownload',
-      {
-        'url': url,
-        'fileName': fileName,
-        'title': title,
-        'description': description,
-      },
-    );
-  }
+  const _ParsedVersion({required this.mainParts, required this.prerelease});
 }

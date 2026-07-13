@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Analyze and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.4
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Verify pubspec encoding
+        shell: bash
+        run: |
+          set -euo pipefail
+          if head -c 3 pubspec.yaml | od -An -tx1 | grep -q 'ef bb bf'; then
+            echo "ERROR: pubspec.yaml has UTF-8 BOM"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import sys
+          text = open("pubspec.yaml", encoding="utf-8").read()
+          for key in ("version:", "description:"):
+              line = next((l for l in text.splitlines() if l.startswith(key) and not l[0:1].isspace()), None)
+              if line is None:
+                  print(f"ERROR: missing {key} line in pubspec.yaml", file=sys.stderr)
+                  sys.exit(1)
+              value = line.split(":", 1)[1].strip()
+              if not value:
+                  print(f"ERROR: empty value for {key} in pubspec.yaml", file=sys.stderr)
+                  sys.exit(1)
+          print("pubspec.yaml encoding OK")
+          PY
+
+      - name: Verify GitHub Actions pin SHAs
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash tool/verify_action_pins.sh
+
+      - name: Install HyperOS audit dependencies
+        run: pip install pyyaml
+
+      - name: HyperOS page compliance audit
+        run: python tool/hyperos_audit.py --strict
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test

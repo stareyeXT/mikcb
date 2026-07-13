@@ -1,9 +1,15 @@
+// ignore_for_file: unused_element, unused_field
+
 import 'dart:convert';
+import 'package:university_timetable/ui/hyperos/hyperos.dart';
 
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:university_timetable/l10n/service_message_localizer.dart';
+import 'package:university_timetable/l10n/enum_localizations.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -16,27 +22,40 @@ import '../models/timetable_settings.dart';
 import '../providers/timetable_provider.dart';
 import '../services/app_analytics.dart';
 import '../services/app_log_service.dart';
+import 'changelog_screen.dart';
 import '../services/app_update_service.dart';
 import '../services/miui_live_activities_service.dart';
-import '../utils/responsive.dart';
+import '../services/support_creator_service.dart';
+import '../services/bundled_assets.dart';
+import '../widgets/about_info_sheet.dart';
+import '../widgets/third_party_disclaimer_card.dart';
+import '../widgets/bundled_asset_image.dart';
+import '../utils/app_toast.dart';
+import '../widgets/app_dialogs.dart';
 import '../services/warehouse_repository_service.dart';
 import 'live_diagnostics_log_viewer_screen.dart';
 
 enum AboutUpdatePrimaryAction {
   openReleasePage,
-  openDownloadLink,
   downloadInApp,
+  openDownloadLink,
 }
 
 @visibleForTesting
 AboutUpdatePrimaryAction resolveAboutUpdatePrimaryAction({
   required bool isAndroid,
   required String? downloadUrl,
+  required AppUpdateDownloadChannel channel,
 }) {
   final hasDownloadUrl = (downloadUrl ?? '').trim().isNotEmpty;
   if (!hasDownloadUrl) {
     return AboutUpdatePrimaryAction.openReleasePage;
   }
+  // 蒲公英渠道：始终用浏览器打开下载页面
+  if (channel == AppUpdateDownloadChannel.pgyer) {
+    return AboutUpdatePrimaryAction.openDownloadLink;
+  }
+  // GitHub 渠道：Android 应用内下载，其他平台打开链接
   if (isAndroid) {
     return AboutUpdatePrimaryAction.downloadInApp;
   }
@@ -59,10 +78,11 @@ class _MirrorProbeState {
 AppUpdateMirrorPreset? resolveRecommendedMirrorPreset(
   Map<AppUpdateMirrorPreset, AppUpdateDownloadProbeResult> probeResults,
 ) {
-  final successfulEntries = probeResults.entries
-      .where((entry) => entry.value.isSuccess)
-      .toList()
-    ..sort((left, right) => left.value.elapsed.compareTo(right.value.elapsed));
+  final successfulEntries =
+      probeResults.entries.where((entry) => entry.value.isSuccess).toList()
+        ..sort(
+          (left, right) => left.value.elapsed.compareTo(right.value.elapsed),
+        );
   return successfulEntries.isEmpty ? null : successfulEntries.first.key;
 }
 
@@ -88,6 +108,7 @@ class AboutScreen extends StatefulWidget {
 
 class _AboutScreenState extends State<AboutScreen> {
   PackageInfo? _packageInfo;
+  bool _openingAppLogs = false;
 
   @override
   void initState() {
@@ -108,10 +129,10 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final settings =
-        context.select<TimetableProvider, TimetableSettings>((provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final settings = context.select<TimetableProvider, TimetableSettings>((
+      provider,
+    ) {
       return provider.settings;
     });
     final versionText = _packageInfo == null
@@ -120,14 +141,15 @@ class _AboutScreenState extends State<AboutScreen> {
             '${_packageInfo!.version} (${_packageInfo!.buildNumber})',
           );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.aboutTitle),
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.aboutTitle),
+      child: HyperosListView(
         children: [
-          Card(
+          Material(
+            color: HyperosColors.card(context),
+            shape: HyperosTheme.cardShape(),
+            clipBehavior: Clip.antiAlias,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -148,162 +170,148 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/branding/launcher_icon.png',
+                      child: BundledAssetImage(
+                        assetPath: BundledAssets.launcherIcon,
                         fit: BoxFit.cover,
                         cacheWidth: 168,
                         cacheHeight: 168,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.calendar_view_week_rounded,
-                            color: colorScheme.primary,
-                            size: 42,
-                          );
-                        },
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     l10n.timetableAppName,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: HyperosTypography.summaryTitle(context),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     versionText,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                    style: HyperosTypography.listDetail(context),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     l10n.aboutHeroSubtitle,
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium,
+                    style: HyperosTypography.sectionDescription(context),
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      _buildInfoChip(theme,
-                          label: l10n.platformLabel, value: 'Android'),
-                      _buildInfoChip(theme,
-                          label: l10n.focusLabel, value: 'HyperOS'),
-                      _buildInfoChip(
-                        theme,
-                        label: l10n.updateLabel,
-                        value: settings.appUpdateIncludePrerelease
-                            ? l10n.prereleaseIncluded
-                            : l10n.stableOnly,
-                      ),
-                    ],
+                  _buildHeroMetaStrip(
+                    context,
+                    platformValue: 'Android',
+                    focusValue: 'HyperOS',
+                    updateValue: settings.appUpdateIncludePrerelease
+                        ? l10n.prereleaseIncluded
+                        : l10n.stableOnly,
+                  ),
+                  const SizedBox(height: 16),
+                  ThirdPartyDisclaimerContent(
+                    text: l10n.thirdPartyDisclaimer,
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                _AboutNavTile(
-                  icon: Icons.system_update_alt_rounded,
-                  title: l10n.aboutUpdatesTitle,
-                  subtitle: l10n.aboutUpdatesSubtitle,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AboutUpdateScreen(
-                          packageInfo: _packageInfo,
-                        ),
+          const HyperosSectionGap(),
+          HyperosListGroup(
+            children: [
+              _AboutEntryTile(
+                icon: Icons.system_update_alt_rounded,
+                iconAccent: HyperosIconColors.orange,
+                title: l10n.aboutUpdatesTitle,
+                subtitle: l10n.aboutUpdatesSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    HyperosPageRoute(
+                      builder: (_) =>
+                          AboutUpdateScreen(packageInfo: _packageInfo),
+                    ),
+                  );
+                },
+              ),
+              _AboutEntryTile(
+                icon: Icons.history_rounded,
+                iconAccent: HyperosIconColors.blue,
+                title: l10n.aboutChangelogTitle,
+                subtitle: l10n.aboutChangelogSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    HyperosPageRoute(builder: (_) => const ChangelogScreen()),
+                  );
+                },
+              ),
+              _AboutEntryTile(
+                icon: Icons.flag_outlined,
+                iconAccent: HyperosIconColors.purple,
+                title: l10n.aboutPositioningTitle,
+                subtitle: l10n.aboutPositioningSubtitle,
+                onTap: () {
+                  _showInfoSheet(
+                    context,
+                    title: l10n.aboutPositioningTitle,
+                    subtitle: l10n.aboutPositioningSubtitle,
+                    items: [
+                      l10n.aboutPositioningBullet1,
+                      l10n.aboutPositioningBullet2,
+                      l10n.aboutPositioningBullet3,
+                      l10n.aboutPositioningBullet4,
+                    ],
+                  );
+                },
+              ),
+              _AboutEntryTile(
+                icon: Icons.import_export_rounded,
+                iconAccent: HyperosIconColors.teal,
+                title: l10n.aboutImportMigrationTitle,
+                subtitle: l10n.aboutImportMigrationSubtitle,
+                onTap: () {
+                  _showInfoSheet(
+                    context,
+                    title: l10n.aboutImportMigrationTitle,
+                    subtitle: l10n.aboutImportMigrationSubtitle,
+                    items: [
+                      l10n.aboutImportMigrationBullet1,
+                      l10n.aboutImportMigrationBullet2,
+                      l10n.aboutImportMigrationBullet3,
+                      l10n.aboutImportMigrationBullet4,
+                    ],
+                  );
+                },
+              ),
+              _AboutEntryTile(
+                icon: Icons.group_outlined,
+                iconAccent: HyperosIconColors.green,
+                title: l10n.aboutContributorsTitle,
+                subtitle: l10n.aboutContributorsSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    HyperosPageRoute(
+                      settings: const RouteSettings(
+                        name: '/about/contributors',
                       ),
-                    );
-                  },
-                ),
-                _AboutNavTile(
-                  icon: Icons.flag_outlined,
-                  title: l10n.aboutPositioningTitle,
-                  subtitle: l10n.aboutPositioningSubtitle,
-                  onTap: () {
-                    _showInfoSheet(
-                      context,
-                      title: l10n.aboutPositioningTitle,
-                      children: [
-                        _AboutBullet(text: l10n.aboutPositioningBullet1),
-                        _AboutBullet(
-                          text: l10n.aboutPositioningBullet2,
-                        ),
-                        _AboutBullet(
-                          text: l10n.aboutPositioningBullet3,
-                        ),
-                        _AboutBullet(
-                          text: l10n.aboutPositioningBullet4,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                _AboutNavTile(
-                  icon: Icons.import_export_rounded,
-                  title: l10n.aboutImportMigrationTitle,
-                  subtitle: l10n.aboutImportMigrationSubtitle,
-                  onTap: () {
-                    _showInfoSheet(
-                      context,
-                      title: l10n.aboutImportMigrationTitle,
-                      children: [
-                        _AboutBullet(
-                          text: l10n.aboutImportMigrationBullet1,
-                        ),
-                        _AboutBullet(
-                          text: l10n.aboutImportMigrationBullet2,
-                        ),
-                        _AboutBullet(
-                          text: l10n.aboutImportMigrationBullet3,
-                        ),
-                        _AboutBullet(
-                          text: l10n.aboutImportMigrationBullet4,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                _AboutNavTile(
-                  icon: Icons.group_outlined,
-                  title: l10n.aboutContributorsTitle,
-                  subtitle: l10n.aboutContributorsSubtitle,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings:
-                            const RouteSettings(name: '/about/contributors'),
-                        builder: (_) => const ContributorsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _AboutNavTile(
-                  icon: Icons.code_rounded,
-                  title: l10n.aboutRepositoryTitle,
-                  subtitle: l10n.aboutRepositorySubtitle,
-                  onTap: () {
-                    _showRepositorySheet(context, theme);
-                  },
-                ),
-                _AboutNavTile(
-                  icon: Icons.article_outlined,
-                  title: l10n.aboutAppLogsTitle,
-                  subtitle: l10n.aboutAppLogsSubtitle,
-                  onTap: _openAppLogsPage,
-                ),
-              ],
-            ),
+                      builder: (_) => const ContributorsScreen(),
+                    ),
+                  );
+                },
+              ),
+              _AboutEntryTile(
+                icon: Icons.code_rounded,
+                iconAccent: HyperosIconColors.indigo,
+                title: l10n.aboutRepositoryTitle,
+                subtitle: l10n.aboutRepositorySubtitle,
+                onTap: () => _showRepositorySheet(context),
+              ),
+              _AboutEntryTile(
+                icon: Icons.article_outlined,
+                iconAccent: HyperosIconColors.cyan,
+                title: l10n.aboutAppLogsTitle,
+                subtitle: l10n.aboutAppLogsSubtitle,
+                onTap: _openAppLogsPage,
+              ),
+            ],
           ),
         ],
       ),
@@ -313,182 +321,188 @@ class _AboutScreenState extends State<AboutScreen> {
   void _showInfoSheet(
     BuildContext context, {
     required String title,
-    required List<Widget> children,
+    String? subtitle,
+    required List<String> items,
   }) {
-    showModalBottomSheet<void>(
+    showHyperosSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                ...children,
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (sheetContext) =>
+          AboutInfoSheetBody(title: title, subtitle: subtitle, items: items),
     );
   }
 
-  void _showRepositorySheet(BuildContext context, ThemeData theme) {
+  void _showRepositorySheet(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    showModalBottomSheet<void>(
+    showHyperosSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        final colorScheme = theme.colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.aboutRepositorySheetTitle,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  AppUpdateService.repositoryUrl,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.aboutRepositorySheetHint,
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _openRepository,
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: Text(l10n.aboutOpenGitHubAction),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: _openWarehouseRepository,
-                        icon: const Icon(Icons.hub_rounded),
-                        label: Text(l10n.aboutOpenWarehouseRepoAction),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: _copyRepositoryUrl,
-                        icon: const Icon(Icons.copy_all_rounded),
-                        label: Text(l10n.copyAddress),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+      builder: (sheetContext) => HyperosSheet(
+        title: l10n.aboutRepositorySheetTitle,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              AppUpdateService.repositoryUrl,
+              style: HyperosTypography.listDetail(sheetContext),
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openAppLogsPage() async {
-    final settings = context.read<TimetableProvider>().settings;
-    final l10n = AppLocalizations.of(context)!;
-    final nativeRawLog =
-        await MiuiLiveActivitiesService().readLiveDiagnosticsText();
-    final rawLog = await AppLogService.instance.readMergedLogsText(
-      nativeRawLog: nativeRawLog,
-    );
-    if (!mounted) {
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LiveDiagnosticsLogViewerScreen(
-          title: AppLocalizations.of(context)!.aboutAppLogsTitle,
-          rawLog: rawLog,
-          isRecordingEnabled: settings.liveEnableLocalDiagnostics,
-          onExport: (text) async {
-            final path = await AppLogService.instance.exportMergedLogsFile(
-              nativeRawLog: nativeRawLog,
-            );
-            if (path == null || path.isEmpty) {
-              return;
-            }
-            await Share.shareXFiles(
-              [XFile(path)],
-              text: l10n.appLogsShareText,
-              subject: l10n.appLogsShareSubject,
-            );
-          },
-          onClear: () async {
-            final clearedAppLogs = await AppLogService.instance.clearAppLogs();
-            final clearedNativeLogs =
-                await MiuiLiveActivitiesService().clearLiveDiagnostics();
-            return clearedAppLogs || clearedNativeLogs;
-          },
+            const SizedBox(height: 12),
+            Text(
+              l10n.aboutRepositorySheetHint,
+              style: HyperosTypography.listDetail(sheetContext),
+            ),
+            const SizedBox(height: 16),
+            HyperosCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  HyperosButton(
+                    label: l10n.aboutOpenGitHubAction,
+                    expand: true,
+                    onPressed: _openRepository,
+                  ),
+                  const SizedBox(height: 10),
+                  HyperosButton(
+                    label: l10n.aboutOpenWarehouseRepoAction,
+                    variant: HyperosButtonVariant.secondary,
+                    expand: true,
+                    onPressed: _openWarehouseRepository,
+                  ),
+                  const SizedBox(height: 10),
+                  HyperosButton(
+                    label: l10n.copyAddress,
+                    variant: HyperosButtonVariant.secondary,
+                    expand: true,
+                    onPressed: _copyRepositoryUrl,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoChip(
-    ThemeData theme, {
-    required String label,
-    required String value,
+  Future<void> _openAppLogsPage() async {
+    if (_openingAppLogs) {
+      return;
+    }
+    _openingAppLogs = true;
+    final settings = context.read<TimetableProvider>().settings;
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await Navigator.of(context).push(
+        HyperosPageRoute(
+          settings: const RouteSettings(name: '/about/app-logs'),
+          builder: (_) => LiveDiagnosticsLogViewerScreen(
+            title: l10n.aboutAppLogsTitle,
+            watchRawLog: () => AppLogService.instance.watchMergedLogsText(
+              loadNativeRawLog:
+                  MiuiLiveActivitiesService().readLiveDiagnosticsText,
+            ),
+            isRecordingEnabled: settings.liveEnableLocalDiagnostics,
+            onRecordingChanged: (value) =>
+                _updateLiveDiagnosticsPreference(value),
+            onExport: (text) async {
+              final nativeRawLog = await MiuiLiveActivitiesService()
+                  .readLiveDiagnosticsText();
+              final path = await AppLogService.instance.exportMergedLogsFile(
+                nativeRawLog: nativeRawLog,
+              );
+              if (path == null || path.isEmpty) {
+                return;
+              }
+              await SharePlus.instance.share(
+                ShareParams(
+                  files: [XFile(path)],
+                  text: l10n.appLogsShareText,
+                  subject: l10n.appLogsShareSubject,
+                ),
+              );
+            },
+            onClear: () async {
+              final clearedAppLogs = await AppLogService.instance
+                  .clearAppLogs();
+              if (defaultTargetPlatform != TargetPlatform.android) {
+                return clearedAppLogs;
+              }
+              final clearedNativeLogs = await MiuiLiveActivitiesService()
+                  .clearLiveDiagnostics();
+              return clearedAppLogs && clearedNativeLogs;
+            },
+          ),
+        ),
+      );
+    } finally {
+      _openingAppLogs = false;
+    }
+  }
+
+  Future<void> _updateLiveDiagnosticsPreference(bool value) async {
+    final provider = context.read<TimetableProvider>();
+    final l10n = AppLocalizations.of(context)!;
+    final message = await provider.updateTimetableSettings(
+      provider.settings.copyWith(liveEnableLocalDiagnostics: value),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (message != null) {
+      showAppToast(context, message: message);
+      return;
+    }
+    showAppToast(
+      context,
+      message: value
+          ? l10n.aboutLiveDiagnosticsEnabled
+          : l10n.aboutLiveDiagnosticsDisabled,
+      kind: AppToastKind.success,
+    );
+  }
+
+  Widget _buildHeroMetaStrip(
+    BuildContext context, {
+    required String platformValue,
+    required String focusValue,
+    required String updateValue,
   }) {
-    final colorScheme = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final insetColor = colorScheme.brightness == Brightness.dark
+        ? colorScheme.surfaceContainerHighest
+        : colorScheme.surfaceContainerLowest;
+
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
+        color: insetColor,
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: _AboutHeroMetaCell(
+                label: l10n.platformLabel,
+                value: platformValue,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+            const _AboutHeroMetaDivider(),
+            Expanded(
+              child: _AboutHeroMetaCell(
+                label: l10n.focusLabel,
+                value: focusValue,
+              ),
             ),
-          ),
-        ],
+            const _AboutHeroMetaDivider(),
+            Expanded(
+              child: _AboutHeroMetaCell(
+                label: l10n.updateLabel,
+                value: updateValue,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -508,14 +522,15 @@ class _AboutScreenState extends State<AboutScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(AppLocalizations.of(context)!.copiedRepositoryAddress)),
+    showAppToast(
+      context,
+      message: AppLocalizations.of(context)!.copiedRepositoryAddress,
+      kind: AppToastKind.success,
     );
   }
 
   Future<void> _openWarehouseRepository() async {
-    final uri = Uri.tryParse('https://github.com/stareyeXT/qingyu_warehouse');
+    final uri = Uri.tryParse('https://github.com/Mutx163/qingyu_warehouse');
     if (uri == null) {
       return;
     }
@@ -526,10 +541,7 @@ class _AboutScreenState extends State<AboutScreen> {
 class AboutUpdateScreen extends StatefulWidget {
   final PackageInfo? packageInfo;
 
-  const AboutUpdateScreen({
-    super.key,
-    required this.packageInfo,
-  });
+  const AboutUpdateScreen({super.key, required this.packageInfo});
 
   @override
   State<AboutUpdateScreen> createState() => _AboutUpdateScreenState();
@@ -538,10 +550,13 @@ class AboutUpdateScreen extends StatefulWidget {
 class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   final AppUpdateService _updateService = AppUpdateService();
   final AppAnalytics _analytics = AppAnalytics.instance;
+  final SupportCreatorService _supportService = SupportCreatorService();
   Future<AppUpdateCheckResult>? _updateFuture;
   bool _isDownloading = false;
   bool _isCancellingDownload = false;
   bool _isProbingMirrors = false;
+  bool _useSystemDownloader = false;
+  bool _openingDiagnosticsViewer = false;
   int _downloadedBytes = 0;
   int? _downloadTotalBytes;
   AppUpdateDownloadController? _downloadController;
@@ -563,328 +578,84 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final settings =
-        context.select<TimetableProvider, TimetableSettings>((provider) {
+    final settings = context.select<TimetableProvider, TimetableSettings>((
+      provider,
+    ) {
       return provider.settings;
     });
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.aboutUpdateScreenTitle),
-      ),
-      bottomNavigationBar:
-          _isDownloading ? _buildDownloadProgressBar(theme) : null,
-      body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.aboutUpdateScreenTitle),
+      suffixes: [
+        FHeaderAction(
+          icon: const Icon(Icons.tune_rounded),
+          semanticsLabel: l10n.aboutAdvancedOptionsTitle,
+          onPress: () => _openAdvancedOptions(theme, settings),
+        ),
+      ],
+      child: HyperosBlurredBodyInset(
         child: Column(
           children: [
-            _buildUpdateCard(theme, settings),
-            const SizedBox(height: 16),
-            _buildAdvancedOptionsCard(theme, settings),
-            const SizedBox(height: 16),
-            _buildDiagnosticsCard(theme, settings),
+            Expanded(child: _buildUpdateList(theme, settings)),
+            if (_isDownloading) _buildDownloadProgressBar(theme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildUpdateCard(ThemeData theme, TimetableSettings settings) {
+  Widget _buildUpdateList(ThemeData theme, TimetableSettings settings) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = theme.colorScheme;
-    final downloadSource = AppUpdateDownloadSourceX.fromValue(
-      settings.appUpdateDownloadSource,
-    );
-    final mirrorPreset = AppUpdateMirrorPresetX.fromValue(
-      settings.appUpdateMirrorPreset,
-    );
-    final effectiveMirrorUrlPrefix = resolveAppUpdateMirrorUrlPrefix(
-      preset: mirrorPreset,
-      customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
-    );
-    final probeResultByPreset = {
-      for (final item in _mirrorProbeStates) item.preset: item.result,
-    };
-    final recommendedMirrorPreset =
-        resolveRecommendedMirrorPreset(probeResultByPreset);
+
     return FutureBuilder<AppUpdateCheckResult>(
       future: _updateFuture,
       builder: (context, snapshot) {
         if (widget.packageInfo == null ||
             snapshot.connectionState == ConnectionState.waiting) {
-          return _buildUpdateSectionCard(
-            theme,
-            title: l10n.aboutUpdateStatusTitle,
-            trailing: IconButton(
-              tooltip: l10n.aboutRefreshCheckTooltip,
-              onPressed: widget.packageInfo == null ? null : _refreshUpdate,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-            subtitle: l10n.aboutCheckingLatestVersion,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: LinearProgressIndicator(minHeight: 3),
-            ),
-          );
+          return _buildUpdateCheckingView(context, theme);
         }
 
         final result = snapshot.data;
         if (result == null) {
-          return _buildUpdateSectionCard(
-            theme,
-            title: l10n.aboutUpdateStatusTitle,
-            trailing: IconButton(
-              tooltip: l10n.aboutRefreshCheckTooltip,
-              onPressed: widget.packageInfo == null ? null : _refreshUpdate,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-            subtitle: l10n.aboutReadVersionFailed,
-            child: Text(
-              l10n.aboutReadVersionFailedHint,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+          return HyperosListView(
+            includeHeaderInset: false,
+            children: [
+              Material(
+                color: HyperosColors.card(context),
+                shape: HyperosTheme.cardShape(),
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      _buildAppLauncherLogo(context, size: 72),
+                      const SizedBox(height: 12),
+                      Text(
+                        l10n.aboutReadVersionFailed,
+                        style: HyperosTypography.sectionLabel(context),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.aboutReadVersionFailedHint,
+                        style: HyperosTypography.sectionDescription(context),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           );
         }
 
-        final release = result.latestRelease;
-        final updateColor = result.hasUpdate
-            ? colorScheme.primary
-            : colorScheme.onSurfaceVariant;
-        final originalDownloadUrl = release?.downloadUrl;
-        final effectiveDownloadUrl = originalDownloadUrl == null
-            ? null
-            : _updateService.buildDownloadUrl(
-                originalUrl: originalDownloadUrl,
-                source: downloadSource,
-                mirrorUrlPrefix: effectiveMirrorUrlPrefix,
-              );
-        final isAndroid = defaultTargetPlatform == TargetPlatform.android;
-        final primaryAction = resolveAboutUpdatePrimaryAction(
-          isAndroid: isAndroid,
-          downloadUrl: effectiveDownloadUrl,
-        );
-        final primaryButtonLabel = switch (primaryAction) {
-          AboutUpdatePrimaryAction.openReleasePage =>
-            l10n.aboutViewReleaseAction,
-          AboutUpdatePrimaryAction.downloadInApp => l10n.aboutDownloadNowAction,
-          AboutUpdatePrimaryAction.openDownloadLink =>
-            l10n.aboutOpenDownloadPageAction,
-        };
-        final primaryButtonIcon = switch (primaryAction) {
-          AboutUpdatePrimaryAction.downloadInApp => Icons.download_rounded,
-          AboutUpdatePrimaryAction.openDownloadLink ||
-          AboutUpdatePrimaryAction.openReleasePage =>
-            Icons.open_in_new_rounded,
-        };
-
-        return Column(
+        return HyperosListView(
+          includeHeaderInset: false,
           children: [
-            _buildUpdateSectionCard(
-              theme,
-              title: l10n.aboutUpdateStatusTitle,
-              trailing: IconButton(
-                tooltip: l10n.aboutRefreshCheckTooltip,
-                onPressed: widget.packageInfo == null ? null : _refreshUpdate,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: updateColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      result.message ?? '',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: updateColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildUpdateInfoChip(
-                        theme,
-                        label: l10n.aboutCurrentVersionLabel,
-                        value: result.currentVersion,
-                      ),
-                      _buildUpdateInfoChip(
-                        theme,
-                        label: l10n.aboutLatestVersionLabel,
-                        value: release?.version ?? l10n.aboutUnreleasedLabel,
-                      ),
-                      if (release?.isPrerelease == true)
-                        _buildUpdateInfoChip(
-                          theme,
-                          label: l10n.aboutVersionChannelLabel,
-                          value: l10n.aboutPrereleaseChannel,
-                        ),
-                    ],
-                  ),
-                  if (release != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      result.hasUpdate
-                          ? l10n.aboutUpdateAvailableHint
-                          : l10n.aboutUpdateNoUpdateHint,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                  if (release?.updatedAt != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      l10n.aboutUpdatedAt(_formatDateTime(release!.updatedAt!)),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildUpdateSectionCard(
-              theme,
-              title: l10n.aboutUpdateNowTitle,
-              subtitle: isAndroid
-                  ? l10n.aboutUpdateNowAndroidSubtitle
-                  : l10n.aboutUpdateNowOtherSubtitle,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      downloadSource == AppUpdateDownloadSource.mirror
-                          ? l10n.aboutMirrorDownloadHint
-                          : l10n.aboutOriginalDownloadHint,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: result.hasRelease
-                        ? (primaryAction ==
-                                    AboutUpdatePrimaryAction.downloadInApp &&
-                                _isDownloading
-                            ? null
-                            : () => _handlePrimaryUpdateAction(
-                                  primaryAction: primaryAction,
-                                  effectiveDownloadUrl: effectiveDownloadUrl,
-                                  releaseUrl: release?.releaseUrl,
-                                ))
-                        : null,
-                    icon: Icon(primaryButtonIcon),
-                    label: Text(primaryButtonLabel),
-                  ),
-                  if (result.hasRelease &&
-                      isAndroid &&
-                      effectiveDownloadUrl != null) ...[
-                    const SizedBox(height: 10),
-                    FilledButton.tonalIcon(
-                      onPressed: _isDownloading
-                          ? null
-                          : () => _enqueueSystemDownload(
-                                url: effectiveDownloadUrl,
-                                version: release?.version,
-                              ),
-                      icon: const Icon(Icons.download_for_offline_rounded),
-                      label: Text(l10n.aboutUseSystemDownloaderAction),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: result.hasRelease
-                        ? () => _openUrl(release?.releaseUrl)
-                        : null,
-                    icon: const Icon(Icons.new_releases_outlined),
-                    label: Text(l10n.aboutOpenReleasePageAction),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildUpdateSectionCard(
-              theme,
-              title: l10n.aboutDownloadMethodTitle,
-              subtitle: l10n.aboutDownloadMethodSubtitle,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SegmentedButton<AppUpdateDownloadSource>(
-                    segments: [
-                      ButtonSegment<AppUpdateDownloadSource>(
-                        value: AppUpdateDownloadSource.mirror,
-                        label: Text(l10n.aboutDownloadMethodMirror),
-                      ),
-                      ButtonSegment<AppUpdateDownloadSource>(
-                        value: AppUpdateDownloadSource.original,
-                        label: Text(l10n.aboutDownloadMethodOriginal),
-                      ),
-                    ],
-                    selected: {downloadSource},
-                    onSelectionChanged: (selection) {
-                      final nextSource = selection.first;
-                      _updateDownloadSource(nextSource);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      downloadSource == AppUpdateDownloadSource.mirror
-                          ? recommendedMirrorPreset != null &&
-                                  recommendedMirrorPreset != mirrorPreset
-                              ? l10n.aboutMirrorModeHintRecommended(
-                                  mirrorPreset.label,
-                                  recommendedMirrorPreset.label)
-                              : l10n.aboutMirrorModeHintCurrent(
-                                  mirrorPreset.label)
-                          : l10n.aboutOriginalModeHint,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if ((release?.body ?? '').isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildUpdateSectionCard(
-                theme,
-                title: l10n.aboutReleaseNotesTitle,
-                subtitle: l10n.aboutReleaseNotesSubtitle,
-                child: ReleaseNotesMarkdown(
-                  data: release!.body.trim(),
-                  onTapLink: _openUrl,
-                ),
-              ),
+            _buildStatusCard(theme, result),
+            if ((result.latestRelease?.body ?? '').isNotEmpty) ...[
+              const HyperosSectionGap(),
+              _buildNotesCard(theme, result),
             ],
           ],
         );
@@ -892,12 +663,76 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     );
   }
 
-  Widget _buildAdvancedOptionsCard(
-    ThemeData theme,
-    TimetableSettings settings,
-  ) {
+  Widget _buildAppLauncherLogo(BuildContext context, {double size = 84}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final radius = size * 24 / 84;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.18),
+            blurRadius: size * 0.21,
+            offset: Offset(0, size * 0.12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BundledAssetImage(
+          assetPath: BundledAssets.launcherIcon,
+          fit: BoxFit.cover,
+          cacheWidth: (size * 2).round(),
+          cacheHeight: (size * 2).round(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUpdateCheckingView(BuildContext context, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = theme.colorScheme;
+    final foruiTheme = context.theme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        children: [
+          const Spacer(flex: 2),
+          _buildAppLauncherLogo(context),
+          const SizedBox(height: 16),
+          Text(
+            l10n.timetableAppName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: foruiTheme.typography.display.lg.copyWith(
+              fontWeight: FontWeight.w600,
+              height: 1.0,
+              letterSpacing: 0.1,
+              color: foruiTheme.colors.foreground,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.aboutCheckingForUpdate,
+            style: HyperosTypography.listDetail(context),
+            textAlign: TextAlign.center,
+          ),
+          const Spacer(flex: 3),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(ThemeData theme, AppUpdateCheckResult result) {
+    final l10n = AppLocalizations.of(context)!;
+    final release = result.latestRelease;
+    final settings = context.read<TimetableProvider>().settings;
+    final downloadChannel = AppUpdateDownloadChannelX.fromValue(
+      settings.appUpdateDownloadChannel,
+    );
     final downloadSource = AppUpdateDownloadSourceX.fromValue(
       settings.appUpdateDownloadSource,
     );
@@ -908,282 +743,187 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
       preset: mirrorPreset,
       customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
     );
-    final probeResultByPreset = {
-      for (final item in _mirrorProbeStates) item.preset: item.result,
+    final effectiveDownloadUrl = _updateService.getEffectiveDownloadUrl(
+      release: release,
+      channel: downloadChannel,
+      source: downloadSource,
+      mirrorUrlPrefix: effectiveMirrorUrlPrefix,
+    );
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final primaryAction = resolveAboutUpdatePrimaryAction(
+      isAndroid: isAndroid,
+      downloadUrl: effectiveDownloadUrl,
+      channel: downloadChannel,
+    );
+    final primaryButtonLabel = switch (primaryAction) {
+      AboutUpdatePrimaryAction.openReleasePage => l10n.aboutViewReleaseAction,
+      AboutUpdatePrimaryAction.downloadInApp => l10n.aboutDownloadNowAction,
+      AboutUpdatePrimaryAction.openDownloadLink =>
+        l10n.aboutOpenDownloadPageAction,
     };
-    final recommendedMirrorPreset =
-        resolveRecommendedMirrorPreset(probeResultByPreset);
 
-    return FutureBuilder<AppUpdateCheckResult>(
-      future: _updateFuture,
-      builder: (context, snapshot) {
-        final originalDownloadUrl = snapshot.data?.latestRelease?.downloadUrl;
-        return Card(
-          child: Theme(
-            data: theme.copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              maintainState: true,
-              tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              title: Text(
-                l10n.aboutAdvancedOptionsTitle,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: Text(
-                l10n.aboutAdvancedOptionsSubtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
+    return Material(
+      color: HyperosColors.card(context),
+      shape: HyperosTheme.cardShape(),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+        child: Column(
+          children: [
+            _buildAppLauncherLogo(context, size: 72),
+            const SizedBox(height: 16),
+            // 状态标题
+            Text(
+              result.hasUpdate
+                  ? l10n.aboutUpdateAvailableHeadline
+                  : l10n.aboutAlreadyLatestHeadline,
+              style: result.hasUpdate
+                  ? HyperosTypography.sectionLabel(
+                      context,
+                    ).copyWith(fontSize: 20, fontWeight: FontWeight.w500)
+                  : HyperosTypography.sectionLabel(context).copyWith(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w400,
+                      color: HyperosColors.primaryText(context),
+                    ),
+            ),
+            const SizedBox(height: 20),
+            // 版本对比信息
+            Row(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    l10n.aboutMirrorSectionTitle,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  downloadSource == AppUpdateDownloadSource.mirror
-                      ? l10n.aboutMirrorSectionMirrorHint
-                      : l10n.aboutMirrorSectionOriginalHint,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (downloadSource == AppUpdateDownloadSource.mirror) ...[
-                  ...AppUpdateMirrorPreset.values.map(
-                    (preset) => _buildMirrorPresetTile(
-                      theme,
-                      settings: settings,
-                      preset: preset,
-                      currentPreset: mirrorPreset,
-                      recommendedPreset: recommendedMirrorPreset,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          mirrorPreset.usesCustomUrl
-                              ? l10n.aboutCurrentCustomMirrorTitle
-                              : l10n.aboutCurrentMirrorTitle,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SelectableText(
-                          effectiveMirrorUrlPrefix,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          mirrorPreset.usesCustomUrl
-                              ? l10n.aboutCurrentCustomMirrorHint
-                              : l10n.aboutCurrentMirrorHint,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      FilledButton.tonalIcon(
-                        onPressed:
-                            originalDownloadUrl == null || _isProbingMirrors
-                                ? null
-                                : () => _probeAndRecommendMirrors(
-                                      originalDownloadUrl,
-                                      customMirrorUrlPrefix:
-                                          settings.appUpdateMirrorUrlPrefix,
-                                    ),
-                        icon: Icon(
-                          _isProbingMirrors
-                              ? Icons.hourglass_top_rounded
-                              : Icons.speed_rounded,
-                        ),
-                        label: Text(
-                          _isProbingMirrors
-                              ? l10n.aboutProbingMirrors
-                              : l10n.aboutProbeMirrorsAction,
-                        ),
+                      Text(
+                        l10n.aboutCurrentVersionLabel,
+                        style: HyperosTypography.listDetail(context),
+                        textAlign: TextAlign.center,
                       ),
-                      FilledButton.tonalIcon(
-                        onPressed: _editMirrorUrlPrefix,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: Text(
-                          mirrorPreset.usesCustomUrl
-                              ? l10n.aboutEditCustomMirrorAction
-                              : l10n.aboutSetCustomMirrorAction,
-                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        result.currentVersion,
+                        style: HyperosTypography.listTitle(
+                          context,
+                        ).copyWith(fontFamily: 'monospace'),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
-                ] else ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      l10n.aboutMirrorDisabledHint,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        l10n.aboutLatestVersionLabel,
+                        style: HyperosTypography.listDetail(context),
+                        textAlign: TextAlign.center,
                       ),
-                    ),
-                  ),
-                ],
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: settings.appUpdateIncludePrerelease,
-                  onChanged: widget.packageInfo == null
-                      ? null
-                      : (value) => _updatePrereleasePreference(value),
-                  title: Text(l10n.aboutCheckPrereleaseTitle),
-                  subtitle: Text(l10n.aboutCheckPrereleaseSubtitle),
-                ),
-                const Divider(height: 24),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '更新日志',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        release?.version ?? l10n.aboutUnreleasedLabel,
+                        style: HyperosTypography.listTitle(
+                          context,
+                        ).copyWith(fontFamily: 'monospace'),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                _buildUpdateLogsArea(theme, colorScheme),
               ],
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildUpdateLogsArea(ThemeData theme, ColorScheme colorScheme) {
-    final logs = _updateService.logs;
-    if (logs.isEmpty) {
-      return Text(
-        '暂无日志',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-    return SizedBox(
-      height: 160,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: ListView.builder(
-          itemCount: logs.length,
-          itemBuilder: (_, i) {
-            final log = logs[i];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Text(
-                '[${log.timeString}] ${log.message}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: colorScheme.onSurfaceVariant,
-                ),
+            const SizedBox(height: 24),
+            // 主要操作按钮
+            HyperosButton(
+              label: _isDownloading
+                  ? l10n.aboutDownloadCancelling
+                  : primaryButtonLabel,
+              expand: true,
+              loading: _isDownloading,
+              onPressed: result.hasRelease
+                  ? () {
+                      if (primaryAction ==
+                          AboutUpdatePrimaryAction.openReleasePage) {
+                        _openUrl(release?.releaseUrl);
+                      } else if (downloadChannel ==
+                          AppUpdateDownloadChannel.pgyer) {
+                        _openUrl(effectiveDownloadUrl);
+                      } else if (effectiveDownloadUrl != null) {
+                        if (_useSystemDownloader) {
+                          _enqueueSystemDownload(
+                            url: effectiveDownloadUrl,
+                            version: release?.version,
+                          );
+                        } else {
+                          _downloadAndInstall(effectiveDownloadUrl);
+                        }
+                      }
+                    }
+                  : null,
+            ),
+            if (primaryAction != AboutUpdatePrimaryAction.openReleasePage &&
+                result.hasRelease) ...[
+              const SizedBox(height: 10),
+              HyperosButton(
+                label: l10n.aboutViewReleaseAction,
+                variant: HyperosButtonVariant.secondary,
+                expand: true,
+                onPressed: () => _openUrl(release?.releaseUrl),
               ),
-            );
-          },
+            ],
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDiagnosticsCard(
-    ThemeData theme,
-    TimetableSettings settings,
-  ) {
+  Widget _buildNotesCard(ThemeData theme, AppUpdateCheckResult result) {
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      child: Theme(
-        data: theme.copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          maintainState: true,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          title: Text(
-            l10n.aboutDiagnosticsTitle,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          subtitle: Text(
-            l10n.aboutDiagnosticsSubtitle,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+    final colorScheme = theme.colorScheme;
+    final release = result.latestRelease;
+    final updatedAt = release?.updatedAt;
+    final headerTextStyle = HyperosTypography.listDetail(
+      context,
+    ).copyWith(color: Theme.of(context).colorScheme.onSurface);
+    return Material(
+      color: HyperosColors.card(context),
+      shape: HyperosTheme.cardShape(),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: settings.liveEnableLocalDiagnostics,
-              onChanged: widget.packageInfo == null
-                  ? null
-                  : (value) => _updateLiveDiagnosticsPreference(value),
-              title: Text(l10n.aboutRecordDiagnosticsTitle),
-              subtitle: Text(l10n.aboutRecordDiagnosticsSubtitle),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.update_rounded,
+                  size: 18,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.aboutReleaseNotesTitle,
+                    style: headerTextStyle,
+                  ),
+                ),
+                if (updatedAt != null)
+                  Text(
+                    l10n.aboutUpdatedAt(_formatDateTime(updatedAt)),
+                    style: headerTextStyle,
+                  ),
+              ],
             ),
-            if (settings.liveEnableLocalDiagnostics) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  FilledButton.tonalIcon(
-                    onPressed: _exportLiveDiagnostics,
-                    icon: const Icon(Icons.ios_share_rounded),
-                    label: Text(l10n.aboutExportDiagnosticsAction),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: _openLiveDiagnosticsViewer,
-                    icon: const Icon(Icons.article_outlined),
-                    label: Text(l10n.aboutViewPhoneLogsAction),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: _clearLiveDiagnostics,
-                    icon: const Icon(Icons.restart_alt_rounded),
-                    label: Text(l10n.aboutClearAndRecollectAction),
-                  ),
-                ],
-              ),
-            ],
+            const SizedBox(height: 12),
+            ReleaseNotesMarkdown(
+              data: release!.body.trim(),
+              onTapLink: _openUrl,
+              plainTypography: true,
+              usePrimaryTextColor: true,
+            ),
           ],
         ),
       ),
@@ -1218,6 +958,30 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  void _openAdvancedOptions(ThemeData theme, TimetableSettings settings) {
+    Navigator.of(context).push(
+      HyperosPageRoute(
+        builder: (context) => _AdvancedOptionsScreen(
+          theme: theme,
+          settings: settings,
+          packageInfo: widget.packageInfo,
+          updateService: _updateService,
+          analytics: _analytics,
+          updateFuture: _updateFuture,
+          mirrorProbeStates: _mirrorProbeStates,
+          isDownloading: _isDownloading,
+          useSystemDownloader: _useSystemDownloader,
+          onUseSystemDownloaderChanged: (value) {
+            setState(() => _useSystemDownloader = value);
+          },
+          onExportLiveDiagnostics: _exportLiveDiagnostics,
+          onOpenLiveDiagnosticsViewer: _openLiveDiagnosticsViewer,
+          onClearLiveDiagnostics: _clearLiveDiagnostics,
+        ),
+      ),
+    );
+  }
+
   void _refreshUpdate() {
     if (widget.packageInfo == null) {
       return;
@@ -1247,17 +1011,13 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   Future<void> _updatePrereleasePreference(bool value) async {
     final provider = context.read<TimetableProvider>();
     final message = await provider.updateTimetableSettings(
-      provider.settings.copyWith(
-        appUpdateIncludePrerelease: value,
-      ),
+      provider.settings.copyWith(appUpdateIncludePrerelease: value),
     );
     if (!mounted) {
       return;
     }
     if (message != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      showAppToast(context, message: message);
       return;
     }
     _analytics.logEventLater(
@@ -1270,54 +1030,54 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   Future<void> _updateLiveDiagnosticsPreference(bool value) async {
     final provider = context.read<TimetableProvider>();
     final message = await provider.updateTimetableSettings(
-      provider.settings.copyWith(
-        liveEnableLocalDiagnostics: value,
-      ),
+      provider.settings.copyWith(liveEnableLocalDiagnostics: value),
     );
     if (!mounted) {
       return;
     }
     if (message != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      showAppToast(context, message: message);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(value
-            ? AppLocalizations.of(context)!.aboutLiveDiagnosticsEnabled
-            : AppLocalizations.of(context)!.aboutLiveDiagnosticsDisabled),
-      ),
+    showAppToast(
+      context,
+      message: value
+          ? AppLocalizations.of(context)!.aboutLiveDiagnosticsEnabled
+          : AppLocalizations.of(context)!.aboutLiveDiagnosticsDisabled,
+      kind: AppToastKind.success,
     );
   }
 
   Future<void> _openLiveDiagnosticsViewer() async {
-    final settings = context.read<TimetableProvider>().settings;
-    final nativeRawLog =
-        await MiuiLiveActivitiesService().readLiveDiagnosticsText();
-    final rawLog = await AppLogService.instance.readMergedLogsText(
-      nativeRawLog: nativeRawLog,
-    );
-    if (!mounted) {
+    if (_openingDiagnosticsViewer) {
       return;
     }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LiveDiagnosticsLogViewerScreen(
-          title: AppLocalizations.of(context)!.aboutAppLogsTitle,
-          rawLog: rawLog,
-          isRecordingEnabled: settings.liveEnableLocalDiagnostics,
-          onExport: _exportLiveDiagnostics,
-          onClear: _clearLiveDiagnostics,
+    _openingDiagnosticsViewer = true;
+    final settings = context.read<TimetableProvider>().settings;
+    try {
+      await Navigator.of(context).push(
+        HyperosPageRoute(
+          builder: (_) => LiveDiagnosticsLogViewerScreen(
+            title: AppLocalizations.of(context)!.aboutAppLogsTitle,
+            watchRawLog: () => AppLogService.instance.watchMergedLogsText(
+              loadNativeRawLog:
+                  MiuiLiveActivitiesService().readLiveDiagnosticsText,
+            ),
+            isRecordingEnabled: settings.liveEnableLocalDiagnostics,
+            onRecordingChanged: _updateLiveDiagnosticsPreference,
+            onExport: _exportLiveDiagnostics,
+            onClear: _clearLiveDiagnostics,
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _openingDiagnosticsViewer = false;
+    }
   }
 
   Future<void> _exportLiveDiagnostics([String? _]) async {
-    final nativeRawLog =
-        await MiuiLiveActivitiesService().readLiveDiagnosticsText();
+    final nativeRawLog = await MiuiLiveActivitiesService()
+        .readLiveDiagnosticsText();
     final path = await AppLogService.instance.exportMergedLogsFile(
       nativeRawLog: nativeRawLog,
     );
@@ -1325,37 +1085,38 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
       return;
     }
     if (path == null || path.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                AppLocalizations.of(context)!.aboutNoDiagnosticsExportYet)),
+      showAppToast(
+        context,
+        message: AppLocalizations.of(context)!.aboutNoDiagnosticsExportYet,
+        kind: AppToastKind.warning,
       );
       return;
     }
 
-    await Share.shareXFiles(
-      [XFile(path)],
-      text: AppLocalizations.of(context)!.appLogsShareText,
-      subject: AppLocalizations.of(context)!.appLogsShareSubject,
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(path)],
+        text: AppLocalizations.of(context)!.appLogsShareText,
+        subject: AppLocalizations.of(context)!.appLogsShareSubject,
+      ),
     );
   }
 
   Future<bool> _clearLiveDiagnostics() async {
     final clearedAppLogs = await AppLogService.instance.clearAppLogs();
-    final clearedNativeLogs =
-        await MiuiLiveActivitiesService().clearLiveDiagnostics();
-    final cleared = clearedAppLogs || clearedNativeLogs;
+    final clearedNativeLogs = defaultTargetPlatform != TargetPlatform.android
+        ? true
+        : await MiuiLiveActivitiesService().clearLiveDiagnostics();
+    final cleared = clearedAppLogs && clearedNativeLogs;
     if (!mounted) {
       return cleared;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          cleared
-              ? AppLocalizations.of(context)!.liveDiagnosticsCleared
-              : AppLocalizations.of(context)!.liveDiagnosticsClearFailed,
-        ),
-      ),
+    showAppToast(
+      context,
+      message: cleared
+          ? AppLocalizations.of(context)!.liveDiagnosticsCleared
+          : AppLocalizations.of(context)!.liveDiagnosticsClearFailed,
+      kind: cleared ? AppToastKind.success : AppToastKind.error,
     );
     return cleared;
   }
@@ -1363,23 +1124,35 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   Future<void> _updateDownloadSource(AppUpdateDownloadSource source) async {
     final provider = context.read<TimetableProvider>();
     final message = await provider.updateTimetableSettings(
-      provider.settings.copyWith(
-        appUpdateDownloadSource: source.value,
-      ),
+      provider.settings.copyWith(appUpdateDownloadSource: source.value),
     );
     if (!mounted) {
       return;
     }
     if (message != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      showAppToast(context, message: message);
     } else {
       _analytics.logEventLater(
         name: 'update_source_changed',
-        parameters: {
-          'source': source.value,
-        },
+        parameters: {'source': source.value},
+      );
+    }
+  }
+
+  Future<void> _updateDownloadChannel(AppUpdateDownloadChannel channel) async {
+    final provider = context.read<TimetableProvider>();
+    final message = await provider.updateTimetableSettings(
+      provider.settings.copyWith(appUpdateDownloadChannel: channel.value),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (message != null) {
+      showAppToast(context, message: message);
+    } else {
+      _analytics.logEventLater(
+        name: 'update_channel_changed',
+        parameters: {'channel': channel.value},
       );
     }
   }
@@ -1387,24 +1160,18 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   Future<void> _updateMirrorPreset(AppUpdateMirrorPreset preset) async {
     final provider = context.read<TimetableProvider>();
     final message = await provider.updateTimetableSettings(
-      provider.settings.copyWith(
-        appUpdateMirrorPreset: preset.value,
-      ),
+      provider.settings.copyWith(appUpdateMirrorPreset: preset.value),
     );
     if (!mounted) {
       return;
     }
     if (message != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      showAppToast(context, message: message);
       return;
     }
     _analytics.logEventLater(
       name: 'update_mirror_preset_changed',
-      parameters: {
-        'preset': preset.value,
-      },
+      parameters: {'preset': preset.value},
     );
   }
 
@@ -1427,158 +1194,6 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
       return;
     }
     await _updateMirrorPreset(preset);
-  }
-
-  Widget _buildMirrorStatusBadge(
-    ThemeData theme, {
-    required String label,
-    required Color backgroundColor,
-    required Color foregroundColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: foregroundColor,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMirrorPresetTile(
-    ThemeData theme, {
-    required TimetableSettings settings,
-    required AppUpdateMirrorPreset preset,
-    required AppUpdateMirrorPreset currentPreset,
-    required AppUpdateMirrorPreset? recommendedPreset,
-  }) {
-    final l10n = AppLocalizations.of(context)!;
-    final colorScheme = theme.colorScheme;
-    final probeState = _findMirrorProbeState(preset);
-    final isSelected = currentPreset == preset;
-    final isRecommended =
-        recommendedPreset == preset && probeState?.result.isSuccess == true;
-    final subtitleText =
-        preset.usesCustomUrl && settings.appUpdateMirrorUrlPrefix.trim().isEmpty
-            ? l10n.aboutFillCustomMirrorFirst
-            : (preset.usesCustomUrl
-                ? resolveAppUpdateMirrorUrlPrefix(
-                    preset: preset,
-                    customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
-                  )
-                : preset.description);
-    final statusText = probeState == null
-        ? null
-        : probeState.result.isSuccess
-            ? '${probeState.result.elapsed.inMilliseconds} ms'
-            : (probeState.result.message ?? l10n.aboutUnavailable);
-    final statusColor = probeState == null
-        ? colorScheme.onSurfaceVariant
-        : probeState.result.isSuccess
-            ? colorScheme.primary
-            : colorScheme.error;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: isSelected
-            ? colorScheme.primaryContainer
-            : colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _handleMirrorPresetTap(preset, settings),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 10, 14, 10),
-            child: RadioGroup<AppUpdateMirrorPreset>(
-              groupValue: currentPreset,
-              onChanged: (value) {
-                if (value == null) return;
-                _handleMirrorPresetTap(value, settings);
-              },
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Radio<AppUpdateMirrorPreset>(value: preset),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              preset.label,
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (isSelected)
-                              _buildMirrorStatusBadge(
-                                theme,
-                                label: l10n.schemeListCurrentLabel,
-                                backgroundColor: colorScheme.primary,
-                                foregroundColor: colorScheme.onPrimary,
-                              ),
-                            if (isRecommended)
-                              _buildMirrorStatusBadge(
-                                theme,
-                                label: l10n.aboutRecommended,
-                                backgroundColor: colorScheme.secondaryContainer,
-                                foregroundColor:
-                                    colorScheme.onSecondaryContainer,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          subtitleText,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        if (statusText != null) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(
-                                probeState!.result.isSuccess
-                                    ? Icons.speed_rounded
-                                    : Icons.error_outline_rounded,
-                                size: 16,
-                                color: statusColor,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  statusText,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: statusColor,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   List<MapEntry<AppUpdateMirrorPreset, String>> _buildMirrorPresetCandidates(
@@ -1606,9 +1221,24 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
           customUrlPrefix: customMirrorUrlPrefix,
         ),
       ),
+      MapEntry(
+        AppUpdateMirrorPreset.ghProxyCom,
+        resolveAppUpdateMirrorUrlPrefix(
+          preset: AppUpdateMirrorPreset.ghProxyCom,
+          customUrlPrefix: customMirrorUrlPrefix,
+        ),
+      ),
+      MapEntry(
+        AppUpdateMirrorPreset.ghproxyNet,
+        resolveAppUpdateMirrorUrlPrefix(
+          preset: AppUpdateMirrorPreset.ghproxyNet,
+          customUrlPrefix: customMirrorUrlPrefix,
+        ),
+      ),
     ];
-    final normalizedCustomPrefix =
-        _normalizeMirrorUrlPrefix(customMirrorUrlPrefix);
+    final normalizedCustomPrefix = _normalizeMirrorUrlPrefix(
+      customMirrorUrlPrefix,
+    );
     if (normalizedCustomPrefix != null) {
       candidates.add(
         MapEntry(AppUpdateMirrorPreset.custom, normalizedCustomPrefix),
@@ -1672,8 +1302,10 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
       for (final item in nextStates) item.preset: item.result,
     });
     if (recommendedPreset == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.aboutProbeNoMirrorFound)),
+      showAppToast(
+        context,
+        message: l10n.aboutProbeNoMirrorFound,
+        kind: AppToastKind.warning,
       );
       return;
     }
@@ -1683,49 +1315,44 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     );
     _analytics.logEventLater(
       name: 'update_mirror_probe_completed',
-      parameters: {
-        'recommended': recommendedPreset.value,
-      },
+      parameters: {'recommended': recommendedPreset.value},
     );
     if (recommendedPreset == currentPreset) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(l10n.aboutProbeCurrentFastest(currentPreset.label))),
+      showAppToast(
+        context,
+        message: l10n.aboutProbeCurrentFastest(
+          appUpdateMirrorPresetLabel(l10n, currentPreset),
+        ),
+        kind: AppToastKind.success,
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.aboutProbeRecommendSwitch(recommendedPreset.label)),
-        action: SnackBarAction(
-          label: l10n.switchAction,
-          onPressed: () {
-            _updateMirrorPreset(recommendedPreset);
-          },
-        ),
+    showAppToastWithAction(
+      context,
+      message: l10n.aboutProbeRecommendSwitch(
+        appUpdateMirrorPresetLabel(l10n, recommendedPreset),
       ),
+      actionLabel: l10n.switchAction,
+      onAction: () => _updateMirrorPreset(recommendedPreset),
     );
   }
 
   void _showDownloadFailureSnackBar(String error) {
     final l10n = AppLocalizations.of(context)!;
+    final localizedError = localizeServiceMessage(l10n, error);
     final settings = context.read<TimetableProvider>().settings;
     final source = AppUpdateDownloadSourceX.fromValue(
       settings.appUpdateDownloadSource,
     );
 
     if (source == AppUpdateDownloadSource.original) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.aboutSwitchToMirrorAfterError(error)),
-          action: SnackBarAction(
-            label: l10n.switchAction,
-            onPressed: () {
-              _updateDownloadSource(AppUpdateDownloadSource.mirror);
-            },
-          ),
-        ),
+      showAppToastWithAction(
+        context,
+        message: l10n.aboutSwitchToMirrorAfterError(localizedError),
+        actionLabel: l10n.switchAction,
+        onAction: () => _updateDownloadSource(AppUpdateDownloadSource.mirror),
+        kind: AppToastKind.error,
       );
       return;
     }
@@ -1741,68 +1368,43 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     });
     final fallbackPreset =
         recommendedPreset != null && recommendedPreset != currentPreset
-            ? recommendedPreset
-            : resolveMirrorFallbackPreset(
-                currentPreset: currentPreset,
-                availablePresets: availablePresets,
-              );
+        ? recommendedPreset
+        : resolveMirrorFallbackPreset(
+            currentPreset: currentPreset,
+            availablePresets: availablePresets,
+          );
 
     if (fallbackPreset != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              l10n.aboutSwitchPresetAfterError(error, fallbackPreset.label)),
-          action: SnackBarAction(
-            label: l10n.switchAction,
-            onPressed: () {
-              _updateMirrorPreset(fallbackPreset);
-            },
-          ),
+      showAppToastWithAction(
+        context,
+        message: l10n.aboutSwitchPresetAfterError(
+          localizedError,
+          appUpdateMirrorPresetLabel(l10n, fallbackPreset),
         ),
+        actionLabel: l10n.switchAction,
+        onAction: () => _updateMirrorPreset(fallbackPreset),
+        kind: AppToastKind.error,
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error)),
-    );
+    showAppToast(context, message: localizedError, kind: AppToastKind.error);
   }
 
   Future<void> _editMirrorUrlPrefix() async {
     final l10n = AppLocalizations.of(context)!;
     final provider = context.read<TimetableProvider>();
-    final controller = TextEditingController(
-      text: provider.settings.appUpdateMirrorUrlPrefix,
+    final result = await showAppTextInputDialog(
+      context,
+      title: l10n.aboutSetMirrorSourceTitle,
+      initialValue: provider.settings.appUpdateMirrorUrlPrefix,
+      bodyBuilder: (controller) => HyperosTextField(
+        controller: controller,
+        label: l10n.aboutMirrorPrefixLabel,
+        hint: 'https://ghfast.top/',
+        autofocus: true,
+      ),
     );
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(l10n.aboutSetMirrorSourceTitle),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText: l10n.aboutMirrorPrefixLabel,
-              hintText: 'https://ghfast.top/',
-            ),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(AppLocalizations.of(dialogContext)!.cancelAction),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(controller.text.trim());
-              },
-              child: Text(AppLocalizations.of(dialogContext)!.saveAction),
-            ),
-          ],
-        );
-      },
-    );
-    controller.dispose();
 
     if (result == null || !mounted) {
       return;
@@ -1810,8 +1412,10 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
 
     final normalizedPrefix = _normalizeMirrorUrlPrefix(result);
     if (normalizedPrefix == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.aboutMirrorPrefixInvalid)),
+      showAppToast(
+        context,
+        message: l10n.aboutMirrorPrefixInvalid,
+        kind: AppToastKind.error,
       );
       return;
     }
@@ -1828,14 +1432,24 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     setState(() {
       _mirrorProbeStates = const [];
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message ?? l10n.aboutMirrorSaved)),
+    showAppToast(
+      context,
+      message: message ?? l10n.aboutMirrorSaved,
+      kind: AppToastKind.success,
     );
     _analytics.logEventLater(name: 'update_mirror_saved');
   }
 
   Future<void> _downloadAndInstall(String url) async {
     final l10n = AppLocalizations.of(context)!;
+    final settings = context.read<TimetableProvider>().settings;
+    final mirrorPreset = AppUpdateMirrorPresetX.fromValue(
+      settings.appUpdateMirrorPreset,
+    );
+    final effectiveMirrorUrlPrefix = resolveAppUpdateMirrorUrlPrefix(
+      preset: mirrorPreset,
+      customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
+    );
     final controller = AppUpdateDownloadController();
     _analytics.logEventLater(name: 'update_download_started');
     setState(() {
@@ -1857,6 +1471,7 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
         }
       },
       controller,
+      mirrorUrlPrefix: effectiveMirrorUrlPrefix,
     );
 
     if (!mounted) {
@@ -1872,9 +1487,7 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     if (error != null) {
       if (error == AppUpdateService.downloadCancelledMessage) {
         _analytics.logEventLater(name: 'update_download_cancelled');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.aboutDownloadCancelled)),
-        );
+        showAppToast(context, message: l10n.aboutDownloadCancelled);
         return;
       }
       _analytics.logEventLater(name: 'update_download_failed');
@@ -1883,10 +1496,10 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     }
 
     _analytics.logEventLater(name: 'update_download_completed');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.aboutInstallReady),
-      ),
+    showAppToast(
+      context,
+      message: l10n.aboutInstallReady,
+      kind: AppToastKind.success,
     );
   }
 
@@ -1911,7 +1524,7 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
       final fileName = normalizedVersion.isEmpty
           ? 'mikcb_update.apk'
           : 'mikcb_v$normalizedVersion.apk';
-      final downloadId = await _updateService.enqueueSystemDownload(
+      final downloadId = await _supportService.enqueueSystemDownload(
         url: url,
         fileName: fileName,
         title: l10n.aboutUpdatePackageTitle,
@@ -1922,36 +1535,34 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
       }
       _analytics.logEventLater(
         name: 'update_system_download_enqueued',
-        parameters: {
-          'has_download_id': downloadId != null,
-        },
+        parameters: {'has_download_id': downloadId != null},
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.aboutSystemDownloaderQueued),
-        ),
+      showAppToast(
+        context,
+        message: l10n.aboutSystemDownloaderQueued,
+        kind: AppToastKind.success,
       );
     } on PlatformException catch (error) {
       if (!mounted) {
         return;
       }
       _analytics.logEventLater(name: 'update_system_download_failed');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message?.trim().isNotEmpty == true
-                ? error.message!
-                : l10n.aboutSystemDownloaderFailed,
-          ),
-        ),
+      showAppToast(
+        context,
+        message: error.message?.trim().isNotEmpty == true
+            ? localizeServiceMessage(l10n, error.message!)
+            : l10n.aboutSystemDownloaderFailed,
+        kind: AppToastKind.error,
       );
     } catch (_) {
       if (!mounted) {
         return;
       }
       _analytics.logEventLater(name: 'update_system_download_failed');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.aboutSystemDownloaderFailed)),
+      showAppToast(
+        context,
+        message: l10n.aboutSystemDownloaderFailed,
+        kind: AppToastKind.error,
       );
     }
   }
@@ -1963,83 +1574,6 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     final hour = dateTime.hour.toString().padLeft(2, '0');
     final minute = dateTime.minute.toString().padLeft(2, '0');
     return '$year-$month-$day $hour:$minute';
-  }
-
-  Widget _buildUpdateInfoChip(
-    ThemeData theme, {
-    required String label,
-    required String value,
-  }) {
-    final colorScheme = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpdateSectionCard(
-    ThemeData theme, {
-    required String title,
-    String? subtitle,
-    Widget? trailing,
-    required Widget child,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (trailing != null) trailing,
-              ],
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
-    );
   }
 
   String? _normalizeMirrorUrlPrefix(String input) {
@@ -2067,8 +1601,8 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
     final progressText = _isCancellingDownload
         ? l10n.aboutDownloadCancelling
         : progress == null
-            ? l10n.aboutDownloadingBytes(_formatBytes(_downloadedBytes))
-            : l10n.aboutDownloadingPercent((progress * 100).toStringAsFixed(1));
+        ? l10n.aboutDownloadingBytes(_formatBytes(_downloadedBytes))
+        : l10n.aboutDownloadingPercent((progress * 100).toStringAsFixed(1));
     return SafeArea(
       top: false,
       child: Container(
@@ -2096,7 +1630,6 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
               progressText,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
               ),
             ),
             if (progress == null && _downloadedBytes > 0) ...[
@@ -2111,20 +1644,18 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-              ),
+              child: LinearProgressIndicator(value: progress, minHeight: 8),
             ),
             const SizedBox(height: 10),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _isCancellingDownload ? null : _cancelDownload,
-                icon: const Icon(Icons.close_rounded),
-                label: Text(_isCancellingDownload
+              child: HyperosButton(
+                label: _isCancellingDownload
                     ? l10n.aboutDownloadCancelling
-                    : l10n.aboutCancelDownloadAction),
+                    : l10n.aboutCancelDownloadAction,
+                variant: HyperosButtonVariant.secondary,
+                loading: _isCancellingDownload,
+                onPressed: _isCancellingDownload ? null : _cancelDownload,
               ),
             ),
           ],
@@ -2144,24 +1675,590 @@ class _AboutUpdateScreenState extends State<AboutUpdateScreen> {
   }
 }
 
+class _AdvancedOptionsScreen extends StatefulWidget {
+  final ThemeData theme;
+  final TimetableSettings settings;
+  final PackageInfo? packageInfo;
+  final AppUpdateService updateService;
+  final AppAnalytics analytics;
+  final Future<AppUpdateCheckResult>? updateFuture;
+  final List<_MirrorProbeState> mirrorProbeStates;
+  final bool isDownloading;
+  final bool useSystemDownloader;
+  final ValueChanged<bool> onUseSystemDownloaderChanged;
+  final Future<void> Function([String? rawLog]) onExportLiveDiagnostics;
+  final Future<void> Function() onOpenLiveDiagnosticsViewer;
+  final Future<bool> Function() onClearLiveDiagnostics;
+
+  const _AdvancedOptionsScreen({
+    required this.theme,
+    required this.settings,
+    required this.packageInfo,
+    required this.updateService,
+    required this.analytics,
+    required this.updateFuture,
+    required this.mirrorProbeStates,
+    required this.isDownloading,
+    required this.useSystemDownloader,
+    required this.onUseSystemDownloaderChanged,
+    required this.onExportLiveDiagnostics,
+    required this.onOpenLiveDiagnosticsViewer,
+    required this.onClearLiveDiagnostics,
+  });
+
+  @override
+  State<_AdvancedOptionsScreen> createState() => _AdvancedOptionsScreenState();
+}
+
+class _AdvancedOptionsScreenState extends State<_AdvancedOptionsScreen> {
+  bool _isProbingMirrors = false;
+  List<_MirrorProbeState> _mirrorProbeStates = const [];
+  late bool _useSystemDownloader;
+
+  @override
+  void initState() {
+    super.initState();
+    _mirrorProbeStates = widget.mirrorProbeStates;
+    _useSystemDownloader = widget.useSystemDownloader;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = widget.theme;
+    final settings = context.select<TimetableProvider, TimetableSettings>(
+      (p) => p.settings,
+    );
+    final downloadChannel = AppUpdateDownloadChannelX.fromValue(
+      settings.appUpdateDownloadChannel,
+    );
+    final downloadSource = AppUpdateDownloadSourceX.fromValue(
+      settings.appUpdateDownloadSource,
+    );
+    final mirrorPreset = AppUpdateMirrorPresetX.fromValue(
+      settings.appUpdateMirrorPreset,
+    );
+    final probeResultByPreset = {
+      for (final item in _mirrorProbeStates) item.preset: item.result,
+    };
+    final recommendedMirrorPreset = resolveRecommendedMirrorPreset(
+      probeResultByPreset,
+    );
+
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.aboutAdvancedOptionsTitle),
+      child: FutureBuilder<AppUpdateCheckResult>(
+        future: widget.updateFuture,
+        builder: (context, snapshot) {
+          final result = snapshot.data;
+          final release = result?.latestRelease;
+          final originalDownloadUrl = release?.downloadUrl;
+
+          return HyperosListView(
+            children: [
+              _buildDownloadChannelGroup(settings),
+              const HyperosSectionGap(),
+              _buildDownloadMethodGroup(),
+              const HyperosSectionGap(),
+              HyperosSectionLabel(text: l10n.aboutCheckPrereleaseTitle),
+              HyperosListGroup(
+                children: [
+                  HyperosSwitchTile(
+                    title: l10n.aboutCheckPrereleaseTitle,
+                    subtitle: l10n.aboutCheckPrereleaseSubtitle,
+                    value: settings.appUpdateIncludePrerelease,
+                    onChanged: widget.packageInfo == null
+                        ? null
+                        : _updatePrereleasePreference,
+                  ),
+                ],
+              ),
+              if (downloadChannel == AppUpdateDownloadChannel.github &&
+                  downloadSource == AppUpdateDownloadSource.mirror) ...[
+                const HyperosSectionGap(),
+                _buildMirrorPresetGroup(
+                  theme,
+                  settings: settings,
+                  mirrorPreset: mirrorPreset,
+                  recommendedPreset: recommendedMirrorPreset,
+                  originalDownloadUrl: originalDownloadUrl,
+                ),
+              ],
+              const HyperosSectionGap(),
+              _buildDiagnosticsCard(settings),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDownloadChannelGroup(TimetableSettings settings) {
+    final l10n = AppLocalizations.of(context)!;
+    final downloadChannel = AppUpdateDownloadChannelX.fromValue(
+      settings.appUpdateDownloadChannel,
+    );
+    const channels = AppUpdateDownloadChannel.values;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        HyperosSectionLabel(text: l10n.aboutDownloadChannelSectionTitle),
+        HyperosChoiceGroup(
+          children: [
+            for (var i = 0; i < channels.length; i++)
+              HyperosChoiceTile(
+                title: appUpdateDownloadChannelLabel(l10n, channels[i]),
+                subtitle: Text(
+                  appUpdateDownloadChannelDescription(l10n, channels[i]),
+                ),
+                selected: downloadChannel == channels[i],
+                showDivider: i < channels.length - 1,
+                onTap: () => _updateDownloadChannel(channels[i]),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDownloadMethodGroup() {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        HyperosSectionLabel(text: l10n.aboutDownloadPackageMethodTitle),
+        HyperosChoiceGroup(
+          children: [
+            HyperosChoiceTile(
+              title: l10n.aboutInAppDownloadTitle,
+              subtitle: Text(l10n.aboutInAppDownloadSubtitle),
+              selected: !_useSystemDownloader,
+              showDivider: true,
+              onTap: () {
+                setState(() => _useSystemDownloader = false);
+                widget.onUseSystemDownloaderChanged(false);
+              },
+            ),
+            HyperosChoiceTile(
+              title: l10n.aboutSystemDownloaderTitle,
+              subtitle: Text(l10n.aboutSystemDownloaderChoiceSubtitle),
+              selected: _useSystemDownloader,
+              onTap: () {
+                setState(() => _useSystemDownloader = true);
+                widget.onUseSystemDownloaderChanged(true);
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMirrorPresetGroup(
+    ThemeData theme, {
+    required TimetableSettings settings,
+    required AppUpdateMirrorPreset mirrorPreset,
+    required AppUpdateMirrorPreset? recommendedPreset,
+    required String? originalDownloadUrl,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    final presets = AppUpdateMirrorPreset.values;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        HyperosSectionLabel(text: l10n.aboutMirrorSectionTitle),
+        HyperosChoiceGroup(
+          children: [
+            for (var i = 0; i < presets.length; i++)
+              _buildMirrorPresetTile(
+                theme,
+                preset: presets[i],
+                currentPreset: mirrorPreset,
+                recommendedPreset: recommendedPreset,
+                settings: settings,
+                showDivider: i < presets.length - 1,
+                onTap: () => _handleMirrorPresetTap(presets[i], settings),
+              ),
+          ],
+        ),
+        const HyperosSectionGap(),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.speed_rounded,
+              iconAccent: HyperosIconColors.blue,
+              title: _isProbingMirrors
+                  ? l10n.aboutProbingMirrors
+                  : l10n.aboutProbeMirrorsAction,
+              onTap: originalDownloadUrl == null || _isProbingMirrors
+                  ? null
+                  : () => _probeAndRecommendMirrors(
+                      originalDownloadUrl,
+                      customMirrorUrlPrefix: settings.appUpdateMirrorUrlPrefix,
+                    ),
+            ),
+            HyperosListTile(
+              icon: Icons.link_rounded,
+              iconAccent: HyperosIconColors.teal,
+              title: mirrorPreset.usesCustomUrl
+                  ? l10n.aboutEditCustomMirrorAction
+                  : l10n.aboutSetCustomMirrorAction,
+              onTap: _editMirrorUrlPrefix,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMirrorPresetTile(
+    ThemeData theme, {
+    required AppUpdateMirrorPreset preset,
+    required AppUpdateMirrorPreset currentPreset,
+    required AppUpdateMirrorPreset? recommendedPreset,
+    required TimetableSettings settings,
+    required bool showDivider,
+    required VoidCallback onTap,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    final probeState = _mirrorProbeStates
+        .where((s) => s.preset == preset)
+        .firstOrNull;
+    final isSelected = currentPreset == preset;
+    final isRecommended =
+        recommendedPreset == preset && probeState?.result.isSuccess == true;
+    final subtitleText =
+        preset.usesCustomUrl && settings.appUpdateMirrorUrlPrefix.trim().isEmpty
+        ? l10n.aboutFillCustomMirrorFirst
+        : (preset.usesCustomUrl
+              ? resolveAppUpdateMirrorUrlPrefix(
+                  preset: preset,
+                  customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
+                )
+              : appUpdateMirrorPresetDescription(l10n, preset));
+
+    return HyperosChoiceTile(
+      title: isRecommended
+          ? '${appUpdateMirrorPresetLabel(l10n, preset)} · ${l10n.aboutRecommended}'
+          : appUpdateMirrorPresetLabel(l10n, preset),
+      subtitle: Text(subtitleText),
+      selected: isSelected,
+      showDivider: showDivider,
+      trailing: probeState == null
+          ? null
+          : _buildMirrorProbeStatusChip(l10n, theme, probeState.result),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildMirrorProbeStatusChip(
+    AppLocalizations l10n,
+    ThemeData theme,
+    AppUpdateDownloadProbeResult result,
+  ) {
+    final colorScheme = theme.colorScheme;
+    final (label, background, foreground) = switch (result) {
+      AppUpdateDownloadProbeResult(isSuccess: true, :final elapsed) => (
+        '${elapsed.inMilliseconds}ms',
+        Colors.green.withValues(alpha: 0.12),
+        Colors.green,
+      ),
+      AppUpdateDownloadProbeResult(isSuccess: false) => (
+        l10n.aboutMirrorProbeFailedLabel,
+        colorScheme.errorContainer,
+        colorScheme.onErrorContainer,
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          color: foreground,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticsCard(TimetableSettings settings) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        HyperosSectionLabel(text: l10n.aboutDiagnosticsTitle),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.upload_outlined,
+              iconAccent: HyperosIconColors.indigo,
+              title: l10n.aboutExportDiagnosticsAction,
+              onTap: () => widget.onExportLiveDiagnostics(),
+            ),
+            HyperosListTile(
+              icon: Icons.article_outlined,
+              iconAccent: HyperosIconColors.cyan,
+              title: l10n.aboutViewPhoneLogsAction,
+              onTap: () => widget.onOpenLiveDiagnosticsViewer(),
+            ),
+            HyperosListTile(
+              icon: Icons.delete_outline_rounded,
+              iconAccent: HyperosIconColors.orange,
+              title: l10n.aboutClearAndRecollectAction,
+              onTap: () => widget.onClearLiveDiagnostics(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _updateDownloadChannel(AppUpdateDownloadChannel channel) async {
+    final provider = context.read<TimetableProvider>();
+    final message = await provider.updateTimetableSettings(
+      provider.settings.copyWith(appUpdateDownloadChannel: channel.value),
+    );
+    if (!mounted) return;
+    if (message != null) {
+      showAppToast(context, message: message);
+    }
+  }
+
+  Future<void> _updatePrereleasePreference(bool value) async {
+    final provider = context.read<TimetableProvider>();
+    final message = await provider.updateTimetableSettings(
+      provider.settings.copyWith(appUpdateIncludePrerelease: value),
+    );
+    if (!mounted) return;
+    if (message != null) {
+      showAppToast(context, message: message);
+    }
+  }
+
+  Future<void> _handleMirrorPresetTap(
+    AppUpdateMirrorPreset preset,
+    TimetableSettings settings,
+  ) async {
+    final provider = context.read<TimetableProvider>();
+    final message = await provider.updateTimetableSettings(
+      provider.settings.copyWith(appUpdateMirrorPreset: preset.value),
+    );
+    if (!mounted) return;
+    if (message != null) {
+      showAppToast(context, message: message);
+    }
+  }
+
+  Future<void> _probeAndRecommendMirrors(
+    String originalDownloadUrl, {
+    String? customMirrorUrlPrefix,
+  }) async {
+    setState(() => _isProbingMirrors = true);
+    try {
+      final candidates = <MapEntry<AppUpdateMirrorPreset, String>>[
+        MapEntry(
+          AppUpdateMirrorPreset.ghfast,
+          resolveAppUpdateMirrorUrlPrefix(
+            preset: AppUpdateMirrorPreset.ghfast,
+            customUrlPrefix: customMirrorUrlPrefix ?? '',
+          ),
+        ),
+        MapEntry(
+          AppUpdateMirrorPreset.ghproxyCn,
+          resolveAppUpdateMirrorUrlPrefix(
+            preset: AppUpdateMirrorPreset.ghproxyCn,
+            customUrlPrefix: customMirrorUrlPrefix ?? '',
+          ),
+        ),
+        MapEntry(
+          AppUpdateMirrorPreset.ghLlkk,
+          resolveAppUpdateMirrorUrlPrefix(
+            preset: AppUpdateMirrorPreset.ghLlkk,
+            customUrlPrefix: customMirrorUrlPrefix ?? '',
+          ),
+        ),
+        MapEntry(
+          AppUpdateMirrorPreset.ghProxyCom,
+          resolveAppUpdateMirrorUrlPrefix(
+            preset: AppUpdateMirrorPreset.ghProxyCom,
+            customUrlPrefix: customMirrorUrlPrefix ?? '',
+          ),
+        ),
+        MapEntry(
+          AppUpdateMirrorPreset.ghproxyNet,
+          resolveAppUpdateMirrorUrlPrefix(
+            preset: AppUpdateMirrorPreset.ghproxyNet,
+            customUrlPrefix: customMirrorUrlPrefix ?? '',
+          ),
+        ),
+      ];
+
+      final results = await Future.wait(
+        candidates.map((candidate) async {
+          final probeUrl = widget.updateService.buildDownloadUrl(
+            originalUrl: originalDownloadUrl,
+            source: AppUpdateDownloadSource.mirror,
+            mirrorUrlPrefix: candidate.value,
+          );
+          final probeResult = await widget.updateService.probeDownloadUrl(
+            probeUrl,
+          );
+          return _MirrorProbeState(
+            preset: candidate.key,
+            prefix: candidate.value,
+            result: probeResult,
+          );
+        }),
+      );
+
+      if (!mounted) return;
+      setState(() => _mirrorProbeStates = results);
+      final recommended = resolveRecommendedMirrorPreset({
+        for (final item in results) item.preset: item.result,
+      });
+      if (recommended != null) {
+        final provider = context.read<TimetableProvider>();
+        await provider.updateTimetableSettings(
+          provider.settings.copyWith(appUpdateMirrorPreset: recommended.value),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProbingMirrors = false);
+    }
+  }
+
+  Future<void> _editMirrorUrlPrefix() async {
+    final l10n = AppLocalizations.of(context)!;
+    final settings = context.read<TimetableProvider>().settings;
+    final result = await showAppTextInputDialog(
+      context,
+      title: l10n.aboutSetMirrorSourceTitle,
+      initialValue: settings.appUpdateMirrorUrlPrefix,
+      bodyBuilder: (controller) => HyperosTextField(
+        controller: controller,
+        label: l10n.aboutMirrorPrefixLabel,
+        hint: 'https://ghfast.top/',
+        autofocus: true,
+      ),
+    );
+    if (result == null || !mounted) return;
+    final provider = context.read<TimetableProvider>();
+    await provider.updateTimetableSettings(
+      provider.settings.copyWith(appUpdateMirrorUrlPrefix: result),
+    );
+  }
+}
+
 class ReleaseNotesMarkdown extends StatelessWidget {
   final String data;
   final ValueChanged<String?>? onTapLink;
+  final bool plainTypography;
+  final bool usePrimaryTextColor;
+
+  static final RegExp _versionHeadingPattern = RegExp(
+    r'^#\s+v[\d.\-a-zA-Z]+',
+    caseSensitive: false,
+  );
 
   const ReleaseNotesMarkdown({
     super.key,
     required this.data,
     this.onTapLink,
+    this.plainTypography = false,
+    this.usePrimaryTextColor = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final normalized = plainTypography ? _stripVersionHeading(data) : data;
+    final styleSheet = _buildReleaseNotesStyleSheet(
+      context,
+      plainTypography: plainTypography,
+      usePrimaryTextColor: usePrimaryTextColor,
+    );
+    final bulletStyle = styleSheet.listBullet;
     return MarkdownBody(
-      data: data,
-      selectable: true,
-      styleSheet: MarkdownStyleSheet.fromTheme(theme),
+      data: normalized,
+      selectable: false,
+      styleSheet: styleSheet,
+      listItemCrossAxisAlignment: plainTypography
+          ? MarkdownListItemCrossAxisAlignment.start
+          : MarkdownListItemCrossAxisAlignment.baseline,
+      bulletBuilder: plainTypography
+          ? (_) => Text('·', style: bulletStyle?.copyWith(height: 1.35))
+          : null,
       onTapLink: (text, href, title) => onTapLink?.call(href),
+    );
+  }
+
+  static String _stripVersionHeading(String data) {
+    final lines = data.split('\n');
+    var start = 0;
+    if (lines.isNotEmpty &&
+        _versionHeadingPattern.hasMatch(lines.first.trim())) {
+      start = 1;
+      while (start < lines.length && lines[start].trim().isEmpty) {
+        start++;
+      }
+    }
+    return lines.sublist(start).join('\n').trim();
+  }
+
+  static MarkdownStyleSheet _buildReleaseNotesStyleSheet(
+    BuildContext context, {
+    required bool plainTypography,
+    required bool usePrimaryTextColor,
+  }) {
+    final theme = Theme.of(context);
+    if (!plainTypography) {
+      return MarkdownStyleSheet.fromTheme(theme);
+    }
+    final onSurface = theme.colorScheme.onSurface;
+    final body = usePrimaryTextColor
+        ? HyperosTypography.sectionDescription(
+            context,
+          ).copyWith(color: onSurface)
+        : HyperosTypography.sectionDescription(context);
+    final sectionHeader = body.copyWith(fontWeight: FontWeight.w600);
+    final linkColor = usePrimaryTextColor
+        ? onSurface
+        : theme.colorScheme.primary;
+    return MarkdownStyleSheet(
+      p: body,
+      pPadding: EdgeInsets.zero,
+      listBullet: body,
+      listIndent: 12,
+      listBulletPadding: const EdgeInsets.only(right: 4),
+      blockSpacing: 6,
+      h1: sectionHeader,
+      h1Padding: EdgeInsets.zero,
+      h2: sectionHeader,
+      h2Padding: const EdgeInsets.only(top: 8, bottom: 2),
+      h3: sectionHeader,
+      h3Padding: EdgeInsets.zero,
+      h4: body,
+      h5: body,
+      h6: body,
+      strong: body.copyWith(fontWeight: FontWeight.w500),
+      em: body.copyWith(fontStyle: FontStyle.italic),
+      a: body.copyWith(color: linkColor, decoration: TextDecoration.underline),
+      blockquote: body,
+      blockquotePadding: const EdgeInsets.only(left: 12),
+      code: body.copyWith(
+        fontFamily: 'monospace',
+        fontSize: (body.fontSize ?? 14) - 1,
+      ),
     );
   }
 }
@@ -2176,8 +2273,8 @@ class ContributorsScreen extends StatefulWidget {
 class _ContributorsScreenState extends State<ContributorsScreen> {
   static final WarehouseRepositorySource _warehouseSource =
       WarehouseRepositorySource.fromGitHubUrl(
-    'https://github.com/stareyeXT/qingyu_warehouse',
-  );
+        'https://github.com/Mutx163/qingyu_warehouse',
+      );
   static const String _maintainersCacheKey = 'warehouse_maintainers_cache_v1';
 
   final WarehouseRepositoryService _repositoryService =
@@ -2193,7 +2290,7 @@ class _ContributorsScreenState extends State<ContributorsScreen> {
   }
 
   Future<List<_WarehouseMaintainerGroup>>
-      _fetchMaintainersFromWarehouse() async {
+  _fetchMaintainersFromWarehouse() async {
     final settings = context.read<TimetableProvider>().settings;
     final options = WarehouseFetchOptions.fromSettings(settings);
     final rootIndex = await _repositoryService.fetchRootIndex(
@@ -2202,26 +2299,28 @@ class _ContributorsScreenState extends State<ContributorsScreen> {
     );
     final groups = <String, List<String>>{};
 
-    final futures = rootIndex.schools.map((school) async {
-      try {
-        final adapters = await _repositoryService.fetchAdaptersIndex(
-          _warehouseSource,
-          school,
-          options: options,
-        );
-        return adapters.adapters
-            .where((adapter) => adapter.maintainer.trim().isNotEmpty)
-            .map(
-              (adapter) => (
-                adapter.maintainer.trim(),
-                '${school.name} · ${adapter.adapterName}',
-              ),
-            )
-            .toList(growable: false);
-      } catch (_) {
-        return const <(String, String)>[];
-      }
-    }).toList(growable: false);
+    final futures = rootIndex.schools
+        .map((school) async {
+          try {
+            final adapters = await _repositoryService.fetchAdaptersIndex(
+              _warehouseSource,
+              school,
+              options: options,
+            );
+            return adapters.adapters
+                .where((adapter) => adapter.maintainer.trim().isNotEmpty)
+                .map(
+                  (adapter) => (
+                    adapter.maintainer.trim(),
+                    '${school.name} · ${adapter.adapterName}',
+                  ),
+                )
+                .toList(growable: false);
+          } catch (_) {
+            return const <(String, String)>[];
+          }
+        })
+        .toList(growable: false);
 
     final results = await Future.wait(futures);
     for (final entries in results) {
@@ -2231,15 +2330,16 @@ class _ContributorsScreenState extends State<ContributorsScreen> {
       }
     }
 
-    final result = groups.entries
-        .map(
-          (entry) => _WarehouseMaintainerGroup(
-            name: entry.key,
-            adapterLabels: [...entry.value]..sort(),
-          ),
-        )
-        .toList(growable: false)
-      ..sort((left, right) => left.name.compareTo(right.name));
+    final result =
+        groups.entries
+            .map(
+              (entry) => _WarehouseMaintainerGroup(
+                name: entry.key,
+                adapterLabels: [...entry.value]..sort(),
+              ),
+            )
+            .toList(growable: false)
+          ..sort((left, right) => left.name.compareTo(right.name));
     return result;
   }
 
@@ -2322,134 +2422,83 @@ class _ContributorsScreenState extends State<ContributorsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.aboutContributorsScreenTitle),
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.aboutContributorsScreenTitle),
+      child: HyperosListView(
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.aboutDevelopersTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _ContributorRow(
-                    name: 'stareyeXT',
-                    subtitle: l10n.aboutDeveloperMaintainerSubtitle,
-                  ),
-                ],
+          HyperosControlCard(
+            title: l10n.aboutDevelopersTitle,
+            child: HyperosControlCardInset(
+              child: _ContributorRow(
+                name: 'Mutx163',
+                subtitle: l10n.aboutDeveloperMaintainerSubtitle,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+          const HyperosSectionGap(),
+          HyperosControlCard(
+            title: l10n.aboutWarehouseMaintainersTitle,
+            subtitle: l10n.aboutWarehouseMaintainersIntro,
+            child: HyperosControlCardInset(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.aboutWarehouseMaintainersTitle,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (_isLoadingMaintainers)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.aboutWarehouseMaintainersIntro,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  if (_isLoadingMaintainers)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Center(child: HyperosCircularProgress()),
                     ),
-                  ),
-                  const SizedBox(height: 12),
                   if (_maintainersError != null && _maintainers.isEmpty)
                     Text(
                       l10n.aboutWarehouseMaintainersLoadFailed(
-                          _maintainersError!),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.error,
+                        _maintainersError!,
                       ),
+                      style: HyperosTypography.listTitle(
+                        context,
+                      ).copyWith(color: HyperosColors.error(context)),
                     )
-                  else if (_maintainers.isEmpty)
+                  else if (_maintainers.isEmpty && !_isLoadingMaintainers)
                     Text(
                       l10n.aboutWarehouseMaintainersEmpty,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                      style: HyperosTypography.listDetail(context),
                     )
                   else
-                    ..._maintainers.map(
-                      (group) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _ContributorRow(
+                    ..._maintainers.asMap().entries.expand((entry) {
+                      final index = entry.key;
+                      final group = entry.value;
+                      return [
+                        if (index > 0) const Divider(height: 24),
+                        _ContributorRow(
                           name: group.name,
                           subtitle: l10n.aboutWarehouseMaintainerCount(
-                              group.adapterLabels.length),
+                            group.adapterLabels.length,
+                          ),
                           details: group.adapterLabels,
                         ),
-                      ),
-                    ),
+                      ];
+                    }),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          const HyperosSectionGap(),
+          HyperosControlCard(
+            title: l10n.aboutParticipateWarehouseTitle,
+            subtitle: l10n.aboutParticipateWarehouseSubtitle,
+            child: HyperosControlCardInset(
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
                 children: [
-                  Text(
-                    l10n.aboutParticipateWarehouseTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  HyperosButton(
+                    label: l10n.aboutOpenWarehouseRepoAction,
+                    onPressed: _openWarehouseRepository,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.aboutParticipateWarehouseSubtitle,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: _openWarehouseRepository,
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: Text(l10n.aboutOpenWarehouseRepoAction),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _copyWarehouseRepositoryUrl,
-                        icon: const Icon(Icons.copy_all_rounded),
-                        label: Text(l10n.copyAddress),
-                      ),
-                    ],
+                  HyperosButton(
+                    label: l10n.copyAddress,
+                    variant: HyperosButtonVariant.secondary,
+                    onPressed: _copyWarehouseRepositoryUrl,
                   ),
                 ],
               ),
@@ -2475,10 +2524,131 @@ class _ContributorsScreenState extends State<ContributorsScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(
-              AppLocalizations.of(context)!.copiedWarehouseRepositoryAddress)),
+    showAppToast(
+      context,
+      message: AppLocalizations.of(context)!.copiedWarehouseRepositoryAddress,
+      kind: AppToastKind.success,
+    );
+  }
+}
+
+EdgeInsets _aboutRowPadding(BuildContext context) {
+  final scope = HyperosListTileScope.maybeOf(context);
+  return HyperosTokens.rowPadding(
+    isFirst: scope?.isFirst ?? true,
+    isLast: scope?.isLast ?? true,
+  );
+}
+
+class _AboutHeroMetaCell extends StatelessWidget {
+  const _AboutHeroMetaCell({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: HyperosTypography.listDetail(context),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: HyperosTypography.listDetail(context).copyWith(
+              color: Color.lerp(
+                HyperosColors.secondaryText(context),
+                HyperosColors.primaryText(context),
+                0.25,
+              ),
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutHeroMetaDivider extends StatelessWidget {
+  const _AboutHeroMetaDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return VerticalDivider(
+      width: 1,
+      thickness: 1,
+      color: HyperosColors.dividerLine(context),
+    );
+  }
+}
+
+class _AboutEntryTile extends StatelessWidget {
+  const _AboutEntryTile({
+    required this.icon,
+    required this.iconAccent,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconAccent;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cardColor = HyperosColors.card(context);
+    final highlightColor = HyperosColors.rowHighlight(context);
+
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: HyperosTokens.listRowMinHeight,
+      ),
+      child: Padding(
+        padding: _aboutRowPadding(context),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            HyperosIconBadge(icon: icon, accent: iconAccent),
+            const SizedBox(width: HyperosTokens.rowContentGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(title, style: HyperosTypography.listTitle(context)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: HyperosTypography.listDetail(context)),
+                ],
+              ),
+            ),
+            SizedBox(width: HyperosTokens.titleChevronGap),
+            const HyperosChevron(),
+          ],
+        ),
+      ),
+    );
+
+    return HyperosPressableRow(
+      onTap: onTap,
+      backgroundColor: cardColor,
+      highlightColor: highlightColor,
+      child: row,
     );
   }
 }
@@ -2506,103 +2676,25 @@ class _ContributorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            name,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          if (details.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            ...details.map(
-              (detail) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '• $detail',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _AboutNavTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _AboutNavTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: onTap,
-    );
-  }
-}
-
-class _AboutBullet extends StatelessWidget {
-  final String text;
-
-  const _AboutBullet({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: colorScheme.primary,
-                shape: BoxShape.circle,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(name, style: HyperosTypography.listTitle(context)),
+        const SizedBox(height: 4),
+        Text(subtitle, style: HyperosTypography.listDetail(context)),
+        if (details.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ...details.map(
+            (detail) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '• $detail',
+                style: HyperosTypography.listDetail(context),
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text)),
         ],
-      ),
+      ],
     );
   }
 }
-

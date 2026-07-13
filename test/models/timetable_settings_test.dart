@@ -9,7 +9,7 @@ void main() {
     expect(settings.timetableShowCurrentWeekCourses, isTrue);
     expect(settings.timetableShowNonCurrentWeekCourses, isFalse);
     expect(settings.showConflictBadgeOnTimetable, isTrue);
-    expect(settings.timetableConflictCourseOpacity, 0.72);
+    expect(settings.timetableConflictCourseOpacity, 0.70);
     expect(settings.liveHidePrefixText, isTrue);
     expect(settings.courseCardShowName, isTrue);
     expect(settings.courseCardShowTeacher, isTrue);
@@ -96,7 +96,7 @@ void main() {
     expect(restored.timetableShowCurrentWeekCourses, isTrue);
     expect(restored.timetableShowNonCurrentWeekCourses, isFalse);
     expect(restored.showConflictBadgeOnTimetable, isTrue);
-    expect(restored.timetableConflictCourseOpacity, 0.72);
+    expect(restored.timetableConflictCourseOpacity, 0.70);
     expect(restored.liveHidePrefixText, isTrue);
     expect(restored.courseCardShowName, isTrue);
     expect(restored.courseCardShowTeacher, isTrue);
@@ -460,5 +460,402 @@ void main() {
 
     expect(restored.appUpdateMirrorPreset, AppUpdateMirrorPreset.custom.value);
     expect(restored.appUpdateMirrorUrlPrefix, 'https://mirror.example.com/');
+  });
+
+  group('ThemeConfig', () {
+    test('roundtrip preserves all fields', () {
+      const original = ThemeConfig(
+        version: 2,
+        seedColor: '#FF0000',
+        backgroundColor: '#FFFFFF',
+        unifiedCardColor: '#00FF00',
+        useUnifiedCardColor: true,
+        themeMode: 'dark',
+        courseCardTitleColorLight: '#111111',
+        courseCardTitleColorDark: '#EEEEEE',
+        courseCardDetailColorLight: '#222222',
+        courseCardDetailColorDark: '#DDDDDD',
+        weekdayBarFontColorLight: '#333333',
+        weekdayBarFontColorDark: '#CCCCCC',
+        weekdayBarAccentColorLight: '#444444',
+        weekdayBarAccentColorDark: '#BBBBBB',
+        timeAxisFontColorLight: '#555555',
+        timeAxisFontColorDark: '#AAAAAA',
+        linkCourseCardColors: false,
+        hideWeekends: true,
+        spacingMode: 'wide',
+        timeDisplayMode: 'startOnly',
+      );
+
+      final restored = ThemeConfig.fromJson(original.toJson());
+
+      expect(restored.version, original.version);
+      expect(restored.seedColor, original.seedColor);
+      expect(restored.backgroundColor, original.backgroundColor);
+      expect(restored.unifiedCardColor, original.unifiedCardColor);
+      expect(restored.useUnifiedCardColor, original.useUnifiedCardColor);
+      expect(restored.themeMode, original.themeMode);
+      expect(
+        restored.courseCardTitleColorLight,
+        original.courseCardTitleColorLight,
+      );
+      expect(
+        restored.courseCardTitleColorDark,
+        original.courseCardTitleColorDark,
+      );
+      expect(
+        restored.courseCardDetailColorLight,
+        original.courseCardDetailColorLight,
+      );
+      expect(
+        restored.courseCardDetailColorDark,
+        original.courseCardDetailColorDark,
+      );
+      expect(
+        restored.weekdayBarFontColorLight,
+        original.weekdayBarFontColorLight,
+      );
+      expect(
+        restored.weekdayBarFontColorDark,
+        original.weekdayBarFontColorDark,
+      );
+      expect(
+        restored.weekdayBarAccentColorLight,
+        original.weekdayBarAccentColorLight,
+      );
+      expect(
+        restored.weekdayBarAccentColorDark,
+        original.weekdayBarAccentColorDark,
+      );
+      expect(restored.timeAxisFontColorLight, original.timeAxisFontColorLight);
+      expect(restored.timeAxisFontColorDark, original.timeAxisFontColorDark);
+      expect(restored.linkCourseCardColors, original.linkCourseCardColors);
+      expect(restored.hideWeekends, original.hideWeekends);
+      expect(restored.spacingMode, original.spacingMode);
+      expect(restored.timeDisplayMode, original.timeDisplayMode);
+    });
+
+    test('v1 compat parses correctly', () {
+      final v1 = {
+        'v': 1,
+        'ccl': '#FFFFFF',
+        'ccd': '#000000',
+        'cdl': '#CCCCCC',
+        'cdd': '#333333',
+        'wbl': '#AAAAAA',
+        'wbd': '#555555',
+        'tal': '#BBBBBB',
+        'tad': '#444444',
+        'link': true,
+      };
+
+      final config = ThemeConfig.fromJson(v1);
+
+      expect(config.version, 1);
+      expect(config.courseCardTitleColorLight, '#FFFFFF');
+      expect(config.courseCardTitleColorDark, '#000000');
+      expect(config.courseCardDetailColorLight, '#CCCCCC');
+      expect(config.courseCardDetailColorDark, '#333333');
+      expect(config.weekdayBarFontColorLight, '#AAAAAA');
+      expect(config.weekdayBarFontColorDark, '#555555');
+      expect(config.timeAxisFontColorLight, '#BBBBBB');
+      expect(config.timeAxisFontColorDark, '#444444');
+      expect(config.linkCourseCardColors, true);
+      // v1 不包含这些字段
+      expect(config.seedColor, isNull);
+      expect(config.backgroundColor, isNull);
+      expect(config.weekdayBarAccentColorLight, isNull);
+    });
+
+    test('fromSettings -> applyToSettings is identity', () {
+      final settings = TimetableSettings.defaults().copyWith(
+        themeSeedColor: '#FF0000',
+        timetablePageBackgroundColor: '#FFFFFF',
+        courseCardTitleColorLight: '#111111',
+        weekdayBarAccentColorLight: '#2563EB',
+        weekdayBarAccentColorDark: '#93C5FD',
+      );
+
+      final config = ThemeConfig.fromSettings(settings);
+      final restored = config.applyToSettings(settings);
+
+      expect(restored.themeSeedColor, settings.themeSeedColor);
+      expect(
+        restored.timetablePageBackgroundColor,
+        settings.timetablePageBackgroundColor,
+      );
+      expect(
+        restored.courseCardTitleColorLight,
+        settings.courseCardTitleColorLight,
+      );
+      expect(
+        restored.weekdayBarAccentColorLight,
+        settings.weekdayBarAccentColorLight,
+      );
+      expect(
+        restored.weekdayBarAccentColorDark,
+        settings.weekdayBarAccentColorDark,
+      );
+    });
+
+    test('previewColors returns up to 4 colors', () {
+      const config = ThemeConfig(
+        seedColor: '#FF0000',
+        courseCardTitleColorLight: '#00FF00',
+        courseCardDetailColorLight: '#0000FF',
+        weekdayBarFontColorLight: '#FFFF00',
+        weekdayBarAccentColorLight: '#FF00FF',
+      );
+
+      final colors = config.previewColors;
+      expect(colors.length, 4);
+      expect(colors[0], '#FF0000');
+      expect(colors[1], '#00FF00');
+      expect(colors[2], '#0000FF');
+      expect(colors[3], '#FFFF00');
+    });
+  });
+
+  group('SavedTheme', () {
+    test('roundtrip preserves config', () {
+      final original = SavedTheme(
+        id: '123',
+        name: 'Test Theme',
+        config: const ThemeConfig(
+          seedColor: '#FF0000',
+          weekdayBarAccentColorLight: '#2563EB',
+        ),
+        createdAt: DateTime(2024, 1, 1),
+      );
+
+      final restored = SavedTheme.fromJson(original.toJson());
+
+      expect(restored.id, original.id);
+      expect(restored.name, original.name);
+      expect(restored.config.seedColor, original.config.seedColor);
+      expect(
+        restored.config.weekdayBarAccentColorLight,
+        original.config.weekdayBarAccentColorLight,
+      );
+      expect(restored.createdAt, original.createdAt);
+    });
+
+    test('themeData getter returns config toJson', () {
+      final theme = SavedTheme(
+        id: '123',
+        name: 'Test',
+        config: const ThemeConfig(seedColor: '#FF0000'),
+        createdAt: DateTime.now(),
+      );
+
+      expect(theme.themeData, theme.config.toJson());
+    });
+  });
+
+  group('hasThemeModifications', () {
+    test('returns false when no checkpoint', () {
+      final settings = TimetableSettings.defaults();
+      expect(settings.themeCheckpointConfig, isNull);
+      expect(settings.hasThemeModifications, isFalse);
+    });
+
+    test('returns false when settings match checkpoint', () {
+      const checkpoint = ThemeConfig(
+        seedColor: '#FF0000',
+        backgroundColor: '#FFFFFF',
+        courseCardTitleColorLight: '#111111',
+      );
+
+      final settings = TimetableSettings.defaults().copyWith(
+        themeSeedColor: '#FF0000',
+        timetablePageBackgroundColor: '#FFFFFF',
+        courseCardTitleColorLight: '#111111',
+        themeCheckpointName: 'Test Theme',
+        themeCheckpointConfig: checkpoint,
+      );
+
+      expect(settings.hasThemeModifications, isFalse);
+    });
+
+    test('returns true when a checkpoint field is modified', () {
+      const checkpoint = ThemeConfig(
+        seedColor: '#FF0000',
+        backgroundColor: '#FFFFFF',
+      );
+
+      final settings = TimetableSettings.defaults().copyWith(
+        themeSeedColor: '#00FF00', // 修改了
+        timetablePageBackgroundColor: '#FFFFFF',
+        themeCheckpointName: 'Test Theme',
+        themeCheckpointConfig: checkpoint,
+      );
+
+      expect(settings.hasThemeModifications, isTrue);
+    });
+
+    test('returns false when only non-checkpoint fields differ', () {
+      // checkpoint 只设置 seedColor，其他字段为 null
+      const checkpoint = ThemeConfig(seedColor: '#FF0000');
+
+      final settings = TimetableSettings.defaults().copyWith(
+        themeSeedColor: '#FF0000', // 与 checkpoint 一致
+        courseCardTitleColorLight: '#999999', // checkpoint 中为 null，不应比较
+        themeCheckpointName: 'Test Theme',
+        themeCheckpointConfig: checkpoint,
+      );
+
+      expect(settings.hasThemeModifications, isFalse);
+    });
+
+    test('handles boolean fields correctly', () {
+      const checkpoint = ThemeConfig(
+        useUnifiedCardColor: true,
+        linkCourseCardColors: true,
+        hideWeekends: false,
+      );
+
+      final settingsUnmodified = TimetableSettings.defaults().copyWith(
+        timetableUseUnifiedCardColor: true,
+        linkCourseCardColors: true,
+        timetableHideWeekends: false,
+        themeCheckpointName: 'Test',
+        themeCheckpointConfig: checkpoint,
+      );
+
+      final settingsModified = TimetableSettings.defaults().copyWith(
+        timetableUseUnifiedCardColor: false, // 修改了
+        linkCourseCardColors: true,
+        timetableHideWeekends: false,
+        themeCheckpointName: 'Test',
+        themeCheckpointConfig: checkpoint,
+      );
+
+      expect(settingsUnmodified.hasThemeModifications, isFalse);
+      expect(settingsModified.hasThemeModifications, isTrue);
+    });
+  });
+
+  group('clearThemeCheckpoint', () {
+    test('clears both checkpoint fields', () {
+      final settings = TimetableSettings.defaults().copyWith(
+        themeCheckpointName: 'Test Theme',
+        themeCheckpointConfig: const ThemeConfig(seedColor: '#FF0000'),
+      );
+
+      expect(settings.themeCheckpointName, isNotNull);
+      expect(settings.themeCheckpointConfig, isNotNull);
+
+      final cleared = settings.copyWith(clearThemeCheckpoint: true);
+
+      expect(cleared.themeCheckpointName, isNull);
+      expect(cleared.themeCheckpointConfig, isNull);
+    });
+
+    test('preserves checkpoint when clearThemeCheckpoint is false', () {
+      final settings = TimetableSettings.defaults().copyWith(
+        themeCheckpointName: 'Test Theme',
+        themeCheckpointConfig: const ThemeConfig(seedColor: '#FF0000'),
+      );
+
+      final preserved = settings.copyWith(clearThemeCheckpoint: false);
+
+      expect(preserved.themeCheckpointName, 'Test Theme');
+      expect(preserved.themeCheckpointConfig?.seedColor, '#FF0000');
+    });
+
+    test('clearThemeCheckpoint takes priority over provided values', () {
+      final settings = TimetableSettings.defaults().copyWith(
+        themeCheckpointName: 'Old Theme',
+        themeCheckpointConfig: const ThemeConfig(seedColor: '#FF0000'),
+      );
+
+      // 即使传入新值，clearThemeCheckpoint: true 也会清空
+      final cleared = settings.copyWith(
+        clearThemeCheckpoint: true,
+        themeCheckpointName: 'New Theme',
+        themeCheckpointConfig: const ThemeConfig(seedColor: '#00FF00'),
+      );
+
+      expect(cleared.themeCheckpointName, isNull);
+      expect(cleared.themeCheckpointConfig, isNull);
+    });
+  });
+
+  group('themeCheckpoint serialization', () {
+    test('roundtrip preserves checkpoint fields', () {
+      const checkpoint = ThemeConfig(
+        seedColor: '#FF0000',
+        backgroundColor: '#FFFFFF',
+        courseCardTitleColorLight: '#111111',
+        weekdayBarAccentColorLight: '#2563EB',
+      );
+
+      final settings = TimetableSettings.defaults().copyWith(
+        themeCheckpointName: 'Blue Theme',
+        themeCheckpointConfig: checkpoint,
+      );
+
+      final restored = TimetableSettings.fromJson(settings.toJson());
+
+      expect(restored.themeCheckpointName, 'Blue Theme');
+      expect(restored.themeCheckpointConfig, isNotNull);
+      expect(restored.themeCheckpointConfig!.seedColor, '#FF0000');
+      expect(restored.themeCheckpointConfig!.backgroundColor, '#FFFFFF');
+      expect(
+        restored.themeCheckpointConfig!.courseCardTitleColorLight,
+        '#111111',
+      );
+      expect(
+        restored.themeCheckpointConfig!.weekdayBarAccentColorLight,
+        '#2563EB',
+      );
+    });
+
+    test('handles null checkpoint in JSON', () {
+      final json = TimetableSettings.defaults().toJson();
+      // 默认值没有 checkpoint 字段
+      expect(json.containsKey('themeCheckpointName'), isFalse);
+      expect(json.containsKey('themeCheckpointConfig'), isFalse);
+
+      final restored = TimetableSettings.fromJson(json);
+      expect(restored.themeCheckpointName, isNull);
+      expect(restored.themeCheckpointConfig, isNull);
+    });
+  });
+
+  test('home page background settings roundtrip in json', () {
+    final settings = TimetableSettings.defaults().copyWith(
+      homePageBackgroundFill: HomePageBackgroundFill.image,
+      homePageBackgroundImagePath: '/tmp/home_bg.png',
+      homePageWallpaperPath: '/tmp/wallpaper.png',
+      homePageBackgroundScope:
+          HomePageBackgroundScope.timetable | HomePageBackgroundScope.header,
+    );
+
+    final restored = TimetableSettings.fromJson(settings.toJson());
+    expect(restored.homePageBackgroundFill, HomePageBackgroundFill.image);
+    expect(restored.homePageBackgroundImagePath, '/tmp/home_bg.png');
+    expect(restored.homePageWallpaperPath, '/tmp/wallpaper.png');
+    expect(
+      HomePageBackgroundScope.includes(
+        restored.homePageBackgroundScope,
+        HomePageBackgroundScope.timetable,
+      ),
+      isTrue,
+    );
+    expect(
+      HomePageBackgroundScope.includes(
+        restored.homePageBackgroundScope,
+        HomePageBackgroundScope.header,
+      ),
+      isTrue,
+    );
+    expect(
+      HomePageBackgroundScope.includes(
+        restored.homePageBackgroundScope,
+        HomePageBackgroundScope.weekdayBar,
+      ),
+      isFalse,
+    );
   });
 }

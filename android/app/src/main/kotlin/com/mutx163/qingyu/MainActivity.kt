@@ -2,6 +2,7 @@ package com.mutx163.qingyu
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.AppOpsManager
 import android.app.DownloadManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,10 +12,13 @@ import android.app.Service
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.provider.OpenableColumns
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
@@ -26,7 +30,6 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.Icon
-import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -44,10 +47,12 @@ import android.util.TypedValue
 import android.webkit.URLUtil
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
+import java.util.Locale
 import java.io.File
 import java.util.Calendar
 import kotlin.math.ceil
@@ -55,6 +60,7 @@ import kotlin.math.ceil
 class MainActivity : FlutterActivity() {
     companion object {
         private const val METHOD_CHANNEL = "com.mutx163.qingyu/miui_live"
+        private const val SYSTEM_UI_CHANNEL = "com.mutx163.qingyu/system_ui"
         private const val UMENG_CHANNEL = "com.mutx163.qingyu/umeng_analytics"
         private const val HOME_WIDGET_CHANNEL = "com.mutx163.qingyu/home_widget"
         private const val SUPPORT_CHANNEL = "com.mutx163.qingyu/support"
@@ -66,10 +72,44 @@ class MainActivity : FlutterActivity() {
         private const val KEY_MANAGED_UPDATE_DOWNLOAD_IDS = "managed_update_download_ids"
         private const val POST_PROMOTED_NOTIFICATIONS_PERMISSION =
             "android.permission.POST_PROMOTED_NOTIFICATIONS"
+        private const val ICS_CHANNEL = "com.mutx163.qingyu/ics_import"
+        private const val LAN_EDIT_CHANNEL = "com.mutx163.qingyu/lan_edit"
+        private const val FROSTED_BLUR_CHANNEL = "com.mutx163.qingyu/frosted_blur"
     }
 
     private var notificationManager: NotificationManager? = null
     private var permissionResult: MethodChannel.Result? = null
+    private data class PendingExternalImport(
+        val kind: String,
+        val fileName: String,
+        val textContent: String? = null,
+        val filePath: String? = null,
+    )
+
+    private var pendingExternalImport: PendingExternalImport? = null
+    private var pendingOpenLanEdit = false
+    private var flutterChannel: MethodChannel? = null
+    private var lanEditChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        window.setBackgroundDrawable(
+            SplashLayerDrawable(
+                this,
+                applicationInfo.loadLabel(packageManager),
+            ),
+        )
+        installSplashScreen()
+        super.onCreate(savedInstanceState)
+        handleExternalImportIntent(intent)
+        handleLanEditIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleExternalImportIntent(intent)
+        handleLanEditIntent(intent)
+    }
 
     override fun onResume() {
         super.onResume()
@@ -82,7 +122,92 @@ class MainActivity : FlutterActivity() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannels()
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SYSTEM_UI_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getTransitionAnimationScale" -> {
+                        val scale = Settings.Global.getFloat(
+                            contentResolver,
+                            Settings.Global.TRANSITION_ANIMATION_SCALE,
+                            1.0f,
+                        )
+                        result.success(scale.toDouble())
+                    }
+                    "getDisplayCornerRadiusDp" -> {
+                        result.success(readDisplayCornerRadiusDp())
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FROSTED_BLUR_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isSupported" -> result.success(FrostedBlur.isSupported())
+                    "blurPng" -> {
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val radius = (call.argument<Double>("radius") ?: 16.0).toFloat()
+                        if (bytes == null) {
+                            result.error("INVALID_ARGUMENTS", "Missing PNG bytes", null)
+                            return@setMethodCallHandler
+                        }
+                        Thread {
+                            try {
+                                val blurred = FrostedBlur.blurPng(bytes, radius)
+                                runOnUiThread {
+                                    if (blurred == null) {
+                                        result.error(
+                                            "BLUR_FAILED",
+                                            "Native blur returned null",
+                                            null,
+                                        )
+                                    } else {
+                                        result.success(blurred)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("BLUR_FAILED", e.message, null)
+                                }
+                            }
+                        }.start()
+                    }
+                    "blurRgba" -> {
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val width = call.argument<Int>("width") ?: 0
+                        val height = call.argument<Int>("height") ?: 0
+                        val radius = (call.argument<Double>("radius") ?: 16.0).toFloat()
+                        if (bytes == null || width <= 0 || height <= 0) {
+                            result.error("INVALID_ARGUMENTS", "Missing RGBA payload", null)
+                            return@setMethodCallHandler
+                        }
+                        Thread {
+                            try {
+                                val blurred = FrostedBlur.blurRgba(bytes, width, height, radius)
+                                runOnUiThread {
+                                    if (blurred == null) {
+                                        result.error(
+                                            "BLUR_FAILED",
+                                            "Native RGBA blur returned null",
+                                            null,
+                                        )
+                                    } else {
+                                        result.success(blurred)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("BLUR_FAILED", e.message, null)
+                                }
+                            }
+                        }.start()
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            .also { flutterChannel = it }
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "initialize" -> result.success(true)
@@ -118,6 +243,9 @@ class MainActivity : FlutterActivity() {
                     "openAccessibilitySettings" -> {
                         openAccessibilitySettings()
                         result.success(true)
+                    }
+                    "isAutoStartEnabled" -> {
+                        result.success(isAutoStartEnabled())
                     }
                     "isKeepAliveAccessibilityEnabled" -> {
                         result.success(isKeepAliveAccessibilityEnabled())
@@ -159,6 +287,30 @@ class MainActivity : FlutterActivity() {
                         LiveUpdateScheduler.clearSnapshot(this)
                         stopLiveUpdateService()
                         result.success(true)
+                    }
+                    "suspendScheduleTriggers" -> {
+                        val untilMillis = (call.arguments as? Number)?.toLong()
+                        if (untilMillis != null) {
+                            LiveUpdateScheduler.suspendScheduleTriggers(this, untilMillis)
+                            result.success(true)
+                        } else {
+                            result.error("INVALID_ARGUMENTS", "Missing suspend deadline", null)
+                        }
+                    }
+
+                    "getPendingExternalImport" -> {
+                        val pending = pendingExternalImport
+                        pendingExternalImport = null
+                        result.success(
+                            pending?.let {
+                                mapOf(
+                                    "kind" to it.kind,
+                                    "fileName" to it.fileName,
+                                    "textContent" to it.textContent,
+                                    "filePath" to it.filePath,
+                                )
+                            },
+                        )
                     }
 
                     else -> result.notImplemented()
@@ -368,6 +520,207 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LAN_EDIT_CHANNEL)
+            .also { lanEditChannel = it }
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startLanEditForeground" -> {
+                        try {
+                            startLanEditForegroundService()
+                            result.success(true)
+                        } catch (e: Exception) {
+                            val tag = when (e) {
+                                is SecurityException -> DiagnosticLogMessages.LOG_LAN_FOREGROUND_START_DENIED
+                                else -> DiagnosticLogMessages.LOG_LAN_FOREGROUND_START_FAILED
+                            }
+                            Log.e("MainActivity", tag, e)
+                            result.error(
+                                "START_FOREGROUND_FAILED",
+                                e.message,
+                                e.javaClass.simpleName,
+                            )
+                        }
+                    }
+                    "stopLanEditForeground" -> {
+                        stopLanEditForegroundService()
+                        result.success(true)
+                    }
+                    "getPendingLanEditOpen" -> {
+                        val pending = pendingOpenLanEdit
+                        pendingOpenLanEdit = false
+                        result.success(pending)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun handleExternalImportIntent(intent: Intent) {
+        val action = intent.action ?: return
+        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return
+
+        val uri = resolveImportUri(intent) ?: return
+        val mimeType = intent.type?.takeIf { it.isNotBlank() }
+            ?: contentResolver.getType(uri)
+        val fileName = resolveImportDisplayName(uri)
+        val bytes = readImportBytes(uri) ?: return
+        val kind = detectImportKind(fileName, mimeType, bytes) ?: return
+
+        val pending = when (kind) {
+            "ics", "backup" -> {
+                val text = bytes.toString(Charsets.UTF_8)
+                if (kind == "ics" && !text.contains("VCALENDAR", ignoreCase = true)) {
+                    return
+                }
+                if (kind == "backup" && !text.contains("\"mikcb\"")) {
+                    return
+                }
+                PendingExternalImport(kind = kind, fileName = fileName, textContent = text)
+            }
+            "spreadsheet" -> {
+                val cachedFile = copyBytesToImportCache(bytes, fileName) ?: return
+                PendingExternalImport(
+                    kind = kind,
+                    fileName = fileName,
+                    filePath = cachedFile.absolutePath,
+                )
+            }
+            else -> return
+        }
+
+        pendingExternalImport = pending
+        notifyExternalImportReceived()
+    }
+
+    private fun resolveImportUri(intent: Intent): Uri? {
+        return when (intent.action) {
+            Intent.ACTION_SEND -> extractSendStreamUri(intent)
+            else -> intent.data
+        }
+    }
+
+    private fun extractSendStreamUri(intent: Intent): Uri? {
+        // Plain-text shares use EXTRA_TEXT and have no stream URI. File shares (CSV, ICS,
+        // JSON, XLSX, etc.) always attach EXTRA_STREAM regardless of MIME type.
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+    }
+
+    private fun resolveImportDisplayName(uri: Uri): String {
+        if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
+            try {
+                contentResolver.query(
+                    uri,
+                    arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null,
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (index >= 0) {
+                            val name = cursor.getString(index)?.trim().orEmpty()
+                            if (name.isNotEmpty()) {
+                                return name
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("MainActivity", "${DiagnosticLogMessages.LOG_RESOLVE_IMPORT_DISPLAY_NAME_FAILED}：$uri", e)
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/').orEmpty().ifBlank { "import" }
+    }
+
+    private fun readImportBytes(uri: Uri): ByteArray? {
+        return try {
+            contentResolver.openInputStream(uri)?.use { stream -> stream.readBytes() }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "${DiagnosticLogMessages.LOG_READ_IMPORT_BYTES_FAILED}：$uri", e)
+            null
+        }
+    }
+
+    private fun detectImportKind(
+        fileName: String,
+        mimeType: String?,
+        bytes: ByteArray,
+    ): String? {
+        val extension = fileName.substringAfterLast('.', "").lowercase(Locale.US)
+        val normalizedMime = mimeType?.lowercase(Locale.US)
+        val textPreview = if (bytes.size <= 65536) {
+            bytes.toString(Charsets.UTF_8)
+        } else {
+            bytes.copyOf(65536).toString(Charsets.UTF_8)
+        }
+
+        when {
+            extension == "ics" || normalizedMime?.startsWith("text/calendar") == true -> {
+                return "ics"
+            }
+            extension == "mikcb" -> return "backup"
+            extension == "json" || normalizedMime == "application/json" -> return "backup"
+            extension == "csv" ||
+                normalizedMime == "text/csv" ||
+                normalizedMime == "text/comma-separated-values" -> {
+                return "spreadsheet"
+            }
+            extension == "xlsx" ||
+                normalizedMime ==
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> {
+                return "spreadsheet"
+            }
+        }
+
+        if (normalizedMime == "application/octet-stream" || normalizedMime == "*/*") {
+            when (extension) {
+                "ics" -> return "ics"
+                "mikcb", "json" -> return "backup"
+                "csv", "xlsx" -> return "spreadsheet"
+            }
+        }
+
+        if (textPreview.contains("VCALENDAR", ignoreCase = true)) {
+            return "ics"
+        }
+        if (textPreview.trimStart().startsWith("{") && textPreview.contains("\"mikcb\"")) {
+            return "backup"
+        }
+        if (bytes.size >= 4 &&
+            bytes[0] == 0x50.toByte() &&
+            bytes[1] == 0x4B.toByte() &&
+            (extension == "xlsx" || extension.isEmpty())
+        ) {
+            return "spreadsheet"
+        }
+
+        return null
+    }
+
+    private fun copyBytesToImportCache(bytes: ByteArray, fileName: String): File? {
+        return try {
+            val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val cacheRoot = File(cacheDir, "external_imports").apply { mkdirs() }
+            val target = File(cacheRoot, "${System.currentTimeMillis()}_$safeName")
+            target.outputStream().use { output -> output.write(bytes) }
+            target
+        } catch (e: Exception) {
+            Log.e("MainActivity", DiagnosticLogMessages.LOG_CACHE_EXTERNAL_IMPORT_FAILED, e)
+            null
+        }
+    }
+
+    private fun notifyExternalImportReceived() {
+        try {
+            flutterChannel?.invokeMethod("onExternalImportReceived", null)
+        } catch (_: Exception) {
+        }
     }
 
     private fun canRequestPinWidget(): Boolean {
@@ -420,7 +773,6 @@ class MainActivity : FlutterActivity() {
                 ?: URLUtil.guessFileName(url, null, "application/vnd.android.package-archive")
         )
         cleanupManagedUpdateDownloads(downloadManager)
-        cleanupManagedUpdateApkFiles()
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setMimeType("application/vnd.android.package-archive")
             setTitle(title?.takeIf { it.isNotBlank() } ?: resolvedFileName)
@@ -463,27 +815,6 @@ class MainActivity : FlutterActivity() {
             }
         }
         prefs.edit().remove(KEY_MANAGED_UPDATE_DOWNLOAD_IDS).apply()
-    }
-
-    private fun cleanupManagedUpdateApkFiles() {
-        val downloadsDir =
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                ?: return
-        val managedApkNamePattern = Regex(
-            "^mikcb(?:_update|_v.+)?\\.apk$",
-            RegexOption.IGNORE_CASE,
-        )
-        downloadsDir.listFiles()?.forEach { file ->
-            if (!file.isFile) {
-                return@forEach
-            }
-            if (!managedApkNamePattern.matches(file.name)) {
-                return@forEach
-            }
-            runCatching {
-                file.delete()
-            }
-        }
     }
 
     private fun rememberManagedUpdateDownload(downloadId: Long) {
@@ -551,7 +882,7 @@ class MainActivity : FlutterActivity() {
                 }
             )
         } catch (e: Exception) {
-            Log.w("MainActivity", "Failed to open notification settings", e)
+            Log.w("MainActivity", DiagnosticLogMessages.LOG_OPEN_NOTIFICATION_SETTINGS_FAILED, e)
             openAppDetailsSettings()
         }
     }
@@ -574,41 +905,111 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun openAutoStartSettings() {
-        val intents = listOf(
-            Intent().apply {
-                component = ComponentName(
-                    "com.miui.securitycenter",
-                    "com.miui.permcenter.autostart.AutoStartManagementActivity"
-                )
-            },
-            Intent("miui.intent.action.APP_PERM_EDITOR").apply {
-                setClassName(
-                    "com.miui.securitycenter",
-                    "com.miui.permcenter.permissions.PermissionsEditorActivity"
-                )
-                putExtra("extra_pkgname", packageName)
-                putExtra("package_name", packageName)
-                putExtra("android.intent.extra.PACKAGE_NAME", packageName)
-            },
-            Intent().apply {
-                component = ComponentName(
-                    "com.miui.securitycenter",
-                    "com.miui.permcenter.permissions.AppPermissionsEditorActivity"
-                )
-                putExtra("extra_pkgname", packageName)
-                putExtra("package_name", packageName)
-                putExtra("android.intent.extra.PACKAGE_NAME", packageName)
-            },
-            Intent().apply {
-                component = ComponentName(
-                    "com.miui.securitycenter",
-                    "com.miui.permcenter.permissions.PermissionsEditorActivity"
-                )
-                putExtra("extra_pkgname", packageName)
-                putExtra("package_name", packageName)
-                putExtra("android.intent.extra.PACKAGE_NAME", packageName)
+        val brand = Build.BRAND.lowercase(Locale.ROOT)
+        val intents = mutableListOf<Intent>()
+
+        when (brand) {
+            "xiaomi", "poco", "redmi" -> {
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.miui.securitycenter",
+                        "com.miui.permcenter.autostart.AutoStartManagementActivity"
+                    )
+                }
+                intents += Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                    component = ComponentName(
+                        "com.miui.securitycenter",
+                        "com.miui.permcenter.permissions.PermissionsEditorActivity"
+                    )
+                    putExtra("extra_pkgname", packageName)
+                    putExtra("package_name", packageName)
+                }
             }
-        )
+            "oppo", "realme", "oneplus" -> {
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.coloros.safecenter",
+                        "com.coloros.safecenter.permission.startup.StartupAppListActivity"
+                    )
+                }
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.oppo.safe",
+                        "com.oppo.safe.permission.startup.StartupAppListActivity"
+                    )
+                }
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.coloros.safecenter",
+                        "com.coloros.safecenter.startupapp.StartupAppListActivity"
+                    )
+                }
+                if (brand == "oneplus") {
+                    intents += Intent().apply {
+                        component = ComponentName(
+                            "com.oneplus.security",
+                            "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"
+                        )
+                    }
+                }
+            }
+            "vivo" -> {
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.iqoo.secure",
+                        "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"
+                    )
+                }
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.vivo.permissionmanager",
+                        "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"
+                    )
+                }
+            }
+            "huawei", "honor" -> {
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.huawei.systemmanager",
+                        "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+                    )
+                }
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.huawei.systemmanager",
+                        "com.huawei.systemmanager.optimize.process.ProtectActivity"
+                    )
+                }
+            }
+            "samsung" -> {
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.samsung.android.lool",
+                        "com.samsung.android.sm.ui.battery.BatteryActivity"
+                    )
+                }
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.samsung.android.lool",
+                        "com.samsung.android.sm.battery.ui.BatteryActivity"
+                    )
+                }
+            }
+            "asus" -> {
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.asus.mobilemanager",
+                        "com.asus.mobilemanager.autostart.AutoStartActivity"
+                    )
+                }
+                intents += Intent().apply {
+                    component = ComponentName(
+                        "com.asus.mobilemanager",
+                        "com.asus.mobilemanager.powersaver.PowerSaverSettings"
+                    )
+                }
+            }
+        }
 
         for (intent in intents) {
             try {
@@ -616,7 +1017,7 @@ class MainActivity : FlutterActivity() {
                 startActivity(intent)
                 return
             } catch (_: Exception) {
-                // Try the next Xiaomi-specific screen.
+                // Try the next screen.
             }
         }
 
@@ -655,7 +1056,7 @@ class MainActivity : FlutterActivity() {
                 }
             )
         } catch (e: Exception) {
-            Log.w("MainActivity", "Failed to open app details settings", e)
+            Log.w("MainActivity", DiagnosticLogMessages.LOG_OPEN_APP_DETAILS_FAILED, e)
         }
     }
 
@@ -695,7 +1096,7 @@ class MainActivity : FlutterActivity() {
                 put(MediaStore.Images.Media.MIME_TYPE, mimeType)
                 put(
                     MediaStore.Images.Media.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_PICTURES}/轻屿课表"
+                    "${Environment.DIRECTORY_PICTURES}/${getString(R.string.pictures_folder_name)}"
                 )
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
@@ -723,7 +1124,7 @@ class MainActivity : FlutterActivity() {
             resolver,
             bitmap,
             safeFileName,
-            "轻屿课表收款码"
+            getString(R.string.payment_qr_description)
         )
         return inserted?.takeIf { it.isNotBlank() }
     }
@@ -743,7 +1144,7 @@ class MainActivity : FlutterActivity() {
             packageInfo.requestedPermissions
                 ?.contains(POST_PROMOTED_NOTIFICATIONS_PERMISSION) == true
         } catch (e: Exception) {
-            Log.w("MainActivity", "Failed to inspect promoted notification permission", e)
+            Log.w("MainActivity", DiagnosticLogMessages.LOG_INSPECT_PROMOTED_PERMISSION_FAILED, e)
             false
         }
     }
@@ -757,10 +1158,10 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "课程表实时更新",
+                getString(R.string.notification_channel_live_update_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "显示当前课程进度"
+                description = getString(R.string.notification_channel_live_update_desc)
             }
             notificationManager?.createNotificationChannel(channel)
         }
@@ -771,7 +1172,7 @@ class MainActivity : FlutterActivity() {
             UmengDiagnosticReporter.record(
                 context = applicationContext,
                 category = "live_update_start_requested",
-                message = "Flutter requested live update start",
+                message = DiagnosticLogMessages.LIVE_UPDATE_START_REQUESTED,
                 extras = mapOf(
                     "stage" to data["stage"],
                     "hasCurrentCourse" to (data["currentCourse"] != null),
@@ -788,7 +1189,7 @@ class MainActivity : FlutterActivity() {
             UmengDiagnosticReporter.report(
                 context = applicationContext,
                 category = "live_update_start_failed",
-                message = "Failed to start live update service from Flutter method channel",
+                message = DiagnosticLogMessages.LIVE_UPDATE_START_FAILED_CHANNEL,
                 throwable = e,
                 dedupeKey = "live_update_start_failed",
             )
@@ -800,9 +1201,45 @@ class MainActivity : FlutterActivity() {
         UmengDiagnosticReporter.record(
             context = applicationContext,
             category = "live_update_stop_requested",
-            message = "Flutter requested live update stop",
+            message = DiagnosticLogMessages.LIVE_UPDATE_STOP_REQUESTED,
         )
         stopService(Intent(this, LiveUpdateService::class.java))
+        // Re-arm the next future trigger instead of cancelling it outright.
+        // Flutter calls stopLiveUpdate on every refresh without an active
+        // course; dropping the exact alarm here would leave only the 15-min
+        // WorkManager backup, delaying the next before-class reminder.
+        // (reschedule cancels the old alarm itself and honors holiday /
+        // suspension state; with a cleared snapshot it is a no-op.)
+        LiveUpdateScheduler.reschedule(applicationContext, allowImmediateStart = false)
+    }
+
+    private fun startLanEditForegroundService() {
+        val intent = LanEditForegroundService.buildStartIntent(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopLanEditForegroundService() {
+        stopService(
+            Intent(this, LanEditForegroundService::class.java).apply {
+                action = LanEditForegroundService.ACTION_STOP
+            },
+        )
+    }
+
+    private fun handleLanEditIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(LanEditForegroundService.EXTRA_OPEN_LAN_EDIT, false) != true) {
+            return
+        }
+        pendingOpenLanEdit = true
+        intent.removeExtra(LanEditForegroundService.EXTRA_OPEN_LAN_EDIT)
+        try {
+            lanEditChannel?.invokeMethod("onLanEditNotificationTapped", null)
+        } catch (_: Exception) {
+        }
     }
 
     private fun persistHideFromRecents(hidden: Boolean) {
@@ -831,7 +1268,7 @@ class MainActivity : FlutterActivity() {
                 task.setExcludeFromRecents(hidden)
             }
         } catch (e: Exception) {
-            Log.w("MainActivity", "Failed to update recents visibility", e)
+            Log.w("MainActivity", DiagnosticLogMessages.LOG_UPDATE_RECENTS_VISIBILITY_FAILED, e)
         }
     }
 
@@ -872,8 +1309,77 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun isAutoStartEnabled(): Boolean {
+        // 1. 尝试 AppOps 反射检测（小米/OPPO/Vivo/一加 等）
+        val appOpsResult = checkAutoStartViaAppOps()
+        if (appOpsResult != null) return appOpsResult
+
+        // 2. 回退到电池优化检测（三星/华为/荣耀/通用）
+        val batteryResult = checkAutoStartViaBattery()
+        if (batteryResult != null) return batteryResult
+
+        // 3. 兜底：乐观默认
+        return true
+    }
+
+    /**
+     * 通过 AppOps 反射检测自启动状态。
+     * 适用：小米 (MIUI)、OPPO (ColorOS)、Vivo、一加 (OxygenOS) 等。
+     * 不适用时返回 null（如 Pixel 等原生 Android）。
+     */
+    private fun checkAutoStartViaAppOps(): Boolean? {
+        return try {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val method = AppOpsManager::class.java.getMethod(
+                "checkOpNoThrow",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                String::class.java
+            )
+            // OP_AUTO_START = 10008 (小米/OPPO/Vivo 等厂商通用)
+            val result = method.invoke(
+                appOps, 10008, android.os.Process.myUid(), packageName
+            ) as Int
+            when (result) {
+                AppOpsManager.MODE_ALLOWED -> true
+                AppOpsManager.MODE_IGNORED,
+                AppOpsManager.MODE_ERRORED -> false
+                else -> null // MODE_DEFAULT 等，说明此 OP 不适用于当前设备
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 通过电池优化状态间接推断。
+     * 适用：三星（sleeping apps）、华为/荣耀（EMUI）等使用电池策略限制后台的厂商。
+     * 对于 Pixel 等原生设备也适用（但通常不需要自启动权限）。
+     */
+    private fun checkAutoStartViaBattery(): Boolean? {
+        return try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            powerManager?.isIgnoringBatteryOptimizations(packageName)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun isKeepAliveAccessibilityEnabled(): Boolean {
         return KeepAliveAccessibilityStatus.isEnabled(this)
+    }
+
+    private fun readDisplayCornerRadiusDp(): Double {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val insets = window.decorView.rootWindowInsets
+            val corner = insets?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)
+            val radiusPx = corner?.radius ?: 0
+            if (radiusPx > 0) {
+                return radiusPx.toDouble() / resources.displayMetrics.density.toDouble()
+            }
+        }
+        return 28.0
     }
 }
 
@@ -911,15 +1417,15 @@ class LiveUpdateService : Service() {
         private var lastDebugUpdatedAtMillis = 0L
 
         @Volatile
-        private var lastStopReason: String? = "原生实时服务未运行"
+        private var lastStopReason: String? = null
 
         fun buildDebugStatus(context: Context): Map<String, Any?> {
             val snapshot = lastDebugSnapshot
             val summary = copyStringKeyMap(snapshot["summary"]).apply {
                 this["serviceRunning"] = isServiceRunning
                 this["statusText"] = when {
-                    isServiceRunning -> this["statusText"] ?: "运行中"
-                    else -> "未运行"
+                    isServiceRunning -> this["statusText"] ?: context.getString(R.string.debug_status_running)
+                    else -> context.getString(R.string.debug_status_not_running)
                 }
                 this["isExpectedToShowIsland"] =
                     (this["isExpectedToShowIsland"] as? Boolean == true) && isServiceRunning
@@ -929,7 +1435,7 @@ class LiveUpdateService : Service() {
                     if (isServiceRunning) {
                         this["notIslandReason"] ?: ""
                     } else {
-                        lastStopReason ?: "原生实时服务未运行"
+                        lastStopReason ?: context.getString(R.string.debug_service_not_running)
                     }
             }
 
@@ -1033,7 +1539,7 @@ class LiveUpdateService : Service() {
                 packageInfo.requestedPermissions
                     ?.contains(POST_PROMOTED_NOTIFICATIONS_PERMISSION) == true
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to inspect promoted notification permission", e)
+                Log.w(TAG, DiagnosticLogMessages.LOG_INSPECT_PROMOTED_PERMISSION_FAILED, e)
                 false
             }
         }
@@ -1098,6 +1604,7 @@ class LiveUpdateService : Service() {
     private var miuiIslandExpandedIconPath: String? = null
     private var startAtMillis = 0L
     private var endAtMillis = 0L
+    private var beforeClassLeadMillis = 0L
     private var endReminderLeadMillis = 600_000L
     private var liveClassReminderStartMinutes = 0
     private var enableBeforeClass = true
@@ -1115,6 +1622,8 @@ class LiveUpdateService : Service() {
     private var cachedIslandBitmapKey: String? = null
     private var cachedIslandBitmap: Bitmap? = null
     private var hasStartedForeground = false
+    private var lastTickerStage: String? = null
+    private var validateAgainstSchedule = true
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -1122,10 +1631,12 @@ class LiveUpdateService : Service() {
         return try {
             val quickActionResult = when (intent?.action) {
                 ACTION_ENABLE_SILENT_MODE -> {
+                    readQuickActionTimingExtra(intent)
                     handleBeforeClassQuickAction(enableDoNotDisturb = false)
                     START_NOT_STICKY
                 }
                 ACTION_ENABLE_DO_NOT_DISTURB -> {
+                    readQuickActionTimingExtra(intent)
                     handleBeforeClassQuickAction(enableDoNotDisturb = true)
                     START_NOT_STICKY
                 }
@@ -1145,7 +1656,7 @@ class LiveUpdateService : Service() {
                 UmengDiagnosticReporter.record(
                     context = applicationContext,
                     category = "live_update_service_missing_payload",
-                    message = "Live update service restarted without complete payload",
+                    message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_MISSING_PAYLOAD,
                     extras = mapOf(
                         "intentIsNull" to (intent == null),
                         "hasCourseName" to (!intent?.getStringExtra("courseName").isNullOrBlank()),
@@ -1157,6 +1668,7 @@ class LiveUpdateService : Service() {
                 val resumed = LiveUpdateScheduler.reschedule(
                     applicationContext,
                     allowImmediateStart = true,
+                    stopStaleSessions = true,
                 )
                 if (!resumed) {
                     stopAndRemoveNotification()
@@ -1211,6 +1723,10 @@ class LiveUpdateService : Service() {
                 intent?.getStringExtra("miuiIslandExpandedIconMode") ?: "app_icon"
             miuiIslandExpandedIconPath =
                 intent?.getStringExtra("miuiIslandExpandedIconPath")?.takeIf { it.isNotBlank() }
+            beforeClassLeadMillis =
+                intent?.getLongExtra("beforeClassLeadMillis", 0L)
+                    ?.coerceAtLeast(0L)
+                    ?: 0L
             endReminderLeadMillis =
                 intent?.getLongExtra("endReminderLeadMillis", 600_000L)
                     ?.coerceAtLeast(0L)
@@ -1225,6 +1741,8 @@ class LiveUpdateService : Service() {
                 intent?.getBooleanExtra("showNotificationDuringClass", true) ?: true
             beforeClassQuickAction =
                 intent?.getStringExtra("beforeClassQuickAction") ?: "none"
+            validateAgainstSchedule =
+                intent?.getBooleanExtra("validateAgainstSchedule", true) ?: true
             progressBreakOffsetsMillis =
                 intent?.getLongArrayExtra("progressBreakOffsetsMillis") ?: longArrayOf()
             progressMilestoneLabels =
@@ -1248,7 +1766,7 @@ class LiveUpdateService : Service() {
             UmengDiagnosticReporter.record(
                 context = applicationContext,
                 category = "live_update_service_started",
-                message = "Live update service started",
+                message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_STARTED,
                 extras = mapOf(
                     "courseName" to courseName,
                     "stage" to activityStage,
@@ -1277,11 +1795,11 @@ class LiveUpdateService : Service() {
             startTicker()
             START_STICKY
         } catch (e: Exception) {
-            markServiceStopped("实时服务启动失败")
+            markServiceStopped(getString(R.string.stop_service_start_failed))
             UmengDiagnosticReporter.report(
                 context = applicationContext,
                 category = "live_update_service_start_failed",
-                message = "Failed to initialize live update service payload or notification",
+                message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_START_FAILED,
                 throwable = e,
                 dedupeKey = "live_update_service_start_failed",
                 extras = mapOf(
@@ -1306,7 +1824,7 @@ class LiveUpdateService : Service() {
     override fun onDestroy() {
         stopTicker()
         if (isServiceRunning) {
-            markServiceStopped("原生实时服务已销毁")
+            markServiceStopped(getString(R.string.stop_service_destroyed))
         }
         if (hasStartedForeground) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -1317,7 +1835,9 @@ class LiveUpdateService : Service() {
             }
             hasStartedForeground = false
         }
-        LiveUpdateScheduler.onLiveUpdateStopped(applicationContext)
+        if (validateAgainstSchedule) {
+            LiveUpdateScheduler.onLiveUpdateStopped(applicationContext)
+        }
         super.onDestroy()
     }
 
@@ -1331,7 +1851,7 @@ class LiveUpdateService : Service() {
         UmengDiagnosticReporter.record(
             context = applicationContext,
             category = "live_update_task_removed",
-            message = "Task removed while live update service was active",
+            message = DiagnosticLogMessages.LIVE_UPDATE_TASK_REMOVED,
             extras = mapOf(
                 "courseName" to courseName,
                 "stage" to activityStage,
@@ -1343,6 +1863,7 @@ class LiveUpdateService : Service() {
         val resumed = LiveUpdateScheduler.reschedule(
             applicationContext,
             allowImmediateStart = true,
+            stopStaleSessions = validateAgainstSchedule,
         )
         if (!resumed) {
             stopAndRemoveNotification()
@@ -1350,7 +1871,7 @@ class LiveUpdateService : Service() {
             UmengDiagnosticReporter.record(
                 context = applicationContext,
                 category = "live_update_task_removed_resumed",
-                message = "Task removed but current live update was resumed immediately",
+                message = DiagnosticLogMessages.LIVE_UPDATE_TASK_REMOVED_RESUMED,
                 extras = mapOf(
                     "courseName" to courseName,
                     "stage" to activityStage,
@@ -1374,12 +1895,19 @@ class LiveUpdateService : Service() {
 
         val bootstrapTitle = intent?.getStringExtra("courseName")
             ?.takeIf { it.isNotBlank() }
-            ?.let { "课程提醒: $it" }
-            ?: "轻屿课表"
-        startForeground(
-            NOTIFICATION_ID,
-            buildBootstrapNotification(bootstrapTitle)
-        )
+            ?.let { getString(R.string.notification_course_reminder_title, it) }
+            ?: getString(R.string.app_display_name)
+        val notification = buildBootstrapNotification(bootstrapTitle)
+        // FOREGROUND_SERVICE_TYPE_SPECIAL_USE is API 34+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
         hasStartedForeground = true
     }
 
@@ -1391,10 +1919,10 @@ class LiveUpdateService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "课程表实时更新",
+            getString(R.string.notification_channel_live_update_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "显示当前课程进度"
+            description = getString(R.string.notification_channel_live_update_desc)
         }
         manager.createNotificationChannel(channel)
     }
@@ -1408,7 +1936,7 @@ class LiveUpdateService : Service() {
 
         return builder
             .setContentTitle(title)
-            .setContentText("正在准备课程提醒")
+            .setContentText(getString(R.string.notification_preparing_reminder))
             .setSmallIcon(R.drawable.ic_course)
             .setOngoing(true)
             .setAutoCancel(false)
@@ -1431,8 +1959,8 @@ class LiveUpdateService : Service() {
 
     private fun buildBeforeClassQuickAction(): Notification.Action? {
         val (action, label) = when (beforeClassQuickAction) {
-            "silent" -> ACTION_ENABLE_SILENT_MODE to "打开静音"
-            "do_not_disturb" -> ACTION_ENABLE_DO_NOT_DISTURB to "打开免打扰"
+            "silent" -> ACTION_ENABLE_SILENT_MODE to getString(R.string.action_enable_silent)
+            "do_not_disturb" -> ACTION_ENABLE_DO_NOT_DISTURB to getString(R.string.action_enable_dnd)
             else -> return null
         }
         val pendingIntent = PendingIntent.getService(
@@ -1440,6 +1968,7 @@ class LiveUpdateService : Service() {
             action.hashCode(),
             Intent(this, LiveUpdateService::class.java).apply {
                 this.action = action
+                putExtra("endAtMillis", endAtMillis)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -1461,21 +1990,37 @@ class LiveUpdateService : Service() {
         )
         return Notification.Action.Builder(
             Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-            "关闭",
+            getString(R.string.action_close),
             pendingIntent,
         ).build()
     }
 
     private fun handleBeforeClassQuickAction(enableDoNotDisturb: Boolean) {
+        val restoreAtMillis = endAtMillis.takeIf { it > 0L }
+            ?: (System.currentTimeMillis() + 2 * 60 * 60_000L)
         val applied = if (enableDoNotDisturb) {
-            enableDoNotDisturbMode()
+            val enabled = BeforeClassQuickActionRestore.enableDoNotDisturbMode(
+                this,
+                restoreAtMillis,
+            )
+            if (!enabled) {
+                openNotificationPolicyAccessSettings()
+            }
+            enabled
         } else {
-            enableSilentMode()
+            val enabled = BeforeClassQuickActionRestore.enableSilentMode(
+                this,
+                restoreAtMillis,
+            )
+            if (!enabled) {
+                openSoundSettings()
+            }
+            enabled
         }
         UmengDiagnosticReporter.record(
             context = applicationContext,
             category = "live_update_before_class_quick_action",
-            message = "Before-class quick action invoked",
+            message = DiagnosticLogMessages.LIVE_UPDATE_BEFORE_CLASS_QUICK_ACTION,
             extras = mapOf(
                 "action" to if (enableDoNotDisturb) "do_not_disturb" else "silent",
                 "applied" to applied,
@@ -1489,11 +2034,11 @@ class LiveUpdateService : Service() {
     }
 
     private fun dismissStatusBarStage() {
-        markServiceStopped("课中状态栏提醒已手动关闭")
+        markServiceStopped(getString(R.string.stop_status_bar_dismissed))
         UmengDiagnosticReporter.record(
             context = applicationContext,
             category = "live_update_status_bar_dismissed",
-            message = "User dismissed during-class status bar notification",
+            message = DiagnosticLogMessages.LIVE_UPDATE_STATUS_BAR_DISMISSED,
             extras = mapOf(
                 "courseName" to courseName,
                 "stage" to activityStage,
@@ -1512,42 +2057,15 @@ class LiveUpdateService : Service() {
         stopSelf()
     }
 
-    private fun enableSilentMode(): Boolean {
-        val audioManager = getSystemService(AudioManager::class.java) ?: return false
-        return try {
-            audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
-            true
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Failed to enable silent mode directly", e)
-            openSoundSettings()
-            false
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to enable silent mode", e)
-            openSoundSettings()
-            false
+    private fun readQuickActionTimingExtra(intent: Intent?) {
+        val restoreAtMillis = intent?.getLongExtra("endAtMillis", 0L) ?: 0L
+        if (restoreAtMillis > 0L) {
+            endAtMillis = restoreAtMillis
         }
     }
 
-    private fun enableDoNotDisturbMode(): Boolean {
-        val manager = getSystemService(NotificationManager::class.java) ?: return false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            !manager.isNotificationPolicyAccessGranted
-        ) {
-            openNotificationPolicyAccessSettings()
-            return false
-        }
-        return try {
-            manager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-            true
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Failed to enable do-not-disturb directly", e)
-            openNotificationPolicyAccessSettings()
-            false
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to enable do-not-disturb", e)
-            openNotificationPolicyAccessSettings()
-            false
-        }
+    private fun restoreBeforeClassQuickActionIfClassEnded() {
+        BeforeClassQuickActionRestore.restoreIfClassEnded(applicationContext)
     }
 
     private fun openNotificationPolicyAccessSettings() {
@@ -1564,7 +2082,7 @@ class LiveUpdateService : Service() {
         try {
             startActivity(intent.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to open settings intent", e)
+            Log.w(TAG, DiagnosticLogMessages.LOG_OPEN_SETTINGS_INTENT_FAILED, e)
             try {
                 startActivity(
                     Intent(Settings.ACTION_SETTINGS).apply {
@@ -1572,7 +2090,7 @@ class LiveUpdateService : Service() {
                     }
                 )
             } catch (fallbackError: Exception) {
-                Log.w(TAG, "Failed to open fallback settings", fallbackError)
+                Log.w(TAG, DiagnosticLogMessages.LOG_OPEN_FALLBACK_SETTINGS_FAILED, fallbackError)
             }
         }
     }
@@ -1606,25 +2124,70 @@ class LiveUpdateService : Service() {
         ticker = object : Runnable {
             override fun run() {
                 val now = System.currentTimeMillis()
+                BeforeClassQuickActionRestore.restoreIfClassEnded(applicationContext, now)
+                if (validateAgainstSchedule &&
+                    !LiveUpdateScheduler.hasActiveLiveSelection(applicationContext, now)
+                ) {
+                    if (!LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = true,
+                        )
+                    ) {
+                        stopAndRemoveNotification()
+                    }
+                    return
+                }
                 val stage = resolveStage(now)
                 if (autoDismissAfterStartMinutes > 0 &&
                     now >= startAtMillis + autoDismissAfterStartMinutes * 60_000L
                 ) {
-                    if (!LiveUpdateScheduler.reschedule(applicationContext, allowImmediateStart = true)) {
+                    if (!LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = validateAgainstSchedule,
+                        )
+                    ) {
                         stopAndRemoveNotification()
                     }
                     return
                 }
 
                 if (stage == null) {
-                    if (!LiveUpdateScheduler.reschedule(applicationContext, allowImmediateStart = true)) {
+                    if (!LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = validateAgainstSchedule,
+                        )
+                    ) {
                         stopAndRemoveNotification()
                     }
                     return
                 }
 
+                // When stage transitions, reschedule so onStartCommand re-reads
+                // the correct displaySettings for the new stage.
+                if (lastTickerStage != null && stage != lastTickerStage) {
+                    lastTickerStage = stage
+                    if (!LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = validateAgainstSchedule,
+                        )
+                    ) {
+                        stopAndRemoveNotification()
+                    }
+                    return
+                }
+                lastTickerStage = stage
+
                 if (now >= endAtMillis + 30_000L) { // Auto-remove 30s after class end, especially for tests.
-                    if (!LiveUpdateScheduler.reschedule(applicationContext, allowImmediateStart = true)) {
+                    if (!LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = validateAgainstSchedule,
+                        )
+                    ) {
                         stopAndRemoveNotification()
                     }
                     return
@@ -1673,8 +2236,8 @@ class LiveUpdateService : Service() {
         val stage = resolveStage(now)
         val timeUntilEnd = endAtMillis - now
 
-        val prefixTextStart = if (hidePrefixText) "" else "距上课"
-        val prefixTextEnd = if (hidePrefixText) "" else "距下课"
+        val prefixTextStart = if (hidePrefixText) "" else getString(R.string.prefix_until_class_start)
+        val prefixTextEnd = if (hidePrefixText) "" else getString(R.string.prefix_until_class_end)
 
         return if (!showCountdown) {
             ""
@@ -1694,7 +2257,7 @@ class LiveUpdateService : Service() {
                     )}"
                 }
                 "duringClass",
-                "duringClassStatusBar" -> "上课中"
+                "duringClassStatusBar" -> getString(R.string.stage_in_class)
                 else -> ""
             }
         }
@@ -1702,6 +2265,12 @@ class LiveUpdateService : Service() {
 
     private fun resolveStage(now: Long): String? {
         if (now >= endAtMillis) {
+            return null
+        }
+        // Do not show the before-class stage earlier than its window start.
+        // (leadMillis == 0 means the caller did not supply a window; keep the
+        // legacy behavior of trusting the start intent in that case.)
+        if (beforeClassLeadMillis > 0L && now < startAtMillis - beforeClassLeadMillis) {
             return null
         }
 
@@ -1981,6 +2550,14 @@ class LiveUpdateService : Service() {
         timeRangeText: String,
         bodyContent: String,
         visibleLocation: String,
+        stage: String?,
+        classProgress: DuringClassProgress?,
+        startAtMillis: Long,
+        endAtMillis: Long,
+        islandName: String,
+        progressBreakOffsetsMillis: LongArray,
+        progressMilestoneLabels: List<String>,
+        progressMilestoneTimeTexts: List<String>,
     ): String? {
         if (!isXiaomiFamilyDevice()) {
             return null
@@ -1994,11 +2571,26 @@ class LiveUpdateService : Service() {
                 if (nextName.isNotBlank()) put("nextCourse", nextName)
             }
 
+            // 摘要态：岛内容
+            val paramIsland = buildIslandSummary(
+                stage = stage,
+                classProgress = classProgress,
+                islandName = islandName,
+                visibleLocation = visibleLocation,
+                startAtMillis = startAtMillis,
+                endAtMillis = endAtMillis,
+                progressBreakOffsetsMillis = progressBreakOffsetsMillis,
+                progressMilestoneLabels = progressMilestoneLabels,
+                progressMilestoneTimeTexts = progressMilestoneTimeTexts,
+            )
+
             val paramV2 = JSONObject().apply {
                 put("protocol", 1)
+                put("business", "class_schedule")
                 put("updatable", true)
                 put("enableFloat", true)
                 put("ticker", title)
+                // 展开态：焦点通知卡片
                 put(
                     "baseInfo",
                     JSONObject().apply {
@@ -2019,15 +2611,160 @@ class LiveUpdateService : Service() {
                 if (extraInfo.length() > 0) {
                     put("extraInfo", extraInfo)
                 }
+                put("param_island", paramIsland)
             }
 
             JSONObject().apply {
                 put("param_v2", paramV2)
             }.toString()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to build miui.focus.param", e)
+            Log.w(TAG, DiagnosticLogMessages.LOG_BUILD_MIUI_FOCUS_PARAM_FAILED, e)
             null
         }
+    }
+
+    private fun buildIslandSummary(
+        stage: String?,
+        classProgress: DuringClassProgress?,
+        islandName: String,
+        visibleLocation: String,
+        startAtMillis: Long,
+        endAtMillis: Long,
+        progressBreakOffsetsMillis: LongArray,
+        progressMilestoneLabels: List<String>,
+        progressMilestoneTimeTexts: List<String>,
+    ): JSONObject {
+        val totalMillis = (endAtMillis - startAtMillis).coerceAtLeast(1L)
+        val now = System.currentTimeMillis()
+        val elapsedMillis = (now - startAtMillis).coerceIn(0L, totalMillis)
+        val progressPercent = classProgress?.progressPercent
+            ?: ((elapsedMillis.toDouble() / totalMillis.toDouble()) * 100).toInt().coerceIn(0, 100)
+
+        val islandContentText = when (stage) {
+            "beforeClass" -> remainingTextForIsland(stage, startAtMillis, endAtMillis)
+            "beforeEnd" -> remainingTextForIsland(stage, startAtMillis, endAtMillis)
+            else -> classProgress?.compactDisplayText ?: getString(R.string.stage_in_class)
+        }
+
+        val bigIslandArea = JSONObject().apply {
+            // A 区：图文组件1
+            val imageTextInfoLeft = JSONObject().apply {
+                put("type", 1)
+                put(
+                    "textInfo",
+                    JSONObject().apply {
+                        put("title", islandName)
+                        put("content", islandContentText)
+                    }
+                )
+                // 上课中阶段显示环形进度
+                if (stage == "duringClass" && classProgress != null) {
+                    put(
+                        "progressInfo",
+                        JSONObject().apply {
+                            put("progress", progressPercent)
+                            put("colorReach", "#4CAF50")
+                            put("colorUnReach", "#33FFFFFF")
+                        }
+                    )
+                }
+            }
+            put("imageTextInfoLeft", imageTextInfoLeft)
+
+            // B 区：仅上课中阶段显示线性进度+节点
+            if (stage == "duringClass" && classProgress != null) {
+                val milestonePoints = buildMilestonePoints(
+                    progressBreakOffsetsMillis,
+                    progressMilestoneLabels,
+                    progressMilestoneTimeTexts,
+                    totalMillis,
+                )
+                val progressTextInfo = JSONObject().apply {
+                    put(
+                        "progressInfo",
+                        JSONObject().apply {
+                            put("progress", progressPercent)
+                            put("colorReach", "#4CAF50")
+                            put("colorUnReach", "#33FFFFFF")
+                            if (milestonePoints.isNotEmpty()) {
+                                put("picMiddle", milestonePoints.first().picKey)
+                            }
+                        }
+                    )
+                    put(
+                        "textInfo",
+                        JSONObject().apply {
+                            val nextMilestone = classProgress.nextMilestoneDisplayText
+                            if (nextMilestone != null) {
+                                put("title", nextMilestone)
+                            } else {
+                                put("title", classProgress.finalDismissDisplayText)
+                            }
+                        }
+                    )
+                }
+                put("progressTextInfo", progressTextInfo)
+            }
+        }
+
+        val smallIslandArea = JSONObject()
+
+        return JSONObject().apply {
+            put("islandProperty", 1)
+            put("islandTimeout", 3600)
+            put("bigIslandArea", bigIslandArea)
+            put("smallIslandArea", smallIslandArea)
+        }
+    }
+
+    private fun remainingTextForIsland(
+        stage: String?,
+        startAtMillis: Long,
+        endAtMillis: Long,
+    ): String {
+        val now = System.currentTimeMillis()
+        return when (stage) {
+            "beforeClass" -> {
+                val remaining = startAtMillis - now
+                if (remaining > 0) {
+                    getString(R.string.remaining_until_class_start, formatCountdownDuration(remaining))
+                } else {
+                    getString(R.string.stage_before_class)
+                }
+            }
+            "beforeEnd" -> {
+                val remaining = endAtMillis - now
+                if (remaining > 0) {
+                    getString(R.string.remaining_until_class_end, formatCountdownDuration(remaining))
+                } else {
+                    getString(R.string.stage_before_end)
+                }
+            }
+            else -> getString(R.string.stage_in_class)
+        }
+    }
+
+    private data class MilestonePoint(
+        val position: Int,
+        val picKey: String,
+    )
+
+    private fun buildMilestonePoints(
+        progressBreakOffsetsMillis: LongArray,
+        progressMilestoneLabels: List<String>,
+        progressMilestoneTimeTexts: List<String>,
+        totalMillis: Long,
+    ): List<MilestonePoint> {
+        if (progressBreakOffsetsMillis.isEmpty() || totalMillis <= 0) return emptyList()
+        val points = mutableListOf<MilestonePoint>()
+        for (index in progressBreakOffsetsMillis.indices) {
+            val offsetMillis = progressBreakOffsetsMillis[index]
+            val position = ((offsetMillis.toDouble() / totalMillis.toDouble()) * 100)
+                .toInt().coerceIn(1, 99)
+            val label = progressMilestoneLabels.getOrNull(index) ?: continue
+            points.add(MilestonePoint(position = position, picKey = "miui.focus.pic_milestone_$index"))
+        }
+        return points.distinctBy { it.position }.sortedBy { it.position }
     }
 
     private fun decodeSquareBitmap(path: String, targetSize: Int): Bitmap? {
@@ -2095,7 +2832,7 @@ class LiveUpdateService : Service() {
             canvas.restore()
             Icon.createWithBitmap(bitmap)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to build rounded launcher icon", e)
+            Log.w(TAG, DiagnosticLogMessages.LOG_BUILD_ROUNDED_LAUNCHER_ICON_FAILED, e)
             null
         }
     }
@@ -2138,9 +2875,9 @@ class LiveUpdateService : Service() {
         val miuiIslandLabelBitmap = resolveIslandLabelBitmap(miuiIslandLabelText)
 
         val stageTitle = when (stage) {
-            "beforeClass" -> "即将上课"
-            "beforeEnd" -> "下课提醒"
-            else -> "上课中"
+            "beforeClass" -> getString(R.string.stage_before_class)
+            "beforeEnd" -> getString(R.string.stage_before_end)
+            else -> getString(R.string.stage_in_class)
         }
         val visibleStatusText = when {
             !showCountdown && showStageText -> stageTitle
@@ -2148,8 +2885,8 @@ class LiveUpdateService : Service() {
             else -> remainingText.ifBlank { stageTitle }
         }
         val title = when (stage) {
-            "beforeClass" -> "即将上课: $shortCourseName"
-            "beforeEnd" -> "下课提醒: $shortCourseName"
+            "beforeClass" -> getString(R.string.title_before_class, shortCourseName)
+            "beforeEnd" -> getString(R.string.title_before_end, shortCourseName)
             else -> shortCourseName
         }
         val shortNameLabel = shortCourseNameRaw.takeIf { it.isNotBlank() && it != courseName }
@@ -2160,13 +2897,13 @@ class LiveUpdateService : Service() {
         }
         val subText = if (isUpcoming) {
             listOf(
-                timeRangeText.takeIf { it.isNotBlank() }?.let { "上课时间: $it" },
-                visibleLocation.takeIf { it.isNotBlank() }?.let { "地点: $it" }
+                timeRangeText.takeIf { it.isNotBlank() }?.let { getString(R.string.label_class_start_time, it) },
+                visibleLocation.takeIf { it.isNotBlank() }?.let { getString(R.string.label_location, it) }
             ).filterNotNull().joinToString("  ·  ")
         } else if (isEndingSoon) {
             listOf(
-                timeRangeText.takeIf { it.isNotBlank() }?.let { "下课时间: $it" },
-                visibleLocation.takeIf { it.isNotBlank() }?.let { "地点: $it" }
+                timeRangeText.takeIf { it.isNotBlank() }?.let { getString(R.string.label_class_end_time, it) },
+                visibleLocation.takeIf { it.isNotBlank() }?.let { getString(R.string.label_location, it) }
             ).filterNotNull().joinToString("  ·  ")
         } else {
             ""
@@ -2205,21 +2942,26 @@ class LiveUpdateService : Service() {
 
         val expandedDetailText = buildString {
             append(stageTitle)
-            append("\n课程: ").append(courseName)
-            if (shortNameLabel != null) append("\n简称: ").append(shortNameLabel)
+            if (shortNameLabel != null) {
+                append("\n").append(getString(R.string.detail_short_name, shortNameLabel))
+            }
             if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
                 if (classProgress.nextMilestoneDisplayText != null) {
-                    append("\n下一节点: ").append(classProgress.nextMilestoneDisplayText)
+                    append("\n").append(
+                        getString(R.string.detail_next_milestone, classProgress.nextMilestoneDisplayText)
+                    )
                 }
-                append("\n整节下课: ").append(classProgress.finalDismissDisplayText)
+                append("\n").append(
+                    getString(R.string.detail_final_dismiss, classProgress.finalDismissDisplayText)
+                )
             } else if (detailStatusText != null) {
-                append("\n状态: ").append(detailStatusText)
+                append("\n").append(getString(R.string.detail_status, detailStatusText))
             }
-            if (timeRangeText.isNotBlank()) append("\n时间: ").append(timeRangeText)
-            if (visibleLocation.isNotBlank()) append("\n地点: ").append(visibleLocation)
-            if (teacher.isNotBlank()) append("\n教师: ").append(teacher)
-            if (nextName.isNotBlank()) append("\n下一节: ").append(nextName)
-            if (note.isNotBlank()) append("\n备注: ").append(note)
+            if (timeRangeText.isNotBlank()) append("\n").append(getString(R.string.detail_time, timeRangeText))
+            if (location.isNotBlank()) append("\n").append(getString(R.string.label_location, location))
+            if (teacher.isNotBlank()) append("\n").append(getString(R.string.detail_teacher, teacher))
+            if (nextName.isNotBlank()) append("\n").append(getString(R.string.detail_next_course, nextName))
+            if (note.isNotBlank()) append("\n").append(getString(R.string.detail_note, note))
         }
 
         val promotedContentText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
@@ -2238,20 +2980,19 @@ class LiveUpdateService : Service() {
         val promotedExpandedDetailText = buildString {
             if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
                 if (classProgress.nextMilestoneDisplayText != null) {
-                    append("下一节点: ").append(classProgress.nextMilestoneDisplayText)
+                    append(getString(R.string.detail_next_milestone, classProgress.nextMilestoneDisplayText))
                     append("\n")
                 }
-                append("整节下课: ").append(classProgress.finalDismissDisplayText)
+                append(getString(R.string.detail_final_dismiss, classProgress.finalDismissDisplayText))
             } else if (detailStatusText != null) {
-                append("状态: ").append(detailStatusText)
+                append(getString(R.string.detail_status, detailStatusText))
             }
-            if (timeRangeText.isNotBlank()) append("\n时间: ").append(timeRangeText)
-            if (visibleLocation.isNotBlank()) append("\n地点: ").append(visibleLocation)
-            if (teacher.isNotBlank()) append("\n教师: ").append(teacher)
-            append("\n课程: ").append(courseName)
-            if (shortNameLabel != null) append("\n简称: ").append(shortNameLabel)
-            if (nextName.isNotBlank()) append("\n下一节: ").append(nextName)
-            if (note.isNotBlank()) append("\n备注: ").append(note)
+            if (timeRangeText.isNotBlank()) append("\n").append(getString(R.string.detail_time, timeRangeText))
+            if (location.isNotBlank()) append("\n").append(getString(R.string.label_location, location))
+            if (teacher.isNotBlank()) append("\n").append(getString(R.string.detail_teacher, teacher))
+            if (shortNameLabel != null) append("\n").append(getString(R.string.detail_short_name, shortNameLabel))
+            if (nextName.isNotBlank()) append("\n").append(getString(R.string.detail_next_course, nextName))
+            if (note.isNotBlank()) append("\n").append(getString(R.string.detail_note, note))
         }
 
         val contentText = if (!showStandardNotification) {
@@ -2286,6 +3027,14 @@ class LiveUpdateService : Service() {
                 timeRangeText = timeRangeText,
                 bodyContent = promotedContentText,
                 visibleLocation = visibleLocation,
+                stage = stage,
+                classProgress = classProgress,
+                startAtMillis = startAtMillis,
+                endAtMillis = endAtMillis,
+                islandName = nameToUse,
+                progressBreakOffsetsMillis = progressBreakOffsetsMillis,
+                progressMilestoneLabels = progressMilestoneLabels,
+                progressMilestoneTimeTexts = progressMilestoneTimeTexts,
             )
         }
 
@@ -2439,21 +3188,39 @@ class LiveUpdateService : Service() {
         } else {
             null
         }
-        val isActuallyPromotable =
-            shouldPromote && !isDuringClassStatusBar && canPostPromoted && hasPromotableCharacteristics == true
+        val isMiuiFocusIslandReady =
+            isXiaomiFamilyDevice() &&
+                miuiFocusParam != null &&
+                shouldPromote &&
+                !isDuringClassStatusBar
+        val isActuallyPromotable = when {
+            isDuringClassStatusBar || !shouldPromote -> false
+            Build.VERSION.SDK_INT >= 36 &&
+                canPostPromoted &&
+                hasPromotableCharacteristics == true -> true
+            isMiuiFocusIslandReady -> true
+            else -> false
+        }
         val notIslandReason = when {
-            !hasStartedForeground -> "前台实时通知尚未启动"
-            stage == null -> "当前不在可展示阶段"
-            isDuringClassStatusBar -> "当前处于仅状态栏提醒阶段，不会上岛"
+            !hasStartedForeground -> getString(R.string.debug_foreground_not_started)
+            stage == null -> getString(R.string.debug_stage_not_displayable)
+            isDuringClassStatusBar -> getString(R.string.debug_status_bar_only)
             !shouldPromote && isDuringClass && !promoteDuringClass ->
-                "课中阶段已配置为普通通知，不会上岛"
-            !shouldPromote -> "当前阶段未请求提升显示"
-            Build.VERSION.SDK_INT < 36 -> "当前系统版本不支持提升通知上岛"
-            !hasNotificationPermissionCompat(this) -> "通知权限未开启"
-            !isPromotedPermissionDeclaredCompat(this) -> "应用未声明提升通知权限"
-            !canPostPromoted -> "系统未允许提升通知"
-            hasPromotableCharacteristics == false -> "当前通知不满足系统提升特征"
-            else -> ""
+                getString(R.string.debug_during_class_normal_notification)
+            !shouldPromote -> getString(R.string.debug_promote_not_requested)
+            !hasNotificationPermissionCompat(this) -> getString(R.string.debug_notification_permission_off)
+            isActuallyPromotable -> ""
+            Build.VERSION.SDK_INT >= 36 && !isPromotedPermissionDeclaredCompat(this) ->
+                getString(R.string.debug_promoted_permission_not_declared)
+            Build.VERSION.SDK_INT >= 36 && !canPostPromoted && !isMiuiFocusIslandReady ->
+                getString(R.string.debug_system_denied_promoted)
+            Build.VERSION.SDK_INT >= 36 && hasPromotableCharacteristics == false && !isMiuiFocusIslandReady ->
+                getString(R.string.debug_notification_not_promotable)
+            isXiaomiFamilyDevice() && miuiFocusParam == null ->
+                getString(R.string.debug_miui_focus_param_missing)
+            Build.VERSION.SDK_INT < 36 && !isXiaomiFamilyDevice() ->
+                getString(R.string.debug_os_not_supported)
+            else -> getString(R.string.debug_try_return_home)
         }
 
         updateDebugSnapshot(
@@ -2464,7 +3231,11 @@ class LiveUpdateService : Service() {
                     "resolvedStage" to stage,
                     "isExpectedToShowIsland" to shouldPromote,
                     "isActuallyPromotable" to isActuallyPromotable,
-                    "statusText" to if (isActuallyPromotable) "已满足上岛条件" else "未满足上岛条件",
+                    "statusText" to if (isActuallyPromotable) {
+                        getString(R.string.debug_island_ready)
+                    } else {
+                        getString(R.string.debug_island_not_ready)
+                    },
                     "notIslandReason" to notIslandReason,
                 ),
                 "service" to linkedMapOf(
@@ -2550,7 +3321,7 @@ class LiveUpdateService : Service() {
                 UmengDiagnosticReporter.record(
                     context = applicationContext,
                     category = "live_update_not_promoted",
-                    message = "Live update notification was built but not promoted",
+                    message = DiagnosticLogMessages.LIVE_UPDATE_NOT_PROMOTED,
                     extras = mapOf(
                         "courseName" to courseName,
                         "stage" to stage,
@@ -2562,7 +3333,7 @@ class LiveUpdateService : Service() {
                 UmengDiagnosticReporter.report(
                     context = applicationContext,
                     category = "live_update_promoted_not_shown",
-                    message = "Live update could not be promoted as expected",
+                    message = DiagnosticLogMessages.LIVE_UPDATE_PROMOTED_NOT_SHOWN,
                     dedupeKey = "live_update_promoted_not_shown:${courseName}:${activityStage}",
                     extras = mapOf(
                         "courseName" to courseName,
@@ -2586,11 +3357,12 @@ class LiveUpdateService : Service() {
     }
 
     private fun stopAndRemoveNotification() {
-        markServiceStopped("实时提醒已结束并移除通知")
+        restoreBeforeClassQuickActionIfClassEnded()
+        markServiceStopped(getString(R.string.stop_reminder_ended))
         UmengDiagnosticReporter.record(
             context = applicationContext,
             category = "live_update_service_stopped",
-            message = "Live update service stopped and notification removed",
+            message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_STOPPED,
             extras = mapOf(
                 "courseName" to courseName,
                 "stage" to activityStage,
@@ -2674,7 +3446,7 @@ class LiveUpdateService : Service() {
             } else {
                 null
             }
-        val finalDismissDisplayText = "整节下课 $finalDismissRemainingText"
+        val finalDismissDisplayText = getString(R.string.final_dismiss_with_time, finalDismissRemainingText)
         val compactDisplayText = if (duringClassTimeDisplayMode == "total") {
             finalDismissDisplayText
         } else {

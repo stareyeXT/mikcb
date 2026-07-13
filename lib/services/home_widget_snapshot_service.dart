@@ -2,22 +2,16 @@ import '../models/course.dart';
 import '../models/exam.dart';
 import '../models/timetable_settings.dart';
 
-enum HomeWidgetSnapshotState {
-  noCourse,
-  upcoming,
-  ongoing,
-  completed,
-  holiday,
-}
+enum HomeWidgetSnapshotState { noCourse, upcoming, ongoing, completed, holiday }
 
 extension HomeWidgetSnapshotStateX on HomeWidgetSnapshotState {
   String get value => switch (this) {
-        HomeWidgetSnapshotState.noCourse => 'no_course',
-        HomeWidgetSnapshotState.upcoming => 'upcoming',
-        HomeWidgetSnapshotState.ongoing => 'ongoing',
-        HomeWidgetSnapshotState.completed => 'completed',
-        HomeWidgetSnapshotState.holiday => 'holiday',
-      };
+    HomeWidgetSnapshotState.noCourse => 'no_course',
+    HomeWidgetSnapshotState.upcoming => 'upcoming',
+    HomeWidgetSnapshotState.ongoing => 'ongoing',
+    HomeWidgetSnapshotState.completed => 'completed',
+    HomeWidgetSnapshotState.holiday => 'holiday',
+  };
 }
 
 class HomeWidgetCourseSummary {
@@ -98,6 +92,9 @@ class HomeWidgetSnapshot {
   final String? nextExamStartTime;
   final String? nextExamEndTime;
   final String? holidayName;
+  final List<HomeWidgetCourseSummary> tomorrowCourses;
+  final int tomorrowWeek;
+  final int tomorrowDayOfWeek;
 
   const HomeWidgetSnapshot({
     required this.profileId,
@@ -125,6 +122,9 @@ class HomeWidgetSnapshot {
     this.nextExamStartTime,
     this.nextExamEndTime,
     this.holidayName,
+    this.tomorrowCourses = const [],
+    this.tomorrowWeek = 0,
+    this.tomorrowDayOfWeek = 0,
   });
 
   Map<String, dynamic> toJson() {
@@ -144,8 +144,9 @@ class HomeWidgetSnapshot {
       'cornerRadius': cornerRadius,
       'totalTodayCourseCount': totalTodayCourseCount,
       'todayCourses': todayCourses.map((course) => course.toJson()).toList(),
-      'visibleTodayCourses':
-          visibleTodayCourses.map((course) => course.toJson()).toList(),
+      'visibleTodayCourses': visibleTodayCourses
+          .map((course) => course.toJson())
+          .toList(),
       'highlightedCourse': highlightedCourse?.toJson(),
       'nextCourse': nextCourse?.toJson(),
       'nextExamName': nextExamName,
@@ -155,6 +156,9 @@ class HomeWidgetSnapshot {
       'nextExamStartTime': nextExamStartTime,
       'nextExamEndTime': nextExamEndTime,
       'holidayName': holidayName,
+      'tomorrowCourses': tomorrowCourses.map((c) => c.toJson()).toList(),
+      'tomorrowWeek': tomorrowWeek,
+      'tomorrowDayOfWeek': tomorrowDayOfWeek,
     };
   }
 }
@@ -174,6 +178,11 @@ class HomeWidgetSnapshotService {
     Exam? nextExam,
     bool isHoliday = false,
     String? holidayName,
+    List<Course> tomorrowCourses = const [],
+    int tomorrowWeek = 0,
+    int tomorrowDayOfWeek = 0,
+    bool showTomorrowCourses = true,
+    int originalTodayCourseCount = 0,
   }) {
     // Holiday: return a dedicated snapshot without course info
     if (isHoliday) {
@@ -202,10 +211,12 @@ class HomeWidgetSnapshotService {
         .map(HomeWidgetCourseSummary.fromCourse)
         .toList(growable: false);
     final visibleCourses = settings.widgetHideCompletedCourses
-        ? todayCourses.where((course) {
-            final end = _buildCourseDateTime(now, course.endTime);
-            return end != null && end.isAfter(now);
-          }).toList(growable: false)
+        ? todayCourses
+              .where((course) {
+                final end = _buildCourseDateTime(now, course.endTime);
+                return end != null && end.isAfter(now);
+              })
+              .toList(growable: false)
         : todayCourses;
     final visibleSummaries = visibleCourses
         .map(HomeWidgetCourseSummary.fromCourse)
@@ -214,8 +225,13 @@ class HomeWidgetSnapshotService {
     final currentCourse = _findCurrentCourse(todayCourses, now);
     final upcomingCourse = _findNextCourse(todayCourses, now);
 
-    final state =
-        switch ((todayCourses.isEmpty, currentCourse, upcomingCourse)) {
+    final hasCoursesScheduled =
+        todayCourses.isNotEmpty || originalTodayCourseCount > 0;
+    final state = switch ((
+      !hasCoursesScheduled,
+      currentCourse,
+      upcomingCourse,
+    )) {
       (true, _, _) => HomeWidgetSnapshotState.noCourse,
       (false, Course _, _) => HomeWidgetSnapshotState.ongoing,
       (false, null, Course _) => HomeWidgetSnapshotState.upcoming,
@@ -229,7 +245,8 @@ class HomeWidgetSnapshotService {
     } else if (countdownLeadMinutes == 0) {
       effectiveShowCountdown = true;
     } else {
-      effectiveShowCountdown = state == HomeWidgetSnapshotState.ongoing ||
+      effectiveShowCountdown =
+          state == HomeWidgetSnapshotState.ongoing ||
           (state == HomeWidgetSnapshotState.upcoming &&
               upcomingCourse != null &&
               _isWithinLeadMinutes(now, upcomingCourse, countdownLeadMinutes));
@@ -254,8 +271,8 @@ class HomeWidgetSnapshotService {
       visibleTodayCourses: visibleSummaries,
       highlightedCourse: currentCourse == null
           ? (upcomingCourse == null
-              ? null
-              : HomeWidgetCourseSummary.fromCourse(upcomingCourse))
+                ? null
+                : HomeWidgetCourseSummary.fromCourse(upcomingCourse))
           : HomeWidgetCourseSummary.fromCourse(currentCourse),
       nextCourse: upcomingCourse == null
           ? null
@@ -268,6 +285,13 @@ class HomeWidgetSnapshotService {
       nextExamLocation: nextExam?.location,
       nextExamStartTime: nextExam?.startTime,
       nextExamEndTime: nextExam?.endTime,
+      tomorrowCourses: showTomorrowCourses
+          ? tomorrowCourses
+                .map(HomeWidgetCourseSummary.fromCourse)
+                .toList(growable: false)
+          : const [],
+      tomorrowWeek: tomorrowWeek,
+      tomorrowDayOfWeek: tomorrowDayOfWeek,
     );
   }
 
@@ -286,8 +310,9 @@ class HomeWidgetSnapshotService {
         triggers.add(start.millisecondsSinceEpoch);
         // Add trigger at countdown activation point (start - lead minutes).
         if (countdownLeadMinutes > 0) {
-          final activation =
-              start.subtract(Duration(minutes: countdownLeadMinutes));
+          final activation = start.subtract(
+            Duration(minutes: countdownLeadMinutes),
+          );
           if (activation.isAfter(now)) {
             triggers.add(activation.millisecondsSinceEpoch);
           }
@@ -335,8 +360,7 @@ class HomeWidgetSnapshotService {
     return null;
   }
 
-  bool _isWithinLeadMinutes(
-      DateTime now, Course course, int leadMinutes) {
+  bool _isWithinLeadMinutes(DateTime now, Course course, int leadMinutes) {
     final start = _buildCourseDateTime(now, course.startTime);
     if (start == null) return false;
     final threshold = start.subtract(Duration(minutes: leadMinutes));

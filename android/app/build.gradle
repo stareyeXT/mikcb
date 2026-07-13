@@ -19,12 +19,14 @@ def releaseKeyAlias =
         keystoreProperties.getProperty("keyAlias") ?: System.getenv("ANDROID_KEY_ALIAS")
 def releaseKeyPassword =
         keystoreProperties.getProperty("keyPassword") ?: System.getenv("ANDROID_KEY_PASSWORD")
+def hasReleaseSigning =
+        releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 def overrideVersionName = project.findProperty("OVERRIDE_VERSION_NAME") ?: System.getenv("OVERRIDE_VERSION_NAME")
 
 android {
     namespace = "com.mutx163.qingyu"
     compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     buildFeatures {
         buildConfig = true
@@ -43,27 +45,32 @@ android {
         applicationId = "com.mutx163.qingyu"
         minSdk = 26
         targetSdk = 36
-        versionCode = flutter.versionCode
+        // +100000 offset: Flutter 3.35+ 的 --split-per-abi 会在 versionCode 上加 ABI 乘数 (e.g., arm64: ×2000),
+        // 移除 --split-per-abi 后 versionCode 会变小，导致 Android 误判为降级安装。
+        // 加此偏移确保 versionCode 始终高于旧版分 ABI 构建的值。
+        versionCode = (flutter.versionCode as int) + 100000
         versionName = overrideVersionName ?: flutter.versionName
         buildConfigField "String", "UMENG_APP_KEY", "\"69c1fd8f9a7f3764889fba4f\""
         buildConfigField "String", "UMENG_CHANNEL", "\"official\""
-        manifestPlaceholders = [
-                appLabel   : "轻屿课表",
-                umengScheme: "um.69c1fd8f9a7f3764889fba4f"
-        ]
+        missingDimensionStrategy 'env', 'prod'
     }
 
     signingConfigs {
-        release {
-            storeFile rootProject.file(releaseStoreFile)
-            storePassword releaseStorePassword
-            keyAlias releaseKeyAlias
-            keyPassword releaseKeyPassword
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
 
-    buildTypes {
-        debug {
+    // Product Flavors for different package names
+    flavorDimensions "env"
+    productFlavors {
+        dev {
+            dimension "env"
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
             buildConfigField "String", "UMENG_CHANNEL", "\"official-debug\""
@@ -72,13 +79,42 @@ android {
                     umengScheme: "um.69c1fd8f9a7f3764889fba4f"
             ]
         }
-        release {
+        perf {
+            dimension "env"
+            applicationIdSuffix ".profile"
+            versionNameSuffix "-profile"
+            buildConfigField "String", "UMENG_CHANNEL", "\"official-profile\""
+            manifestPlaceholders = [
+                    appLabel   : "轻屿课表性能版",
+                    umengScheme: "um.69c1fd8f9a7f3764889fba4f"
+            ]
+        }
+        prod {
+            dimension "env"
             manifestPlaceholders = [
                     appLabel   : "轻屿课表",
                     umengScheme: "um.69c1fd8f9a7f3764889fba4f"
             ]
+        }
+    }
+
+    buildTypes {
+        debug {
+            // Debug build type - no applicationIdSuffix here, handled by flavor
+        }
+        profile {
+            initWith(getByName("debug"))
+            matchingFallbacks = ['debug', 'release']
+        }
+        release {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig = signingConfigs.release
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.release
+            } else {
+                throw new GradleException(
+                        "Missing release signing config. Provide android/key.properties or ANDROID_KEYSTORE_PATH / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD."
+                )
+            }
         }
     }
 }
@@ -87,11 +123,21 @@ flutter {
     source = "../.."
 }
 
+// Work around flutter/flutter#187553: merge*JniLibFolders may stay UP-TO-DATE while
+// Flutter jniLibs changed, packaging a stale libapp.so into flavor APKs.
+tasks.configureEach { task ->
+    if (task.name.startsWith("merge") && task.name.endsWith("JniLibFolders")) {
+        task.outputs.upToDateWhen { false }
+    }
+}
+
 dependencies {
+    implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation 'com.umeng.umsdk:common:9.6.3'
     implementation 'com.umeng.umsdk:asms:1.8.0'
     implementation 'com.umeng.umsdk:apm:1.5.2'
     implementation 'com.umeng.umsdk:uyumao:1.1.2'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'androidx.work:work-runtime-ktx:2.10.1'
     testImplementation 'junit:junit:4.13.2'
 }

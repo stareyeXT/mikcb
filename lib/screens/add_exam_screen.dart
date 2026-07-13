@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:university_timetable/l10n/enum_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import '../utils/responsive.dart';
 
-import '../models/course.dart';
 import '../models/exam.dart';
+import '../models/timetable_settings.dart';
+import 'package:intl/intl.dart';
 import '../providers/timetable_provider.dart';
+import '../utils/app_toast.dart';
 import '../utils/hex_color.dart';
+import '../widgets/course_template_picker_sheet.dart';
+import '../ui/hyperos/hyperos.dart';
 
 class AddExamScreen extends StatefulWidget {
   final Exam? exam;
@@ -31,6 +36,7 @@ class _AddExamScreenState extends State<AddExamScreen> {
   late TimeOfDay _endTime;
   ExamReminderPreset _reminderPreset = ExamReminderPreset.day1AndHour1;
   List<int> _customReminderMinutes = [1440, 60];
+  bool _hasSelectedDate = false;
 
   bool get _isEditing => widget.exam != null;
 
@@ -42,6 +48,7 @@ class _AddExamScreenState extends State<AddExamScreen> {
       _selectedCourseId = exam.courseId;
       _nameController.text = exam.name;
       _selectedDate = exam.dateTime;
+      _hasSelectedDate = true;
       _startTime = _parseTime(exam.startTime);
       _endTime = _parseTime(exam.endTime);
       _locationController.text = exam.location ?? '';
@@ -69,49 +76,109 @@ class _AddExamScreenState extends State<AddExamScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<TimetableProvider>();
     final l10n = AppLocalizations.of(context)!;
-    final courses = provider.courses;
+    final courseGroups = provider.courseGroups;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditing ? l10n.editExam : l10n.addExam),
-        actions: [
-          if (_isEditing)
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded),
-              tooltip: l10n.deleteExam,
-              onPressed: () => _confirmDelete(l10n),
-            ),
-          IconButton(
-            icon: const Icon(Icons.check_rounded),
-            tooltip: l10n.saveExam,
-            onPressed: _saveExam,
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      resizeToAvoidBottomInset: true,
+      title: Text(_isEditing ? l10n.editExam : l10n.addExam),
+      suffixes: [
+        if (_isEditing)
+          FHeaderAction(
+            icon: const Icon(Icons.delete_outline_rounded),
+            semanticsLabel: l10n.deleteExam,
+            onPress: () => _confirmDelete(l10n),
           ),
-        ],
-      ),
-      body: Form(
+        FHeaderAction(
+          icon: const Icon(Icons.check_rounded),
+          semanticsLabel: l10n.saveExam,
+          onPress: _saveExam,
+        ),
+      ],
+      child: Form(
         key: _formKey,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(context.isTablet ? 32 : 16, 8, context.isTablet ? 32 : 16, 40),
+        child: HyperosListView(
           children: [
-            _buildCourseDropdown(courses, l10n),
-            const SizedBox(height: 16),
-            _buildNameField(l10n),
-            const SizedBox(height: 16),
-            _buildDatePicker(l10n),
-            const SizedBox(height: 16),
-            _buildTimePickers(l10n),
-            const SizedBox(height: 16),
-            _buildLocationField(l10n, provider),
-            const SizedBox(height: 16),
-            _buildSeatField(l10n),
-            const SizedBox(height: 16),
-            _buildReminderDropdown(l10n),
-            const SizedBox(height: 16),
-            _buildNoteField(l10n),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _saveExam,
-              child: Text(l10n.saveExam),
+            HyperosControlCard(
+              edgeToEdge: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildCourseLinkTile(courseGroups, l10n, provider),
+                  if (_selectedCourseId == null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        HyperosControlCardScope.defaultHorizontalPadding,
+                        6,
+                        HyperosControlCardScope.defaultHorizontalPadding,
+                        HyperosControlCardScope.defaultBodyBottomInset,
+                      ),
+                      child: Text(
+                        l10n.linkCourseRequired,
+                        style: HyperosTypography.listDetail(
+                          context,
+                        ).copyWith(color: Theme.of(context).colorScheme.error),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const HyperosSectionGap(),
+            HyperosControlCard(
+              edgeToEdge: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      HyperosControlCardScope.defaultHorizontalPadding,
+                      HyperosControlCardScope.defaultHorizontalPadding,
+                      HyperosControlCardScope.defaultHorizontalPadding,
+                      0,
+                    ),
+                    child: _buildNameField(l10n),
+                  ),
+                  _buildDateTimePickerRows(l10n),
+                ],
+              ),
+            ),
+            const HyperosSectionGap(),
+            HyperosControlCard(
+              edgeToEdge: true,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  HyperosControlCardScope.defaultHorizontalPadding,
+                  HyperosControlCardScope.defaultHorizontalPadding,
+                  HyperosControlCardScope.defaultHorizontalPadding,
+                  HyperosControlCardScope.defaultBodyBottomInset,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _withSpacing([
+                    _buildLocationField(l10n, provider),
+                    _buildSeatField(l10n),
+                  ]),
+                ),
+              ),
+            ),
+            const HyperosSectionGap(),
+            HyperosControlCard(
+              edgeToEdge: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildReminderDropdown(l10n),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      HyperosControlCardScope.defaultHorizontalPadding,
+                      0,
+                      HyperosControlCardScope.defaultHorizontalPadding,
+                      HyperosControlCardScope.defaultBodyBottomInset,
+                    ),
+                    child: _buildNoteField(l10n),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -119,400 +186,587 @@ class _AddExamScreenState extends State<AddExamScreen> {
     );
   }
 
-  Widget _buildCourseDropdown(List<Course> courses, AppLocalizations l10n) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selected = courses.where((c) => c.id == _selectedCourseId).firstOrNull;
+  List<Widget> _withSpacing(List<Widget> children) {
+    final spaced = <Widget>[];
+    for (var index = 0; index < children.length; index++) {
+      if (index > 0) {
+        spaced.add(const SizedBox(height: 12));
+      }
+      spaced.add(children[index]);
+    }
+    return spaced;
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.linkCourse,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildCourseTrigger(selected, courses, colorScheme, l10n),
-        if (_selectedCourseId == null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              l10n.linkCourseRequired,
-              style: TextStyle(color: colorScheme.error, fontSize: 12),
-            ),
-          ),
-      ],
+  Widget _buildPickerTile({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onPress,
+    bool isPlaceholder = false,
+  }) {
+    return HyperosListTile(
+      icon: icon,
+      title: label,
+      details: isPlaceholder ? null : value,
+      onTap: onPress,
     );
   }
 
-  Widget _buildCourseTrigger(
-    Course? selected,
-    List<Course> courses,
-    ColorScheme colorScheme,
+  Widget _buildCourseLinkTile(
+    List<CourseGroup> courseGroups,
     AppLocalizations l10n,
+    TimetableProvider provider,
   ) {
-    final selectedColor = selected != null
-        ? parseHexColorOrFallback(selected.color, fallback: colorScheme.primary)
-        : colorScheme.primary;
+    final selected = _selectedCourseId != null
+        ? provider.getCourseById(_selectedCourseId!)
+        : null;
+    final courseColor = selected != null
+        ? parseHexColorOrFallback(
+            selected.color,
+            fallback: Theme.of(context).colorScheme.primary,
+          )
+        : null;
 
-    return Material(
-      color: selected != null
-          ? selectedColor.withValues(alpha: 0.08)
-          : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _showCourseSheet(courses, colorScheme, l10n),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: selected != null
-              ? BoxDecoration(
-                  border: Border.all(
-                    color: selectedColor.withValues(alpha: 0.35),
-                    width: 1.2,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                )
-              : null,
-          child: Row(
-            children: [
-              if (selected != null) ...[
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: selectedColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '${selected.name}  ·  ${selected.teacher}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: selectedColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ] else ...[
-                Icon(Icons.link_rounded, size: 18, color: colorScheme.onSurfaceVariant),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    courses.isEmpty ? '暂无课程，请先添加课程' : l10n.linkCourse,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-              Icon(Icons.unfold_more_rounded, size: 20, color: colorScheme.onSurfaceVariant),
-            ],
+    final detailsText = selected != null
+        ? '${selected.name} · ${selected.teacher}'
+        : (courseGroups.isEmpty
+              ? l10n.noCoursesInCurrentProfile
+              : l10n.linkCourse);
+
+    return HyperosChoiceTile(
+      prefix: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: (courseColor ?? context.theme.colors.muted).withValues(
+            alpha: courseColor == null ? 1 : 0.14,
           ),
+          borderRadius: BorderRadius.circular(12),
         ),
+        alignment: Alignment.center,
+        child: courseColor != null
+            ? Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: courseColor,
+                  shape: BoxShape.circle,
+                ),
+              )
+            : Icon(
+                Icons.link_rounded,
+                size: 18,
+                color: context.theme.colors.mutedForeground,
+              ),
       ),
+      title: l10n.linkCourse,
+      subtitle: Text(detailsText, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: courseGroups.isEmpty
+          ? null
+          : Icon(
+              Icons.chevron_right_rounded,
+              color: context.theme.colors.mutedForeground,
+            ),
+      onTap: courseGroups.isEmpty
+          ? null
+          : () => _showCourseSheet(courseGroups, l10n),
     );
   }
 
-  void _showCourseSheet(List<Course> courses, ColorScheme colorScheme, AppLocalizations l10n) {
-    if (courses.isEmpty) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Row(
-                  children: [
-                    Text(
-                      l10n.linkCourse,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.55,
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                  itemCount: courses.length,
-                  itemBuilder: (_, i) {
-                    final course = courses[i];
-                    final isSelected = course.id == _selectedCourseId;
-                    final courseColor = parseHexColorOrFallback(
-                      course.color,
-                      fallback: colorScheme.primary,
-                    );
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Material(
-                        color: isSelected
-                            ? courseColor.withValues(alpha: 0.10)
-                            : colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(14),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () {
-                            setState(() {
-                              _selectedCourseId = course.id;
-                              if (_nameController.text.isEmpty) {
-                                _nameController.text = '期末考试';
-                              }
-                            });
-                            Navigator.pop(ctx);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            decoration: isSelected
-                                ? BoxDecoration(
-                                    border: Border.all(
-                                      color: courseColor.withValues(alpha: 0.4),
-                                      width: 1.5,
-                                    ),
-                                    borderRadius: BorderRadius.circular(14),
-                                  )
-                                : null,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: courseColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        course.name,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                          color: isSelected ? courseColor : colorScheme.onSurface,
-                                        ),
-                                      ),
-                                      if (course.teacher.isNotEmpty)
-                                        Text(
-                                          course.teacher,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                if (isSelected)
-                                  Icon(Icons.check_circle_rounded, size: 20, color: courseColor),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+  Future<void> _showCourseSheet(
+    List<CourseGroup> courseGroups,
+    AppLocalizations l10n,
+  ) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final course = await showCourseTemplatePickerSheet(
+      context,
+      title: l10n.linkCourse,
+      courseGroups: courseGroups,
+      selectedCourseId: _selectedCourseId,
     );
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
+    if (course != null) {
+      setState(() {
+        _selectedCourseId = course.id;
+        if (_nameController.text.isEmpty) {
+          _nameController.text = l10n.examDefaultName;
+        }
+      });
+    }
   }
 
   Widget _buildNameField(AppLocalizations l10n) {
-    return TextFormField(
-      controller: _nameController,
-      decoration: InputDecoration(
-        labelText: l10n.examNameLabel,
-        border: const OutlineInputBorder(),
-      ),
+    return FormField<String>(
+      initialValue: _nameController.text,
       validator: (value) {
-        if (value == null || value.trim().isEmpty) {
+        final name = (value ?? _nameController.text).trim();
+        if (name.isEmpty) {
           return l10n.examNameRequired;
         }
         return null;
+      },
+      builder: (field) {
+        return HyperosTextField(
+          controller: _nameController,
+          label: l10n.examNameLabel,
+          helper: field.errorText,
+          onChanged: field.didChange,
+        );
       },
     );
   }
 
   Widget _buildDatePicker(AppLocalizations l10n) {
-    return InkWell(
-      onTap: _pickDate,
-      borderRadius: BorderRadius.circular(4),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: l10n.examDateLabel,
-          border: const OutlineInputBorder(),
-          suffixIcon: const Icon(Icons.calendar_today),
-        ),
-        child: Text(
-          '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
-        ),
-      ),
-    );
-  }
+    final provider = context.read<TimetableProvider>();
+    final semesterStart = provider.semesterStartDate;
+    final settings = provider.settings;
 
-  Widget _buildTimePickers(AppLocalizations l10n) {
-    return Row(
-      children: [
-        Expanded(
-          child: InkWell(
-            onTap: () => _pickTime(isStart: true),
-            borderRadius: BorderRadius.circular(4),
-            child: InputDecorator(
-              decoration: InputDecoration(
-                labelText: l10n.examStartTimeLabel,
-                border: const OutlineInputBorder(),
-              ),
-              child: Text(_formatTimeOfDay(_startTime)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: InkWell(
-            onTap: () => _pickTime(isStart: false),
-            borderRadius: BorderRadius.circular(4),
-            child: InputDecorator(
-              decoration: InputDecoration(
-                labelText: l10n.examEndTimeLabel,
-                border: const OutlineInputBorder(),
-              ),
-              child: Text(_formatTimeOfDay(_endTime)),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLocationField(AppLocalizations l10n, TimetableProvider provider) {
-    String? hint;
-    if (_selectedCourseId != null) {
-      final course = provider.getCourseForExam(
-        Exam(
-          id: '',
-          courseId: _selectedCourseId!,
-          name: '',
-          dateTime: DateTime.now(),
-          startTime: '',
-          endTime: '',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
-      if (course != null) {
-        hint = '${l10n.sameAsClassroom}: ${course.location}';
+    // 计算当前选中日期是第几周
+    String weekInfo = '';
+    if (_hasSelectedDate && semesterStart != null) {
+      final weekIndex = provider.getWeekIndex(_selectedDate, semesterStart);
+      if (weekIndex != null &&
+          weekIndex >= 1 &&
+          weekIndex <= settings.semesterWeekCount) {
+        final dayNames = [
+          l10n.weekdayMon,
+          l10n.weekdayTue,
+          l10n.weekdayWed,
+          l10n.weekdayThu,
+          l10n.weekdayFri,
+          l10n.weekdaySat,
+          l10n.weekdaySun,
+        ];
+        final dayOfWeek = _selectedDate.weekday; // 1=Monday, 7=Sunday
+        weekInfo = ' ${l10n.weekLabel(weekIndex)} ${dayNames[dayOfWeek - 1]}';
       }
     }
-    return TextFormField(
-      controller: _locationController,
-      decoration: InputDecoration(
-        labelText: l10n.examLocationLabel,
-        hintText: hint ?? l10n.examLocationHint,
-        border: const OutlineInputBorder(),
-      ),
+
+    final displayText = _hasSelectedDate
+        ? '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}$weekInfo'
+        : l10n.examDateHint;
+
+    return _buildPickerTile(
+      label: l10n.examDateLabel,
+      value: displayText,
+      icon: semesterStart != null
+          ? Icons.view_week_rounded
+          : Icons.calendar_today_outlined,
+      isPlaceholder: !_hasSelectedDate,
+      onPress: () => _pickDate(context),
     );
   }
 
-  Widget _buildSeatField(AppLocalizations l10n) {
-    return TextFormField(
-      controller: _seatController,
-      decoration: InputDecoration(
-        labelText: l10n.examSeatLabel,
-        border: const OutlineInputBorder(),
-      ),
+  Widget _buildDateTimePickerRows(AppLocalizations l10n) {
+    final dateTile = _buildDatePicker(l10n);
+    final startTile = _buildPickerTile(
+      label: l10n.examStartTimeLabel,
+      value: _formatTimeOfDay(_startTime),
+      icon: Icons.schedule_rounded,
+      onPress: () => _pickTime(isStart: true),
     );
-  }
+    final endTile = _buildPickerTile(
+      label: l10n.examEndTimeLabel,
+      value: _formatTimeOfDay(_endTime),
+      icon: Icons.schedule_outlined,
+      onPress: () => _pickTime(isStart: false),
+    );
 
-  Widget _buildReminderDropdown(AppLocalizations l10n) {
-    return DropdownButtonFormField<ExamReminderPreset>(
-      initialValue: _reminderPreset,
-      decoration: InputDecoration(
-        labelText: l10n.examReminderLabel,
-        border: const OutlineInputBorder(),
-      ),
-      items: ExamReminderPreset.values.map((preset) {
-        return DropdownMenuItem(
-          value: preset,
-          child: Text(preset.label),
-        );
-      }).toList(),
-      onChanged: (value) {
-        if (value != null) {
-          setState(() {
-            _reminderPreset = value;
-          });
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              HyperosListTileScope(
+                isFirst: true,
+                isLast: false,
+                child: dateTile,
+              ),
+              HyperosListTileScope(
+                isFirst: false,
+                isLast: false,
+                child: startTile,
+              ),
+              HyperosListTileScope(
+                isFirst: false,
+                isLast: true,
+                child: endTile,
+              ),
+            ],
+          );
         }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HyperosListTileScope(
+              isFirst: true,
+              isLast: false,
+              child: dateTile,
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: HyperosListTileScope(
+                    isFirst: false,
+                    isLast: true,
+                    child: startTile,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: HyperosListTileScope(
+                    isFirst: false,
+                    isLast: true,
+                    child: endTile,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
       },
     );
   }
 
-  Widget _buildNoteField(AppLocalizations l10n) {
-    return TextFormField(
-      controller: _noteController,
-      maxLines: 3,
-      decoration: InputDecoration(
-        labelText: l10n.examNoteLabel,
-        alignLabelWithHint: true,
-        border: const OutlineInputBorder(),
-      ),
+  Widget _buildLocationField(
+    AppLocalizations l10n,
+    TimetableProvider provider,
+  ) {
+    String? hint;
+    if (_selectedCourseId != null) {
+      final course = provider.getCourseById(_selectedCourseId!);
+      if (course != null) {
+        hint = '${l10n.sameAsClassroom}: ${course.location}';
+      }
+    }
+    return HyperosTextField(
+      controller: _locationController,
+      label: l10n.examLocationLabel,
+      hint: hint ?? l10n.examLocationHint,
     );
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+  Widget _buildSeatField(AppLocalizations l10n) {
+    return HyperosTextField(
+      controller: _seatController,
+      label: l10n.examSeatLabel,
+    );
+  }
+
+  Widget _buildReminderDropdown(AppLocalizations l10n) {
+    return HyperosSelectTile<ExamReminderPreset>(
+      label: l10n.examReminderLabel,
+      items: {
+        for (final preset in ExamReminderPreset.values)
+          examReminderPresetLabel(l10n, preset): preset,
+      },
+      value: _reminderPreset,
+      onChanged: (value) => setState(() => _reminderPreset = value),
+    );
+  }
+
+  Widget _buildNoteField(AppLocalizations l10n) {
+    return HyperosTextField(
+      controller: _noteController,
+      label: l10n.examNoteLabel,
+      minLines: 3,
+      maxLines: 5,
+    );
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    final provider = context.read<TimetableProvider>();
+    final semesterStart = provider.semesterStartDate;
+    final settings = provider.settings;
+
+    if (semesterStart == null) {
+      // 没有设置开学日期，回退到标准日历选择器
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDate,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      );
+      if (picked != null) {
+        setState(() {
+          _selectedDate = picked;
+          _hasSelectedDate = true;
+        });
+      }
+      return;
+    }
+
+    // 有开学日期，显示周次选择器
+    final picked = await _showWeekPicker(
+      context,
+      semesterStart,
+      settings,
+      provider: provider,
+      currentDate: _selectedDate,
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _hasSelectedDate = true;
+      });
     }
+  }
+
+  Future<DateTime?> _showWeekPicker(
+    BuildContext context,
+    DateTime semesterStart,
+    TimetableSettings settings, {
+    required TimetableProvider provider,
+    DateTime? currentDate,
+  }) async {
+    final totalWeeks = settings.semesterWeekCount;
+    // 基于已选日期（或今天）计算初始周次
+    final anchor = currentDate ?? DateTime.now();
+    final anchorWeekIndex = provider.getWeekIndex(anchor, semesterStart);
+    final initialWeek =
+        (anchorWeekIndex != null &&
+            anchorWeekIndex >= 1 &&
+            anchorWeekIndex <= totalWeeks)
+        ? anchorWeekIndex
+        : 1;
+
+    int selectedWeek = initialWeek;
+    // 已选日期有值时默认选中对应星期，否则不选中
+    int? selectedDayOfWeek = _hasSelectedDate ? currentDate?.weekday : null;
+
+    // 滚动控制器，初始偏移指向已选周次
+    final initialOffset = ((initialWeek - 1) * 56.0 - 100.0).clamp(
+      0.0,
+      double.infinity,
+    );
+    final scrollController = ScrollController(
+      initialScrollOffset: initialOffset,
+    );
+
+    // 计算某周某天的实际日期
+    const weekStartDay = 1; // 1=Monday
+    DateTime getDateForWeekAndDay(int week, int dayOfWeek) {
+      // 学期开始日期所在周的起始日
+      final startWeekday = semesterStart.weekday;
+      final daysToSubtract = (startWeekday - weekStartDay + 7) % 7;
+      final alignedStart = semesterStart.subtract(
+        Duration(days: daysToSubtract),
+      );
+      // 目标日期 = 对齐后的起始日 + (周数-1)*7 + (星期几 - weekStartDay)
+      final dayOffset = (dayOfWeek - weekStartDay + 7) % 7;
+      return alignedStart.add(Duration(days: (week - 1) * 7 + dayOffset));
+    }
+
+    final result = await showHyperosSheet<DateTime>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final l10n = AppLocalizations.of(ctx)!;
+            final colorScheme = Theme.of(ctx).colorScheme;
+            final dayNames = [
+              l10n.weekdayMon,
+              l10n.weekdayTue,
+              l10n.weekdayWed,
+              l10n.weekdayThu,
+              l10n.weekdayFri,
+              l10n.weekdaySat,
+              l10n.weekdaySun,
+            ];
+            final selectedDay = selectedDayOfWeek;
+            final selectedDateLabel = selectedDay != null
+                ? DateFormat.Md().format(
+                    getDateForWeekAndDay(selectedWeek, selectedDay),
+                  )
+                : l10n.weekLabel(selectedWeek);
+
+            return HyperosSheet(
+              title: l10n.examDateWeekPickerTitle,
+              description: selectedDateLabel,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  HyperosButton(
+                    label: l10n.weekPickerCalendarTooltip,
+                    variant: HyperosButtonVariant.secondary,
+                    expand: true,
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: getDateForWeekAndDay(
+                          selectedWeek,
+                          selectedDayOfWeek ?? DateTime.now().weekday,
+                        ),
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 365),
+                        ),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 2),
+                        ),
+                      );
+                      if (picked != null && ctx.mounted) {
+                        Navigator.pop(ctx, picked);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: List.generate(7, (index) {
+                      final dayOfWeek = index + 1;
+                      final isSelected = dayOfWeek == selectedDayOfWeek;
+                      final date = getDateForWeekAndDay(
+                        selectedWeek,
+                        dayOfWeek,
+                      );
+                      return Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(left: index == 0 ? 0 : 4),
+                          child: Material(
+                            color: isSelected
+                                ? Theme.of(ctx).colorScheme.secondaryContainer
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.pop(
+                                  ctx,
+                                  getDateForWeekAndDay(selectedWeek, dayOfWeek),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 4,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      dayNames[index],
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      DateFormat.Md().format(date),
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(ctx).height * 0.42,
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: HyperosChoiceGroup(
+                        children: [
+                          for (var week = 1; week <= totalWeeks; week++)
+                            HyperosChoiceTile(
+                              prefix: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color:
+                                      (week == selectedWeek
+                                              ? colorScheme.primary
+                                              : _isCurrentWeek(
+                                                  week,
+                                                  semesterStart,
+                                                  provider,
+                                                )
+                                              ? colorScheme.secondary
+                                              : colorScheme
+                                                    .surfaceContainerHighest)
+                                          .withValues(
+                                            alpha: week == selectedWeek
+                                                ? 1
+                                                : 0.18,
+                                          ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$week',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: week == selectedWeek
+                                        ? colorScheme.onPrimary
+                                        : colorScheme.onSurface,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              title: selectedDayOfWeek != null
+                                  ? '${DateFormat.Md().format(getDateForWeekAndDay(week, selectedDayOfWeek))} ${dayNames[selectedDayOfWeek - 1]}'
+                                  : l10n.weekLabel(week),
+                              subtitle: Text(
+                                _isCurrentWeek(week, semesterStart, provider)
+                                    ? l10n.thisWeekLabel
+                                    : l10n.weekLabel(week),
+                              ),
+                              selected: week == selectedWeek,
+                              highlightSelectedText: true,
+                              onTap: () {
+                                final day = selectedDayOfWeek;
+                                if (day != null) {
+                                  Navigator.pop(
+                                    ctx,
+                                    getDateForWeekAndDay(week, day),
+                                  );
+                                } else {
+                                  setModalState(() {
+                                    selectedWeek = week;
+                                  });
+                                }
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    scrollController.dispose();
+    return result;
+  }
+
+  bool _isCurrentWeek(
+    int week,
+    DateTime semesterStart,
+    TimetableProvider provider,
+  ) {
+    final now = DateTime.now();
+    final currentWeekIndex = provider.getWeekIndex(now, semesterStart);
+    return currentWeekIndex == week;
   }
 
   Future<void> _pickTime({required bool isStart}) async {
     final initial = isStart ? _startTime : _endTime;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-    );
+    final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked != null) {
       setState(() {
         if (isStart) {
@@ -525,22 +779,13 @@ class _AddExamScreenState extends State<AddExamScreen> {
   }
 
   Future<void> _confirmDelete(AppLocalizations l10n) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showHyperosConfirmDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.deleteExam),
-        content: Text(l10n.deleteExamConfirm(widget.exam!.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancelAction),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.deleteAction),
-          ),
-        ],
-      ),
+      title: l10n.deleteExam,
+      message: l10n.deleteExamConfirm(widget.exam!.name),
+      cancelLabel: l10n.cancelAction,
+      confirmLabel: l10n.deleteAction,
+      destructive: true,
     );
     if (confirmed == true && mounted) {
       context.read<TimetableProvider>().deleteExam(widget.exam!.id);
@@ -549,7 +794,26 @@ class _AddExamScreenState extends State<AddExamScreen> {
   }
 
   void _saveExam() {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedCourseId == null || _selectedCourseId!.trim().isEmpty) {
+      showAppToast(
+        context,
+        message: l10n.linkCourseRequired,
+        kind: AppToastKind.warning,
+      );
+      return;
+    }
+
+    if (!_hasSelectedDate) {
+      showAppToast(
+        context,
+        message: l10n.examDateRequired,
+        kind: AppToastKind.warning,
+      );
+      return;
+    }
 
     final provider = context.read<TimetableProvider>();
     final now = DateTime.now();

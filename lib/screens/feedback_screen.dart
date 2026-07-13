@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../utils/responsive.dart';
+
+import '../ui/hyperos/hyperos.dart';
+import '../utils/app_toast.dart';
 
 class FeedbackScreen extends StatelessWidget {
   const FeedbackScreen({super.key});
 
-  static const String _issuesUrl = 'https://github.com/stareyeXT/mikcb-for-ECJTU/issues';
+  static const String _issuesUrl = 'https://github.com/Mutx163/mikcb/issues';
   static const String _xiaohongshuId = '4976443029';
   static const String _coolapkId = 'Mutx666';
   static const String _qqGroupId = '1077077989';
@@ -15,86 +18,84 @@ class FeedbackScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.feedbackTitle),
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.feedbackTitle),
+      child: HyperosListView(
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.feedbackIntro,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.feedbackIssueHint,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+          HyperosListGroup(
+            children: [
+              _FeedbackChannelTile(
+                brandBadge: const _FeedbackBrandBadge.svg(
+                  assetPath: 'assets/branding/github.svg',
+                  color: Color(0xFF181717),
+                ),
+                title: l10n.githubIssueTitle,
+                subtitle: l10n.githubIssueSubtitle,
+                onTap: () => _openUrl(_issuesUrl),
+                onCopy: () => _copyText(
+                  context,
+                  _issuesUrl,
+                  successMessage: l10n.copiedIssueAddress,
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _FeedbackCard(
-            icon: Icons.bug_report_outlined,
-            title: l10n.githubIssueTitle,
-            subtitle: l10n.githubIssueSubtitle,
-            primaryLabel: l10n.openIssuePage,
-            onPrimaryTap: () => _openUrl(_issuesUrl),
-            secondaryLabel: l10n.copyAddress,
-            onSecondaryTap: () => _copyText(
-              context,
-              _issuesUrl,
-              successMessage: l10n.copiedIssueAddress,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _FeedbackCard(
-            icon: Icons.forum_outlined,
-            title: l10n.feedbackXiaohongshuTitle,
-            subtitle: l10n.feedbackXiaohongshuSubtitle(_xiaohongshuId),
-            primaryLabel: l10n.copyXiaohongshuId,
-            onPrimaryTap: () => _copyText(
-              context,
-              _xiaohongshuId,
-              successMessage: l10n.copiedXiaohongshuId,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _FeedbackCard(
-            icon: Icons.verified_user_outlined,
-            title: l10n.feedbackCoolapkTitle,
-            subtitle: l10n.feedbackCoolapkSubtitle(_coolapkId),
-            primaryLabel: l10n.copyCoolapkId,
-            onPrimaryTap: () => _copyText(
-              context,
-              _coolapkId,
-              successMessage: l10n.copiedCoolapkId,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _FeedbackCard(
-            icon: Icons.groups_outlined,
-            title: l10n.feedbackQqGroupTitle,
-            subtitle: l10n.feedbackQqGroupSubtitle(_qqGroupId),
-            primaryLabel: l10n.copyQqGroupId,
-            onPrimaryTap: () => _copyText(
-              context,
-              _qqGroupId,
-              successMessage: l10n.copiedQqGroupId,
-            ),
+              _FeedbackChannelTile(
+                brandBadge: const _FeedbackBrandBadge.svg(
+                  assetPath: 'assets/branding/xiaohongshu.svg',
+                  color: Colors.white,
+                  backgroundColor: Color(0xFFFF2442),
+                ),
+                title: l10n.feedbackXiaohongshuTitle,
+                subtitle: l10n.feedbackXiaohongshuSubtitle(_xiaohongshuId),
+                onTap: () => _copyText(
+                  context,
+                  _xiaohongshuId,
+                  successMessage: l10n.copiedXiaohongshuId,
+                ),
+                onCopy: () => _copyText(
+                  context,
+                  _xiaohongshuId,
+                  successMessage: l10n.copiedXiaohongshuId,
+                ),
+              ),
+              _FeedbackChannelTile(
+                brandBadge: const _FeedbackBrandBadge.png(
+                  assetPath: 'assets/branding/coolapk.png',
+                  backgroundColor: Color(0xFF4CAF50),
+                ),
+                title: l10n.feedbackCoolapkTitle,
+                subtitle: l10n.feedbackCoolapkSubtitle(_coolapkId),
+                onTap: () => _copyText(
+                  context,
+                  _coolapkId,
+                  successMessage: l10n.copiedCoolapkId,
+                ),
+                onCopy: () => _copyText(
+                  context,
+                  _coolapkId,
+                  successMessage: l10n.copiedCoolapkId,
+                ),
+              ),
+              _FeedbackChannelTile(
+                brandBadge: const _FeedbackBrandBadge.svg(
+                  assetPath: 'assets/branding/qq.svg',
+                  color: Color(0xFF12B7F5),
+                ),
+                title: l10n.feedbackQqGroupTitle,
+                subtitle: l10n.feedbackQqGroupSubtitle(_qqGroupId),
+                onTap: () => _copyText(
+                  context,
+                  _qqGroupId,
+                  successMessage: l10n.copiedQqGroupId,
+                ),
+                onCopy: () => _copyText(
+                  context,
+                  _qqGroupId,
+                  successMessage: l10n.copiedQqGroupId,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -118,89 +119,140 @@ class FeedbackScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(successMessage)),
-    );
+    showAppToast(context, message: successMessage, kind: AppToastKind.success);
   }
 }
 
-class _FeedbackCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String primaryLabel;
-  final Future<void> Function() onPrimaryTap;
-  final String? secondaryLabel;
-  final Future<void> Function()? onSecondaryTap;
+EdgeInsets _feedbackRowPadding(BuildContext context) {
+  final scope = HyperosListTileScope.maybeOf(context);
+  return HyperosTokens.rowPadding(
+    isFirst: scope?.isFirst ?? true,
+    isLast: scope?.isLast ?? true,
+  );
+}
 
-  const _FeedbackCard({
-    required this.icon,
+class _FeedbackChannelTile extends StatelessWidget {
+  const _FeedbackChannelTile({
+    required this.brandBadge,
     required this.title,
     required this.subtitle,
-    required this.primaryLabel,
-    required this.onPrimaryTap,
-    this.secondaryLabel,
-    this.onSecondaryTap,
+    required this.onTap,
+    required this.onCopy,
   });
+
+  final Widget brandBadge;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cardColor = HyperosColors.card(context);
+    final highlightColor = HyperosColors.rowHighlight(context);
 
-    return Card(
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: HyperosTokens.listRowMinHeight,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: _feedbackRowPadding(context),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: colorScheme.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+            brandBadge,
+            const SizedBox(width: HyperosTokens.rowContentGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(title, style: HyperosTypography.listTitle(context)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: HyperosTypography.listDetail(context)),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonal(
-                  onPressed: onPrimaryTap,
-                  child: Text(primaryLabel),
-                ),
-                if (secondaryLabel != null && onSecondaryTap != null)
-                  FilledButton.tonal(
-                    onPressed: onSecondaryTap,
-                    child: Text(secondaryLabel!),
-                  ),
-              ],
+            IconButton(
+              icon: const Icon(Icons.copy_rounded, size: 20),
+              color: HyperosColors.actionIcon(context),
+              tooltip: MaterialLocalizations.of(context).copyButtonLabel,
+              onPressed: onCopy,
             ),
           ],
         ),
       ),
     );
+
+    return HyperosPressableRow(
+      onTap: onTap,
+      backgroundColor: cardColor,
+      highlightColor: highlightColor,
+      child: row,
+    );
   }
 }
 
+class _FeedbackBrandBadge extends StatelessWidget {
+  const _FeedbackBrandBadge.svg({
+    required this.assetPath,
+    required this.color,
+    this.backgroundColor,
+  }) : _isSvg = true;
+
+  const _FeedbackBrandBadge.png({required this.assetPath, this.backgroundColor})
+    : _isSvg = false,
+      color = null;
+
+  final String assetPath;
+  final Color? color;
+  final Color? backgroundColor;
+  final bool _isSvg;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final resolvedBackgroundColor =
+        backgroundColor ?? (isDark ? const Color(0xFF1E1E1E) : Colors.white);
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.08);
+
+    final iconSize = _isSvg
+        ? HyperosTokens.iconGlyphSize
+        : HyperosTokens.iconBadgeSize - 8;
+    final iconWidget = _isSvg
+        ? SvgPicture.asset(
+            assetPath,
+            width: iconSize,
+            height: iconSize,
+            colorFilter: color == null
+                ? null
+                : ColorFilter.mode(color!, BlendMode.srcIn),
+          )
+        : Image.asset(
+            assetPath,
+            width: iconSize,
+            height: iconSize,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (context, error, stackTrace) => Icon(
+              Icons.broken_image_outlined,
+              size: HyperosTokens.iconGlyphSize,
+              color: HyperosColors.actionIcon(context),
+            ),
+          );
+
+    return Container(
+      width: HyperosTokens.iconBadgeSize,
+      height: HyperosTokens.iconBadgeSize,
+      decoration: BoxDecoration(
+        color: resolvedBackgroundColor,
+        borderRadius: BorderRadius.circular(HyperosTokens.iconBadgeRadius),
+        border: Border.all(color: borderColor),
+      ),
+      alignment: Alignment.center,
+      child: iconWidget,
+    );
+  }
+}

@@ -5,12 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/course.dart';
 import '../models/timetable_settings.dart';
+import '../logging/app_debug_log.dart';
+import '../logging/app_log_messages.dart';
 import 'app_log_service.dart';
 import 'umeng_analytics_service.dart';
 
 class MiuiLiveActivitiesService {
-  static const MethodChannel _channel =
-      MethodChannel('com.mutx163.qingyu/miui_live');
+  static const MethodChannel _channel = MethodChannel(
+    'com.mutx163.qingyu/miui_live',
+  );
 
   static final MiuiLiveActivitiesService _instance =
       MiuiLiveActivitiesService._internal();
@@ -27,25 +30,26 @@ class MiuiLiveActivitiesService {
     } catch (e, stackTrace) {
       await AppLogService.instance.error(
         'miui_live_initialize_failed',
-        'Failed to initialize MIUI live activities channel',
+        AppLogMessages.miuiLiveInitializeFailed,
         error: e,
         stackTrace: stackTrace,
       );
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_flutter_initialize_failed',
-        'Failed to initialize MIUI live activities channel',
+        AppLogMessages.miuiLiveInitializeFailed,
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint('Failed to initialize: $e');
+      appDebugLog('MiuiLive', '初始化失败：$e');
     }
   }
 
   Future<bool> requestNotificationPermission() async {
     if (!Platform.isAndroid) return true;
     try {
-      final result =
-          await _channel.invokeMethod('requestNotificationPermission');
+      final result = await _channel.invokeMethod(
+        'requestNotificationPermission',
+      );
       return result == true;
     } catch (e) {
       return false;
@@ -85,11 +89,11 @@ class MiuiLiveActivitiesService {
       unawaited(
         AppLogService.instance.warn(
           'miui_live_open_promoted_settings_failed',
-          'Failed to open promoted settings',
+          AppLogMessages.miuiLiveOpenPromotedSettingsFailed,
           extras: {'error': '$e'},
         ),
       );
-      debugPrint('Failed to open settings: $e');
+      appDebugLog('MiuiLive', '打开设置失败：$e');
     }
   }
 
@@ -100,11 +104,11 @@ class MiuiLiveActivitiesService {
       unawaited(
         AppLogService.instance.warn(
           'miui_live_open_notification_settings_failed',
-          'Failed to open notification settings',
+          AppLogMessages.miuiLiveOpenNotificationSettingsFailed,
           extras: {'error': '$e'},
         ),
       );
-      debugPrint('Failed to open notification settings: $e');
+      appDebugLog('MiuiLive', '打开通知设置失败：$e');
     }
   }
 
@@ -115,11 +119,11 @@ class MiuiLiveActivitiesService {
       unawaited(
         AppLogService.instance.warn(
           'miui_live_open_autostart_settings_failed',
-          'Failed to open auto-start settings',
+          AppLogMessages.miuiLiveOpenAutostartSettingsFailed,
           extras: {'error': '$e'},
         ),
       );
-      debugPrint('Failed to open auto-start settings: $e');
+      appDebugLog('MiuiLive', '打开自启动设置失败：$e');
     }
   }
 
@@ -130,11 +134,11 @@ class MiuiLiveActivitiesService {
       unawaited(
         AppLogService.instance.warn(
           'miui_live_open_battery_settings_failed',
-          'Failed to open battery optimization settings',
+          AppLogMessages.miuiLiveOpenBatterySettingsFailed,
           extras: {'error': '$e'},
         ),
       );
-      debugPrint('Failed to open battery optimization settings: $e');
+      appDebugLog('MiuiLive', '打开电池优化设置失败：$e');
     }
   }
 
@@ -145,19 +149,30 @@ class MiuiLiveActivitiesService {
       unawaited(
         AppLogService.instance.warn(
           'miui_live_open_accessibility_settings_failed',
-          'Failed to open accessibility settings',
+          AppLogMessages.miuiLiveOpenAccessibilitySettingsFailed,
           extras: {'error': '$e'},
         ),
       );
-      debugPrint('Failed to open accessibility settings: $e');
+      appDebugLog('MiuiLive', '打开无障碍设置失败：$e');
+    }
+  }
+
+  Future<bool> isAutoStartEnabled() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final result = await _channel.invokeMethod('isAutoStartEnabled');
+      return result == true;
+    } catch (e) {
+      return false;
     }
   }
 
   Future<bool> isKeepAliveAccessibilityEnabled() async {
     if (!Platform.isAndroid) return false;
     try {
-      final result =
-          await _channel.invokeMethod('isKeepAliveAccessibilityEnabled');
+      final result = await _channel.invokeMethod(
+        'isKeepAliveAccessibilityEnabled',
+      );
       return result == true;
     } catch (e) {
       return false;
@@ -172,11 +187,11 @@ class MiuiLiveActivitiesService {
       unawaited(
         AppLogService.instance.warn(
           'miui_live_hide_from_recents_failed',
-          'Failed to update hide-from-recents',
+          AppLogMessages.miuiLiveHideFromRecentsFailed,
           extras: {'error': '$e', 'value': value},
         ),
       );
-      debugPrint('Failed to update hide-from-recents: $e');
+      appDebugLog('MiuiLive', '更新从最近任务隐藏失败：$e');
     }
   }
 
@@ -206,6 +221,47 @@ class MiuiLiveActivitiesService {
     return UmengAnalyticsService.readLiveDiagnosticsText();
   }
 
+  Stream<String> watchLiveDiagnosticsText({
+    Duration interval = const Duration(seconds: 1),
+  }) {
+    late final StreamController<String> controller;
+    Timer? pollTimer;
+    var closed = false;
+    String? lastEmitted;
+
+    Future<void> poll() async {
+      if (closed) {
+        return;
+      }
+      try {
+        final text = await readLiveDiagnosticsText();
+        final normalized = text ?? '';
+        if (closed || normalized == lastEmitted) {
+          return;
+        }
+        lastEmitted = normalized;
+        controller.add(normalized);
+      } catch (error, stackTrace) {
+        if (!closed) {
+          controller.addError(error, stackTrace);
+        }
+      }
+    }
+
+    controller = StreamController<String>(
+      onListen: () {
+        poll();
+        pollTimer = Timer.periodic(interval, (_) => poll());
+      },
+      onCancel: () {
+        closed = true;
+        pollTimer?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
+
   Future<bool> clearLiveDiagnostics() async {
     return UmengAnalyticsService.clearLiveDiagnostics();
   }
@@ -213,8 +269,9 @@ class MiuiLiveActivitiesService {
   Future<bool> isIgnoringBatteryOptimizations() async {
     if (!Platform.isAndroid) return true;
     try {
-      final result =
-          await _channel.invokeMethod('isIgnoringBatteryOptimizations');
+      final result = await _channel.invokeMethod(
+        'isIgnoringBatteryOptimizations',
+      );
       return result == true;
     } catch (e) {
       return false;
@@ -268,6 +325,7 @@ class MiuiLiveActivitiesService {
     List<int> progressBreakOffsetsMillis = const [],
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
+    bool validateAgainstSchedule = false,
   }) async {
     await initialize();
     try {
@@ -277,6 +335,7 @@ class MiuiLiveActivitiesService {
         autoDismissAfterStartMinutes: autoDismissAfterStartMinutes,
         stage: stage,
         beforeClassLeadMillis: beforeClassLeadMillis,
+        validateAgainstSchedule: validateAgainstSchedule,
         startAtMillis: startAtMillis,
         endAtMillis: endAtMillis,
         endReminderLeadMillis: endReminderLeadMillis,
@@ -317,11 +376,11 @@ class MiuiLiveActivitiesService {
     } catch (e, stackTrace) {
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_start_failed',
-        'Failed to start live update from Flutter',
+        AppLogMessages.liveUpdateStartFailed,
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint('Failed to start live update: $e');
+      appDebugLog('MiuiLive', '启动超级岛失败：$e');
     }
   }
 
@@ -331,11 +390,11 @@ class MiuiLiveActivitiesService {
     } catch (e, stackTrace) {
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_stop_failed',
-        'Failed to stop live update from Flutter',
+        AppLogMessages.liveUpdateStopFailed,
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint('Failed to stop: $e');
+      appDebugLog('MiuiLive', '停止超级岛失败：$e');
     }
   }
 
@@ -347,11 +406,11 @@ class MiuiLiveActivitiesService {
     } catch (e, stackTrace) {
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_debug_status_failed',
-        'Failed to fetch native live update debug status',
+        AppLogMessages.liveUpdateDebugStatusFailed,
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint('Failed to fetch live update debug status: $e');
+      appDebugLog('MiuiLive', '获取超级岛调试状态失败：$e');
       return {
         'summary': {
           'serviceRunning': false,
@@ -409,11 +468,13 @@ class MiuiLiveActivitiesService {
     List<int> progressBreakOffsetsMillis = const [],
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
+    bool validateAgainstSchedule = false,
   }) {
     final data = <String, dynamic>{
       'autoDismissAfterStartMinutes': autoDismissAfterStartMinutes,
       'stage': stage,
       'beforeClassLeadMillis': beforeClassLeadMillis,
+      'validateAgainstSchedule': validateAgainstSchedule,
       'startAtMillis': startAtMillis,
       'endAtMillis': endAtMillis,
       'endReminderLeadMillis': endReminderLeadMillis,
@@ -481,6 +542,11 @@ class MiuiLiveActivitiesService {
     required int currentWeek,
     DateTime? semesterStartDate,
     required int endReminderLeadMillis,
+    bool isHoliday = false,
+    List<String> holidayDates = const [],
+    bool holidayOverrideEnabled = false,
+    bool enableHolidayMarking = true,
+    String? isHolidayDate,
   }) async {
     await initialize();
     try {
@@ -488,19 +554,37 @@ class MiuiLiveActivitiesService {
         'currentWeek': currentWeek,
         'semesterStartMillis': semesterStartDate?.millisecondsSinceEpoch,
         'endReminderLeadMillis': endReminderLeadMillis,
+        'isHoliday': isHoliday,
+        'isHolidayDate': isHolidayDate,
+        'holidayDates': holidayDates,
+        'holidayOverrideEnabled': holidayOverrideEnabled,
+        'enableHolidayMarking': enableHolidayMarking,
         'courses': courses.map((course) => course.toJson()).toList(),
         'settings': settings.toJson(),
       });
       await _channel.invokeMethod('syncScheduleSnapshot', snapshotJson);
+      await UmengAnalyticsService.reportDiagnostic(
+        'live_update_settings_synced',
+        AppLogMessages.liveUpdateSettingsSynced(
+          beforeClass: settings.liveEnableBeforeClass,
+          duringClass: settings.liveEnableDuringClass,
+          beforeEnd: settings.liveEnableBeforeEnd,
+          promote: settings.livePromoteDuringClass,
+          notification: settings.liveShowDuringClassNotification,
+          countdown: settings.liveShowCountdown,
+          courseName: settings.liveShowCourseName,
+          location: settings.liveShowLocation,
+        ),
+      );
       return true;
     } catch (e, stackTrace) {
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_snapshot_sync_failed',
-        'Failed to sync live update schedule snapshot',
+        AppLogMessages.liveUpdateSnapshotSyncFailed,
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint('Failed to sync schedule snapshot: $e');
+      appDebugLog('MiuiLive', '同步课表快照失败：$e');
       return false;
     }
   }
@@ -513,12 +597,122 @@ class MiuiLiveActivitiesService {
     } catch (e, stackTrace) {
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_snapshot_clear_failed',
-        'Failed to clear live update schedule snapshot',
+        AppLogMessages.liveUpdateSnapshotClearFailed,
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint('Failed to clear schedule snapshot: $e');
+      appDebugLog('MiuiLive', '清空课表快照失败：$e');
       return false;
     }
+  }
+
+  Future<bool> suspendScheduleTriggers(int untilMillis) async {
+    await initialize();
+    try {
+      await _channel.invokeMethod('suspendScheduleTriggers', untilMillis);
+      return true;
+    } catch (e, stackTrace) {
+      await UmengAnalyticsService.reportDiagnostic(
+        'live_update_suspend_triggers_failed',
+        AppLogMessages.liveUpdateSuspendTriggersFailed,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      appDebugLog('MiuiLive', '挂起课表调度失败：$e');
+      return false;
+    }
+  }
+}
+
+/// Lightweight in-memory test double; does not call the native channel.
+@visibleForTesting
+class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
+  TestMiuiLiveActivitiesService() : super._internal();
+
+  int stopLiveUpdateCallCount = 0;
+  int startLiveUpdateCallCount = 0;
+
+  @override
+  Future<void> stopLiveUpdate() async {
+    stopLiveUpdateCallCount++;
+  }
+
+  @override
+  Future<void> startLiveUpdate(
+    Course currentCourse,
+    Course? nextCourse, {
+    int autoDismissAfterStartMinutes = 0,
+    String? stage,
+    int beforeClassLeadMillis = 0,
+    int? startAtMillis,
+    int? endAtMillis,
+    int? endReminderLeadMillis,
+    int liveClassReminderStartMinutes = 0,
+    int endSecondsCountdownThreshold = 60,
+    bool promoteDuringClass = true,
+    bool showNotificationDuringClass = true,
+    bool enableBeforeClass = true,
+    bool enableDuringClass = true,
+    bool enableBeforeEnd = true,
+    bool showCountdown = true,
+    LiveCountdownTextStyle countdownTextStyle = LiveCountdownTextStyle.smart,
+    bool showStageText = true,
+    bool showCourseNameInIsland = true,
+    bool showLocationInIsland = true,
+    bool useShortNameInIsland = true,
+    bool hidePrefixText = false,
+    LiveDuringClassTimeDisplayMode duringClassTimeDisplayMode =
+        LiveDuringClassTimeDisplayMode.nearest,
+    bool enableMiuiIslandLabelImage = false,
+    MiuiIslandLabelStyle miuiIslandLabelStyle = MiuiIslandLabelStyle.textOnly,
+    MiuiIslandLabelContent miuiIslandLabelContent =
+        MiuiIslandLabelContent.courseName,
+    String miuiIslandLabelFontColor = '#FFFFFF',
+    MiuiIslandLabelFontWeight miuiIslandLabelFontWeight =
+        MiuiIslandLabelFontWeight.bold,
+    MiuiIslandLabelRenderQuality miuiIslandLabelRenderQuality =
+        MiuiIslandLabelRenderQuality.standard,
+    double miuiIslandLabelFontSize = 14,
+    double miuiIslandLabelOffsetX = 0,
+    double miuiIslandLabelOffsetY = 0,
+    String? miuiIslandLabelLogoPath,
+    double miuiIslandLabelLogoCornerRadius = 8,
+    MiuiIslandExpandedIconMode miuiIslandExpandedIconMode =
+        MiuiIslandExpandedIconMode.appIcon,
+    String? miuiIslandExpandedIconPath,
+    LiveBeforeClassQuickAction beforeClassQuickAction =
+        LiveBeforeClassQuickAction.none,
+    List<int> progressBreakOffsetsMillis = const [],
+    List<String> progressMilestoneLabels = const [],
+    List<String> progressMilestoneTimeTexts = const [],
+    bool validateAgainstSchedule = false,
+  }) async {
+    startLiveUpdateCallCount++;
+  }
+
+  @override
+  Future<bool> syncScheduleSnapshot({
+    required List<Course> courses,
+    required TimetableSettings settings,
+    required int currentWeek,
+    DateTime? semesterStartDate,
+    required int endReminderLeadMillis,
+    bool isHoliday = false,
+    List<String> holidayDates = const [],
+    bool holidayOverrideEnabled = false,
+    bool enableHolidayMarking = true,
+    String? isHolidayDate,
+  }) async {
+    return true;
+  }
+
+  @override
+  Future<bool> suspendScheduleTriggers(int untilMillis) async {
+    return true;
+  }
+
+  @override
+  Future<bool> clearScheduleSnapshot() async {
+    return true;
   }
 }

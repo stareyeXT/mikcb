@@ -15,6 +15,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitleDebug => 'Qingyu Timetable Debug';
 
   @override
+  String get appTitleProfile => 'Qingyu Timetable Profile';
+
+  @override
   String get appearanceTitle => 'Appearance';
 
   @override
@@ -46,16 +49,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fontSectionSubtitle =>
-      'Supports system default and MiSans. Falls back automatically if MiSans is unavailable.';
+      'Inter is built in; other options use fonts already on your phone.';
+
+  @override
+  String get fontSectionFootnote =>
+      'Brand fonts aren\'t bundled; they work only if already on your system. On Xiaomi, usually only MiSans is obvious. No change means auto fallback—you usually don\'t need to install fonts.';
 
   @override
   String get fontModeLabel => 'Font';
 
   @override
-  String get fontModeSystem => 'Phone Default';
+  String get fontModeSystem => 'App Default (Inter)';
 
   @override
-  String get fontModeMiSans => 'Prefer MiSans';
+  String get fontModeSansSerif => 'System Sans';
+
+  @override
+  String get fontModeMiSans => 'MiSans';
+
+  @override
+  String get fontModeHarmonyOS => 'HarmonyOS Sans';
+
+  @override
+  String get fontModeOppoSans => 'OPPO Sans';
+
+  @override
+  String get fontModePingFang => 'PingFang SC';
+
+  @override
+  String get fontModeNotoSans => 'Noto Sans';
+
+  @override
+  String get fontModeSerif => 'Serif';
+
+  @override
+  String get fontModeSongti => 'Songti';
+
+  @override
+  String get fontModeMonospace => 'Monospace';
 
   @override
   String get languageSectionTitle => 'App Language';
@@ -69,15 +100,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageModeSystem => 'Follow System';
-
-  @override
-  String get languageModeZhCn => 'Simplified Chinese';
-
-  @override
-  String get languageModeZhHk => 'Traditional Chinese (Hong Kong)';
-
-  @override
-  String get languageModeEnUs => 'English';
 
   @override
   String get settingsTitle => 'Timetable Settings';
@@ -139,6 +161,598 @@ class AppLocalizationsEn extends AppLocalizations {
       'Export a complete timetable file for others to import directly';
 
   @override
+  String get coupleTimetableEntryTitle => 'Couple Timetable';
+
+  @override
+  String get coupleTimetableEntryBound => 'Linked';
+
+  @override
+  String get coupleTimetableModeEnableTooltip => 'Couple timetable on';
+
+  @override
+  String get coupleTimetableModeDisableTooltip => 'Couple timetable off';
+
+  @override
+  String get coupleTimetableTitle => 'Couple Timetable';
+
+  @override
+  String get coupleTimetableIntro =>
+      'Export your timetable for your partner, or import their shared file. After binding, open the overlay view to compare schedules.';
+
+  @override
+  String get coupleTimetableBoundTitle => 'Partner timetable linked';
+
+  @override
+  String get coupleTimetableUnboundTitle => 'No partner timetable yet';
+
+  @override
+  String get coupleTimetablePartnerNameLabel => 'Partner name';
+
+  @override
+  String coupleTimetableLastImportedAt(String time) {
+    return 'Last imported: $time';
+  }
+
+  @override
+  String get coupleTimetableExportForPartner =>
+      'Export my timetable for partner';
+
+  @override
+  String get coupleTimetableImportPartner => 'Import partner timetable';
+
+  @override
+  String get coupleTimetableUnlink => 'Unlink';
+
+  @override
+  String get coupleTimetableOpenOverlay => 'Open overlay view';
+
+  @override
+  String get coupleTimetableImportSuccess => 'Partner timetable imported';
+
+  @override
+  String get coupleTimetableImportUpdated => 'Partner timetable updated';
+
+  @override
+  String get coupleTimetableUnlinkConfirmTitle => 'Unlink partner timetable?';
+
+  @override
+  String get coupleTimetableUnlinkConfirmMessage =>
+      'This removes the locally stored partner timetable and closes the overlay view.';
+
+  @override
+  String get coupleTimetableUnlinkSuccess => 'Partner timetable unlinked';
+
+  @override
+  String get coupleTimetablePrivacyHint =>
+      'Your partner only sees the timetable content included in the exported file.';
+
+  @override
+  String get coupleTimetableOverlayTitle => 'Couple overlay';
+
+  @override
+  String get coupleTimetableLegendMine => 'Mine';
+
+  @override
+  String get coupleTimetableLegendPartner => 'Partner';
+
+  @override
+  String get coupleTimetableLegendTogether => 'Together';
+
+  @override
+  String get coupleTimetableLegendFree => 'Shared free';
+
+  @override
+  String get coupleTimetableSharedFreeTitle => 'Shared free time today';
+
+  @override
+  String get coupleTimetableNoSharedFree => 'No shared free time today';
+
+  @override
+  String get coupleTimetablePartnerReadOnlyBadge =>
+      'Partner timetable (read-only)';
+
+  @override
+  String get coupleTimetableNotBoundMessage =>
+      'Import a partner timetable before opening the overlay view.';
+
+  @override
+  String get coupleTimetableShareText =>
+      'Here is my timetable. Import it in Qingyu Timetable > Couple Timetable to view together.';
+
+  @override
+  String get coupleTimetableShareSubject => 'Qingyu Timetable · Couple share';
+
+  @override
+  String get coupleTimetableWeekOffsetTitle => 'Week offset';
+
+  @override
+  String get coupleTimetableWeekOffsetSubtitle =>
+      'When you view week N, partner courses are read from week N + offset. For example, +1 means their semester is one week ahead.';
+
+  @override
+  String get coupleTimetableWeekOffsetZero => 'No offset';
+
+  @override
+  String coupleTimetableWeekOffsetSigned(String offset) {
+    return '$offset wk';
+  }
+
+  @override
+  String coupleTimetableWeekOffsetPreview(int myWeek, int partnerWeek) {
+    return 'Viewing your week $myWeek shows partner week $partnerWeek';
+  }
+
+  @override
+  String get coupleTimetableColorsTitle => 'Overlay colors';
+
+  @override
+  String get coupleTimetableColorsSubtitle =>
+      'Choose colors for your courses, partner courses, and shared classes in overlay view.';
+
+  @override
+  String get partnerImportRequiresSingleProfile =>
+      'Please import a single-profile backup, not a full backup';
+
+  @override
+  String get coupleWebdavTitle => 'Nutstore pull';
+
+  @override
+  String get coupleWebdavSubtitle =>
+      'Sign in to your partner\'s (or shared) Nutstore account to download their uploaded timetable. Separate from Cloud Sync credentials.';
+
+  @override
+  String get coupleWebdavNotConnected => 'Not connected to Nutstore';
+
+  @override
+  String coupleWebdavConnectedAs(String username) {
+    return 'Connected as $username';
+  }
+
+  @override
+  String coupleWebdavRemotePathHint(String path) {
+    return 'Remote file: $path';
+  }
+
+  @override
+  String coupleWebdavLastPulledAt(String time) {
+    return 'Last pulled: $time';
+  }
+
+  @override
+  String get coupleWebdavConnect => 'Connect Nutstore';
+
+  @override
+  String get coupleWebdavDisconnect => 'Disconnect';
+
+  @override
+  String get coupleWebdavPullNow => 'Pull partner timetable';
+
+  @override
+  String get coupleWebdavUploadForPartner => 'Upload my timetable to Nutstore';
+
+  @override
+  String get coupleWebdavLoginSheetTitle =>
+      'Connect Nutstore (couple timetable)';
+
+  @override
+  String get coupleWebdavLoginSheetSubtitle =>
+      'Use an app-specific password. Your partner must upload their timetable to the agreed path first, or upload from their device on the same account.';
+
+  @override
+  String get coupleWebdavConfirmConnect => 'Connect and pull';
+
+  @override
+  String get coupleWebdavTestSuccess => 'Nutstore connection successful';
+
+  @override
+  String get coupleWebdavTestFailed =>
+      'Connection failed. Check account, app password, and network.';
+
+  @override
+  String get coupleWebdavPullImported =>
+      'Partner timetable imported from Nutstore';
+
+  @override
+  String get coupleWebdavPullUpdated =>
+      'Partner timetable updated from Nutstore';
+
+  @override
+  String get coupleWebdavPullUnchanged => 'Partner timetable is up to date';
+
+  @override
+  String get coupleWebdavUploadSuccess =>
+      'Timetable uploaded for your partner to pull';
+
+  @override
+  String get coupleWebdavPartnerFileMissing =>
+      'Partner timetable file not found. Ask them to upload first.';
+
+  @override
+  String get coupleWebdavPullFailed =>
+      'Failed to pull partner timetable. Try again later.';
+
+  @override
+  String get coupleWebdavNotConnectedError => 'Connect Nutstore first';
+
+  @override
+  String get cloudSyncEntryTitle => 'Cloud Sync (WEBDAV)';
+
+  @override
+  String get cloudSyncEntrySubtitle =>
+      'Sync timetables and import data across devices via Jianguoyun';
+
+  @override
+  String get cloudSyncTitle => 'Cloud Sync';
+
+  @override
+  String get cloudSyncIntroTitle => 'Multi-device sync';
+
+  @override
+  String get cloudSyncIntroSubtitle =>
+      'Configure Jianguoyun WEBDAV to sync timetables, warehouse accounts, and related settings across devices.';
+
+  @override
+  String get cloudSyncSettingsSectionTitle => 'Sync settings';
+
+  @override
+  String get cloudSyncSettingsSectionSubtitle =>
+      'Switch between manual and automatic sync.';
+
+  @override
+  String get cloudSyncEnabledTitle => 'Enable cloud sync';
+
+  @override
+  String get cloudSyncEnabledSubtitle =>
+      'When off, no snapshot is uploaded or downloaded';
+
+  @override
+  String get cloudSyncProviderTitle => 'Provider';
+
+  @override
+  String get cloudSyncProviderJianguoyun => 'Jianguoyun';
+
+  @override
+  String get cloudSyncProviderCustom => 'Custom WEBDAV';
+
+  @override
+  String get cloudSyncModeTitle => 'Sync mode';
+
+  @override
+  String get cloudSyncModeAuto => 'Automatic';
+
+  @override
+  String get cloudSyncModeManual => 'Manual';
+
+  @override
+  String get cloudSyncAccountTitle => 'Account';
+
+  @override
+  String get cloudSyncAccountSubtitle =>
+      'Use a Jianguoyun app-specific password, not your login password. Snapshots include remembered school accounts.';
+
+  @override
+  String get cloudSyncUsernameLabel => 'Email / username';
+
+  @override
+  String get cloudSyncUsernameHint => 'Jianguoyun account email';
+
+  @override
+  String get cloudSyncPasswordLabel => 'App-specific password';
+
+  @override
+  String get cloudSyncPasswordHint =>
+      'Generate it in Jianguoyun security settings';
+
+  @override
+  String get cloudSyncPasswordStoredHint =>
+      'Password saved; leave blank to keep the stored password.';
+
+  @override
+  String get cloudSyncAdvancedTitle => 'Advanced';
+
+  @override
+  String get cloudSyncBaseUrlLabel => 'WEBDAV URL';
+
+  @override
+  String get cloudSyncRemoteFolderLabel => 'Remote folder';
+
+  @override
+  String get cloudSyncStatusTitle => 'Status';
+
+  @override
+  String get cloudSyncLastSyncedLabel => 'Last synced';
+
+  @override
+  String get cloudSyncLastErrorLabel => 'Latest error';
+
+  @override
+  String cloudSyncLastSyncedAt(String time) {
+    return 'Last synced: $time';
+  }
+
+  @override
+  String get cloudSyncSyncing => 'Syncing…';
+
+  @override
+  String cloudSyncLastError(String message) {
+    return 'Latest error: $message';
+  }
+
+  @override
+  String get cloudSyncHelpTitle => 'How to get a Jianguoyun app password';
+
+  @override
+  String get cloudSyncHelpBody =>
+      'Open Jianguoyun → Account → Security → Add app password. Default WEBDAV URL: https://dav.jianguoyun.com/dav/';
+
+  @override
+  String get cloudSyncTestConnection => 'Test connection';
+
+  @override
+  String get cloudSyncSyncNow => 'Sync now';
+
+  @override
+  String get cloudSyncSyncNowSubtitle =>
+      'Keep timetables aligned across devices: pull cloud updates, then upload local changes';
+
+  @override
+  String get cloudSyncTestSuccess => 'WEBDAV connection succeeded';
+
+  @override
+  String get cloudSyncTestFailed =>
+      'WEBDAV connection failed. Check account, app password, and network.';
+
+  @override
+  String get cloudSyncResultUploaded => 'Uploaded to cloud';
+
+  @override
+  String get cloudSyncResultDownloaded => 'Restored from cloud';
+
+  @override
+  String get cloudSyncResultUpToDate => 'Already up to date';
+
+  @override
+  String get cloudSyncResultCancelled => 'Sync cancelled';
+
+  @override
+  String cloudSyncResultFailed(String message) {
+    return 'Sync failed: $message';
+  }
+
+  @override
+  String get cloudSyncConflictTitle => 'Sync conflict detected';
+
+  @override
+  String get cloudSyncConflictBody =>
+      'Both this device and the cloud have newer changes. Choose which copy to keep.';
+
+  @override
+  String get cloudSyncUseRemoteAction => 'Use cloud';
+
+  @override
+  String get cloudSyncKeepLocalAction => 'Keep local';
+
+  @override
+  String get cloudSyncAccountSectionTitle => 'Cloud account';
+
+  @override
+  String get cloudSyncNotConnectedHint =>
+      'Connect Jianguoyun to sync timetables and import data across devices.';
+
+  @override
+  String get cloudSyncConnectAccount => 'Connect Jianguoyun';
+
+  @override
+  String cloudSyncConnectedAs(String email) {
+    return 'Connected: $email';
+  }
+
+  @override
+  String get cloudSyncDisconnect => 'Disconnect';
+
+  @override
+  String get cloudSyncDisconnectTitle => 'Disconnect cloud account';
+
+  @override
+  String get cloudSyncDisconnectBody =>
+      'This removes saved WEBDAV credentials from this device. Local timetables are kept. Continue?';
+
+  @override
+  String get cloudSyncLoginSheetTitle => 'Connect Jianguoyun';
+
+  @override
+  String get cloudSyncLoginSheetSubtitle =>
+      'Use an app-specific password, not your Jianguoyun login password.';
+
+  @override
+  String get cloudSyncConfirmConnect => 'Connect';
+
+  @override
+  String get cloudSyncConnectSuccess => 'Account connected';
+
+  @override
+  String get cloudBackupSectionTitle => 'Version history';
+
+  @override
+  String get cloudBackupSectionSubtitle =>
+      'Saved automatically when you sync. Tap to restore a version.';
+
+  @override
+  String get cloudBackupCurrentLabel => 'Current version';
+
+  @override
+  String get cloudBackupCurrentBadge => 'Current';
+
+  @override
+  String get cloudBackupCreateNow => 'Back up now';
+
+  @override
+  String get cloudBackupViewAll => 'View all versions';
+
+  @override
+  String get cloudBackupEmpty =>
+      'No versions yet. They are saved automatically when you sync.';
+
+  @override
+  String get cloudBackupSourceAuto => 'Auto backup';
+
+  @override
+  String get cloudBackupSourceManual => 'Manual backup';
+
+  @override
+  String get cloudBackupDefaultDeviceLabel => 'This device';
+
+  @override
+  String get cloudBackupDeviceLabelTitle => 'Device name';
+
+  @override
+  String get cloudBackupDeviceLabelHint =>
+      'Shown in backup list, e.g. My phone';
+
+  @override
+  String cloudBackupSummary(int profileCount, int courseCount) {
+    return '$profileCount timetables · $courseCount courses';
+  }
+
+  @override
+  String get cloudBackupRestoreTitle => 'Restore this backup';
+
+  @override
+  String cloudBackupRestoreBody(String time) {
+    return 'Restore the timetable from $time. Unsynced local changes will be lost. Continue?';
+  }
+
+  @override
+  String get cloudBackupRestoreAction => 'Restore';
+
+  @override
+  String get cloudBackupRestoreSuccess => 'Backup restored';
+
+  @override
+  String cloudBackupRestoreFailed(String message) {
+    return 'Restore failed: $message';
+  }
+
+  @override
+  String get cloudBackupDeleteTitle => 'Delete this backup';
+
+  @override
+  String cloudBackupDeleteBody(String time) {
+    return 'Delete the cloud backup from $time? This cannot be undone.';
+  }
+
+  @override
+  String get cloudBackupDeleteSuccess => 'Backup deleted';
+
+  @override
+  String cloudBackupDeleteFailed(String message) {
+    return 'Delete failed: $message';
+  }
+
+  @override
+  String get cloudBackupCreateSuccess => 'Backup saved to cloud';
+
+  @override
+  String cloudBackupCreateFailed(String message) {
+    return 'Backup failed: $message';
+  }
+
+  @override
+  String get cloudBackupUploadAsCurrentTitle => 'Set as current cloud version';
+
+  @override
+  String get cloudBackupUploadAsCurrentBody =>
+      'Upload this backup as the current cloud version? Recommended to avoid sync conflicts.';
+
+  @override
+  String get cloudBackupUploadAsCurrentYes => 'Set as current';
+
+  @override
+  String get cloudBackupUploadAsCurrentNo => 'Local only';
+
+  @override
+  String get cloudBackupDetailDevice => 'Device';
+
+  @override
+  String get cloudBackupDetailSource => 'Source';
+
+  @override
+  String get cloudBackupDetailSummary => 'Contents';
+
+  @override
+  String get lanEditEntryTitle => 'LAN editing';
+
+  @override
+  String get lanEditEntrySubtitle =>
+      'Edit the current timetable from a desktop browser';
+
+  @override
+  String get lanEditTitle => 'LAN editing';
+
+  @override
+  String get lanEditIntro =>
+      'While enabled, a computer on the same Wi-Fi or phone hotspot can edit the current timetable in a browser. Data stays on your LAN and access stops when you turn this off.';
+
+  @override
+  String get lanEditStart => 'Start LAN editing';
+
+  @override
+  String get lanEditStop => 'Stop';
+
+  @override
+  String get lanEditStatusRunning => 'LAN editing is active';
+
+  @override
+  String get lanEditAddressLabel => 'Address';
+
+  @override
+  String get lanEditAddressUnavailable =>
+      'No LAN IP detected. Connect to Wi-Fi or enable hotspot.';
+
+  @override
+  String get lanEditPinLabel => 'PIN';
+
+  @override
+  String get lanEditPortLabel => 'Port';
+
+  @override
+  String get lanEditCopyAddress => 'Copy address';
+
+  @override
+  String get lanEditCopied => 'Address copied';
+
+  @override
+  String get lanEditHotspotHint =>
+      'If dorm Wi-Fi blocks device-to-device access, try phone hotspot instead.';
+
+  @override
+  String get lanEditQrHint =>
+      'Scan the QR code on a PC browser on the same LAN (link includes PIN).';
+
+  @override
+  String get lanEditStartFailed => 'Failed to start';
+
+  @override
+  String get lanEditConnectedClientsLabel => 'Connected';
+
+  @override
+  String get lanEditConnectedClientsNone => 'None';
+
+  @override
+  String lanEditConnectedClientsValue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count devices',
+      one: '1 device',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lanEditLastActivityLabel => 'Last activity';
+
+  @override
   String get aboutSupportSectionTitle => 'About & Support';
 
   @override
@@ -184,6 +798,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'If disabled, each course keeps its own color.';
 
   @override
+  String get importRandomCourseColorTitle => 'Random course colors';
+
+  @override
+  String get importRandomCourseColorSubtitle =>
+      'When on, assign preset colors by course name and teacher instead of one default blue';
+
+  @override
   String get courseImportTitle => 'Import Courses';
 
   @override
@@ -225,6 +846,60 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get importMethodWarehouseFooter =>
       'Choose a school and adapter, then open the academic system page and run the import.';
+
+  @override
+  String get importMethodSpreadsheetTitle => 'Spreadsheet Import';
+
+  @override
+  String get importMethodSpreadsheetSubtitle =>
+      'Fill in the mikcb template in Excel/WPS and import without exporting .ics first.';
+
+  @override
+  String get importMethodSpreadsheetFooter =>
+      'Supports .csv and .xlsx. Download the template, fill it in, then pick a file.';
+
+  @override
+  String get spreadsheetImportTitle => 'Spreadsheet Import';
+
+  @override
+  String get spreadsheetScenarioIntro =>
+      'The mikcb template maps columns by header: required fields are course name, weekday, sections, and weeks; others are optional. Download the full template or keep only required columns. WakeUp 7-column layout is also supported.';
+
+  @override
+  String get spreadsheetStep1Subtitle =>
+      'Download the full template, or keep only required columns plus 上课周 (or 开始周+结束周) for minimal import.';
+
+  @override
+  String get spreadsheetStep2Subtitle =>
+      'Save as .csv or keep .xlsx when finished.';
+
+  @override
+  String get spreadsheetStep3Subtitle =>
+      'Pick a file to import. Warnings are shown first, then choose append or replace.';
+
+  @override
+  String get spreadsheetSupportedFilesSuffix =>
+      'Supports .csv and .xlsx (first sheet only).';
+
+  @override
+  String get chooseSpreadsheetFileAction => 'Choose spreadsheet file';
+
+  @override
+  String get downloadSpreadsheetTemplateAction => 'Download mikcb template';
+
+  @override
+  String get spreadsheetImportWarningsTitle => 'Import warnings';
+
+  @override
+  String get spreadsheetImportWarningsMessage =>
+      'These rows were skipped. You can still import the rest:';
+
+  @override
+  String get spreadsheetImportWarningsContinue => 'Continue import';
+
+  @override
+  String get spreadsheetFormatUnrecognized =>
+      'Unrecognized format. Please use the mikcb template; WakeUp-like column layouts are also supported.';
 
   @override
   String get icsImportTitle => '.ics Calendar Import';
@@ -562,6 +1237,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can start using the app right away, or import courses / restore a backup first.';
 
   @override
+  String get thirdPartyDisclaimer =>
+      'Disclaimer: This app is independently developed by a third-party developer for learning and research purposes only. It is not official Xiaomi software and has no affiliation, partnership, or authorization relationship with Xiaomi Technology Co., Ltd. If you believe any content infringes your rights, please contact the author. We will promptly remove the relevant content upon notification.';
+
+  @override
   String get startUsingTitle => 'Start Using';
 
   @override
@@ -642,6 +1321,139 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get openOldAppFailed =>
       'Failed to open the old app. Please return to the home screen and open it manually.';
+
+  @override
+  String get supportCreatorTitle => 'Buy the Creator a Coffee';
+
+  @override
+  String get supportHeroTitle => 'Support Qingyu Timetable';
+
+  @override
+  String get supportHeroSubtitle =>
+      'Your support goes directly into timetable maintenance, academic adapter updates, and overall experience improvements.';
+
+  @override
+  String get supportChipFixes => 'Bug Fixes';
+
+  @override
+  String get supportChipAdapters => 'Adapters';
+
+  @override
+  String get supportChipPolish => 'Polish';
+
+  @override
+  String get supportMethodTitle => 'Choose a Support Method';
+
+  @override
+  String get wechatLabel => 'WeChat';
+
+  @override
+  String get alipayLabel => 'Alipay';
+
+  @override
+  String get supportWeChatHint => 'Use WeChat to scan and support the creator';
+
+  @override
+  String get supportAlipayHint => 'Use Alipay to scan and support the creator';
+
+  @override
+  String get viewLargeImage => 'View Large Image';
+
+  @override
+  String get saveToGallery => 'Save to Gallery';
+
+  @override
+  String get supportCompleteThanks =>
+      'Thanks for supporting Qingyu Timetable ❤️';
+
+  @override
+  String get supportConfirmed => 'I’ve Supported';
+
+  @override
+  String get donorListTitle => 'Acknowledgements';
+
+  @override
+  String get donorListLoadFailed =>
+      'The online donor list is temporarily unavailable.';
+
+  @override
+  String get reloadAction => 'Reload';
+
+  @override
+  String updatedAtLabel(String time) {
+    return 'Updated at $time';
+  }
+
+  @override
+  String get donorListEmpty =>
+      'The donor list is still empty. You can edit docs/donors.json and publish again.';
+
+  @override
+  String get savedToGallery => 'Saved to gallery';
+
+  @override
+  String get saveToGalleryFailed => 'Failed to save to gallery';
+
+  @override
+  String saveFailedWithError(String error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get supportRunningBadge => 'Active';
+
+  @override
+  String get supportTapQrHint => 'Tap to enlarge';
+
+  @override
+  String get supportSaveShort => 'Save';
+
+  @override
+  String get supportConfirmedShort => 'Supported';
+
+  @override
+  String get donorSearchHint => 'Search name or message...';
+
+  @override
+  String get donorSortLargeFirst => 'Largest first';
+
+  @override
+  String get donorSortSmallFirst => 'Smallest first';
+
+  @override
+  String get supportMonthlyGoalLabel => 'Monthly server & certificate renewal';
+
+  @override
+  String supportGoalRaised(String raised, String goal) {
+    return 'Raised: $raised / Goal $goal';
+  }
+
+  @override
+  String supportBackerCount(int count) {
+    return '$count supporters so far';
+  }
+
+  @override
+  String get supportDonorListFooter => 'Names are kept permanently 💖';
+
+  @override
+  String supportMarqueeThanks(String name, String amount) {
+    return '🎉 Thanks to $name for $amount';
+  }
+
+  @override
+  String get supportMarqueeTail =>
+      'Qingyu Timetable keeps running — thank you for your support!';
+
+  @override
+  String get scanQrWechatTitle => 'Scan with WeChat';
+
+  @override
+  String get scanQrAlipayTitle => 'Scan with Alipay';
+
+  @override
+  String get scanQrSubtitle =>
+      'Screenshot and scan, thank you for your support!';
 
   @override
   String get courseOverviewTitle => 'Course Overview & Edit';
@@ -908,7 +1720,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutUpdatesSubtitle =>
-      'Check updates, download now, and open testing / diagnostics tools.';
+      'Check for updates and download the latest release.';
+
+  @override
+  String get aboutChangelogTitle => 'Changelog';
+
+  @override
+  String get aboutChangelogSubtitle => 'View update notes for all versions';
 
   @override
   String get aboutPositioningTitle => 'Project Positioning';
@@ -1003,6 +1821,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appLogsClearFailed => 'Failed to clear app logs';
+
+  @override
+  String get appLogsSourceApp => 'App';
+
+  @override
+  String get appLogsSourceNative => 'Super Island';
+
+  @override
+  String get appLogsRecordingPausedHint =>
+      'Recording is off. The entries below are historical logs only; no new logs will be added.';
 
   @override
   String get aboutRepositorySubtitle =>
@@ -1400,6 +2228,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get timeCorrectionTitle => 'Bell-time correction';
+
+  @override
   String get timeCorrectionHelp =>
       'If the school bell is early, shift earlier. If the bell is late, shift later.';
 
@@ -1460,7 +2291,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get beforeClassQuickActionSubtitle =>
-      'Only appears in the expanded before-class reminder. Do Not Disturb may open a system permission page on first use.';
+      'Only appears in the expanded before-class reminder. Silent/DND restores after class ends and on reboot. Do Not Disturb may open a system permission page on first use.';
 
   @override
   String liveMiuiLabelSizePreview(String value) {
@@ -1500,9 +2331,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get liveMiuiLabelLogoCornerRadiusTitle => 'Left icon corner radius';
+
+  @override
   String liveMiuiLabelFontSizeLabel(String value) {
     return 'Left Text Size $value';
   }
+
+  @override
+  String get liveMiuiLabelFontSizeTitle => 'Left text size';
 
   @override
   String liveMiuiLabelOffsetXLabel(String value) {
@@ -1510,9 +2347,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get liveMiuiLabelOffsetXTitle => 'Left text horizontal offset';
+
+  @override
   String liveMiuiLabelOffsetYLabel(String value) {
     return 'Left Text Vertical Offset $value';
   }
+
+  @override
+  String get liveMiuiLabelOffsetYTitle => 'Left text vertical offset';
 
   @override
   String get liveMiuiLabelFontWeightLabel => 'Left Text Weight';
@@ -1687,11 +2530,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'The raw view follows the current level filter and only shows matching log blocks.';
 
   @override
+  String get diagnosticsTimeSortAscending => 'Oldest first';
+
+  @override
+  String get diagnosticsTimeSortDescending => 'Newest first';
+
+  @override
+  String get diagnosticsDisplayOptionsTitle => 'View & sort';
+
+  @override
+  String get diagnosticsStreamingHint =>
+      'Live updates are on. New logs appear automatically.';
+
+  @override
   String get diagnosticsEmptyTitle => 'No Logs Yet';
 
   @override
   String get diagnosticsEmptySubtitle =>
-      'There are currently no island diagnostics logs to display.';
+      'There are currently no app logs to display.';
 
   @override
   String get diagnosticsLogTitleFallback => 'Island Diagnostics Log';
@@ -1866,8 +2722,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sharedInfoTitle => 'Shared Info';
 
   @override
-  String get sharedInfoHint =>
-      'Name, short name, teacher, description, nature, and color will sync to other entries with the same course name.';
+  String get sharedInfoHint => 'View shared field descriptions';
+
+  @override
+  String get sharedInfoSheetItemCourseName =>
+      'Course name: Unique identifier. Schedule entries with the same name belong to one course; renaming creates a separate course record.';
+
+  @override
+  String get sharedInfoSheetItemShortName =>
+      'Course short name: Used for concise display in Super Island and similar surfaces. Must be entered manually; the system does not generate it automatically. Takes effect when Prefer course short name is enabled; limit to about 3 characters when possible.';
+
+  @override
+  String get sharedInfoSheetItemSharedSync =>
+      'Shared sync: Short name, color, nature, description, and related fields sync to other schedule entries under the same course name.';
 
   @override
   String get reuseExistingCourseLabel => 'Reuse Existing Course';
@@ -1888,13 +2755,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get courseNameHelper =>
-      'For island display, 3 Chinese characters or a short name works best.';
+      'Serves as the unique course identifier. Entries with the same name are grouped as one course. Enter the full official name; do not abbreviate for display.';
 
   @override
   String get pleaseEnterCourseName => 'Please enter the course name';
 
   @override
-  String get courseShortNameOptional => 'Course Short Name (Optional)';
+  String get courseShortNameOptional => 'Course short name';
+
+  @override
+  String get courseShortNameHelper =>
+      'Recommended for concise display in Super Island and similar surfaces. Short names are not generated automatically; enable Prefer course short name to apply. Limit to about 3 characters when possible.';
+
+  @override
+  String get courseShortNameAutoFillAction => 'First 2 chars';
 
   @override
   String get teacherLabel => 'Teacher';
@@ -2086,12 +2960,133 @@ class AppLocalizationsEn extends AppLocalizations {
       'Affects the top bar, accent color, and global primary tone.';
 
   @override
+  String get frostedSheetSectionTitle => 'Sheet frosted glass';
+
+  @override
+  String get frostedSheetSectionSubtitle =>
+      'Adjust home popup blur and milky frosted brightness. Further right = brighter white glass.';
+
+  @override
+  String get frostedBlurEnabledTitle => 'Gaussian blur';
+
+  @override
+  String get frostedBlurEnabledSubtitle =>
+      'When off, sheets and home frosted areas keep tint only, without backdrop blur.';
+
+  @override
+  String get frostedSheetPreviewOpenAction => 'Open sheet preview';
+
+  @override
+  String get frostedSheetPreviewDemoTitle => 'Sheet preview';
+
+  @override
+  String get frostedSheetPreviewDemoSubtitle =>
+      'Same frosted glass as the home top-right menu.';
+
+  @override
+  String get frostedSheetBlurLabel => 'Blur strength';
+
+  @override
+  String get frostedSheetTintLabel => 'Frost brightness';
+
+  @override
   String get timetableBackgroundColorSectionTitle =>
       'Timetable background color';
 
   @override
   String get timetableBackgroundColorSectionSubtitle =>
-      'Only affects the large background of the timetable page.';
+      'Used in solid-color mode for the selected display regions; can pair with a background image.';
+
+  @override
+  String get homePageBackgroundFillLabel => 'Background fill';
+
+  @override
+  String get homePageBackgroundFillColor => 'Solid color';
+
+  @override
+  String get homePageBackgroundFillImage => 'Image';
+
+  @override
+  String get homePageBackgroundImageTitle => 'Background image';
+
+  @override
+  String get homePageBackgroundImageSubtitle =>
+      'In image mode, applies to the display regions selected below.';
+
+  @override
+  String get homePageWallpaperTitle => 'Background image';
+
+  @override
+  String get homePageWallpaperSubtitle =>
+      'One full-screen image. Checked regions below show it through; others use the page color.';
+
+  @override
+  String get homePageBackdropFollowsWeekPagerTitle =>
+      'Background follows week swipe';
+
+  @override
+  String get homePageBackdropFollowsWeekPagerSubtitle =>
+      'When swiping between weeks, the background image moves with the timetable page.';
+
+  @override
+  String get homePageBackgroundScopeTitle => 'Background display area';
+
+  @override
+  String get homePageBackgroundScopeSubtitle =>
+      'Top to bottom: choose which regions show the image; others use the page color.';
+
+  @override
+  String get homePageBackgroundScopeStatusBar => 'Status bar';
+
+  @override
+  String get homePageBackgroundScopeTimetable => 'Timetable area';
+
+  @override
+  String get homePageBackgroundScopeWeekdayBar => 'Info bar';
+
+  @override
+  String get homePageBackgroundScopeHeader => 'Top bar';
+
+  @override
+  String get homePageHeaderBlurTitle => 'Top bar blur';
+
+  @override
+  String get homePageHeaderBlurSubtitle =>
+      'Frost the title row; includes the status bar when that scope is enabled.';
+
+  @override
+  String get homePageWeekdayBarBlurTitle => 'Info bar blur';
+
+  @override
+  String get homePageWeekdayBarBlurSubtitle =>
+      'Frost the week and weekday row over the background image.';
+
+  @override
+  String get homePageTimeColumnBlurTitle => 'Time column blur';
+
+  @override
+  String get homePageTimeColumnBlurSubtitle =>
+      'Frost the left section/time column over the background image.';
+
+  @override
+  String get homePageRegionBlurSectionSubtitle =>
+      'Works with a background image. Blur strength follows sheet frosted-glass settings.';
+
+  @override
+  String get homePagePickImageAction => 'Choose image';
+
+  @override
+  String get homePageClearImageAction => 'Clear image';
+
+  @override
+  String get homePageImageNotSelected => 'Not selected';
+
+  @override
+  String get appearanceTextColorsSectionTitle => 'Text colors';
+
+  @override
+  String get appearanceTextColorsSectionSubtitle =>
+      'Customize course card, weekday bar, and time axis text colors.';
 
   @override
   String get defaultTimetablePreviewName => 'Default timetable';
@@ -2120,13 +3115,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveDisplaySummaryStageText => 'Stage text';
 
   @override
-  String get liveDisplaySummaryLeftLabelImage => 'Left label image';
+  String get liveDisplaySummaryLeftLabelImage => 'Icon';
 
   @override
   String get liveDisplaySummaryMinimal => 'Minimal display';
 
   @override
-  String get languageModeZhTw => 'Traditional Chinese (Taiwan)';
+  String get liveDisplaySummaryCountdownShort => 'Countdown';
+
+  @override
+  String liveDisplaySummaryMore(String first, int count) {
+    return '$first, $count items';
+  }
 
   @override
   String get guideHyperOsChip => 'HyperOS 3.0.300+';
@@ -2346,19 +3346,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Umeng Privacy Policy: https://www.umeng.com/page/policy';
 
   @override
-  String get liveDiagnosticsUnavailable =>
-      'There are no Island diagnostic logs to view yet.';
+  String get liveDiagnosticsUnavailable => 'There are no app logs to view yet.';
 
   @override
-  String get liveDiagnosticsViewerTitle => 'Island diagnostic logs';
+  String get liveDiagnosticsViewerTitle => 'Super Island logs';
 
   @override
   String get liveDiagnosticsShareText =>
-      'These are the Island diagnostic logs exported from Qingyu Timetable. They can help investigate issues such as the Island not appearing.';
+      'These are the Super Island related logs exported from Qingyu Timetable. They can help investigate issues such as the Island not appearing.';
 
   @override
   String get liveDiagnosticsShareSubject =>
-      'Qingyu Timetable - Island diagnostic logs';
+      'Qingyu Timetable - Super Island logs';
 
   @override
   String get liveDiagnosticsSnapshotShareText =>
@@ -2373,12 +3372,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'There is no log file or status snapshot available to export right now.';
 
   @override
-  String get liveDiagnosticsCleared =>
-      'Island diagnostic logs have been cleared. Collection will start again afterward.';
+  String get liveDiagnosticsCleared => 'App logs have been cleared.';
 
   @override
-  String get liveDiagnosticsClearFailed =>
-      'Failed to clear Island diagnostic logs';
+  String get liveDiagnosticsClearFailed => 'Failed to clear app logs';
 
   @override
   String get liveTestingNotRefreshed => 'Not refreshed yet';
@@ -2615,6 +3612,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'When enabled, the 2×2, 2×4, and 4×4 course lists show only classes that have not finished yet.';
 
   @override
+  String get homeWidgetShowTomorrowTitle => 'Show tomorrow\'s classes';
+
+  @override
+  String get homeWidgetShowTomorrowSubtitle =>
+      'When enabled, the widget automatically switches to tomorrow\'s classes after today\'s classes end.';
+
+  @override
   String get homeWidgetHeightAdjustTitle => 'Card height adjustment';
 
   @override
@@ -2687,6 +3691,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'When off, interactions such as page switching no longer trigger light vibration.';
 
   @override
+  String pageTransitionSpeedLabel(String speed) {
+    return 'Page transition speed $speed×';
+  }
+
+  @override
+  String get pageTransitionSpeedTitle => 'Page transition speed';
+
+  @override
+  String get pageTransitionSpeedSubtitle =>
+      'Adjust how fast sub-pages slide in and out. Higher is faster, lower is slower. Multiplied by the system transition animation scale on Android.';
+
+  @override
+  String pageTransitionSpeedDurationHint(int milliseconds) {
+    return 'About $milliseconds ms';
+  }
+
+  @override
   String get layoutTimeColumnDisplayLabel => 'Home page time column';
 
   @override
@@ -2714,6 +3735,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get layoutBackToCurrentWeekButtonOpacityTitle =>
+      'Floating button opacity';
+
+  @override
   String get layoutBackToCurrentWeekButtonOpacitySubtitle =>
       'Only applies to the floating bottom-right style.';
 
@@ -2723,9 +3748,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get layoutCourseCardGapTitle => 'Course card spacing';
+
+  @override
   String layoutSectionHeightLabel(String value) {
     return 'Row height $value';
   }
+
+  @override
+  String get layoutSectionHeightTitle => 'Row height';
 
   @override
   String layoutCompactFontSizeLabel(String value) {
@@ -2733,9 +3764,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get layoutCompactFontSizeTitle => 'Compact font size';
+
+  @override
   String layoutCourseCardFontSizeLabel(String value) {
     return 'Course card font size $value';
   }
+
+  @override
+  String get layoutCourseCardFontSizeTitle => 'Course card font size';
 
   @override
   String get layoutCourseCardDisplayTitle => 'Course card display';
@@ -2861,6 +3898,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aboutCheckingLatestVersion =>
       'Checking the latest version information…';
+
+  @override
+  String get aboutCheckingForUpdate => 'Checking for updates…';
 
   @override
   String get aboutReadVersionFailed =>
@@ -3051,7 +4091,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutRecordDiagnosticsSubtitle =>
-      'When enabled, key local logs across the whole app are continuously recorded, including error / warn / info / debug / verbose levels for update, import, notification, and crash troubleshooting.';
+      'When enabled, app runtime logs are recorded locally. Super Island related entries are labeled separately.';
 
   @override
   String get aboutExportDiagnosticsAction => 'Export app logs';
@@ -3555,6 +4595,97 @@ class AppLocalizationsEn extends AppLocalizations {
   String get webLoginImport => 'Web login import';
 
   @override
+  String get fillUrlThenRecord => 'Enter URL before recording';
+
+  @override
+  String get recordImportAction => 'Record import';
+
+  @override
+  String get quickImportAction => 'Quick import';
+
+  @override
+  String get quickImportTooltip => 'Quick import';
+
+  @override
+  String get selectQuickImportTitle => 'Choose quick import';
+
+  @override
+  String quickImportMacroSteps(String adapterName, int stepCount) {
+    return '$adapterName · $stepCount steps';
+  }
+
+  @override
+  String quickImportTitle(String name) {
+    return 'Quick import - $name';
+  }
+
+  @override
+  String get noSavedQuickImportRecords => 'No saved quick-import records yet';
+
+  @override
+  String get noValidWarehouseLoginUrl =>
+      'No valid academic-system login URL found';
+
+  @override
+  String get noMacroRecordFound =>
+      'No recording found. Complete a recording first.';
+
+  @override
+  String get quickImportPlayingTitle => 'Auto-importing…';
+
+  @override
+  String get quickImportExecutingScriptTitle =>
+      'Playback finished. Running import script…';
+
+  @override
+  String get quickImportManualInputTitle => 'Manual action required';
+
+  @override
+  String get quickImportManualInputHint =>
+      'Complete the required manual step, then tap Continue.';
+
+  @override
+  String get quickImportCancelImportAction => 'Cancel import';
+
+  @override
+  String get quickImportContinueAction => 'Continue';
+
+  @override
+  String get quickImportFinishedTitle => 'Import complete';
+
+  @override
+  String get quickImportDismissAction => 'Done';
+
+  @override
+  String get quickImportRetryAction => 'Retry';
+
+  @override
+  String quickImportPlaybackStepProgress(int current, int total) {
+    return 'Step $current / $total';
+  }
+
+  @override
+  String get quickImportCancelPlaybackAction => 'Cancel';
+
+  @override
+  String get quickImportUnknownError => 'An unknown error occurred';
+
+  @override
+  String get recentSchoolLabel => 'Recently used';
+
+  @override
+  String get warehouseSchoolTapHint => 'Tap to choose an adapter and import';
+
+  @override
+  String get warehouseAdaptersLoadFailedTitle => 'Could not load adapter list';
+
+  @override
+  String get stopRecordingTooltip => 'Stop recording';
+
+  @override
+  String get startRecordingTooltip => 'Record actions';
+
+  @override
   String get savedImportUrlHint =>
       'Academic-system URL saved. You can import directly next time.';
 
@@ -3684,7 +4815,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeMenuSettingsTitle => 'Timetable settings';
 
   @override
-  String get reloadAction => 'Reload';
+  String get homeMenuCoffeeTitle => 'Buy me a coffee';
 
   @override
   String get homeMenuFeedbackTitle => 'Feedback';
@@ -4242,6 +5373,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scheduleDateLabel => 'Date';
 
   @override
+  String get scheduleStartGroupLabel => 'Start';
+
+  @override
+  String get scheduleEndGroupLabel => 'End';
+
+  @override
   String get scheduleStartDateLabel => 'Start Date';
 
   @override
@@ -4345,6 +5482,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get examDateLabel => 'Exam Date';
 
   @override
+  String get examDateHint => 'Select date';
+
+  @override
+  String get examDateRequired => 'Please select exam date';
+
+  @override
   String get examStartTimeLabel => 'Start Time';
 
   @override
@@ -4405,6 +5548,38 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get scheduleEntrySingleTitle => 'Class schedule';
+
+  @override
+  String get scheduleEntryCardSubtitle =>
+      'Set when this course meets, which weeks it runs, and who teaches it where.';
+
+  @override
+  String get scheduleEntryTimeSectionTitle => 'When';
+
+  @override
+  String get scheduleEntryTimeSectionSubtitle =>
+      'Pick the weekday and section range. Use the same start/end section for a single period.';
+
+  @override
+  String get scheduleEntryWeeksSectionTitle => 'Which weeks';
+
+  @override
+  String get scheduleEntryPeopleSectionTitle => 'Teacher & location';
+
+  @override
+  String get scheduleEntryTimeSchemeSectionTitle => 'Custom time scheme';
+
+  @override
+  String get scheduleEntryTimeSchemeSectionSubtitle =>
+      'Follows the timetable by default. Change only if this slot uses different bell times.';
+
+  @override
+  String scheduleSectionNumberLabel(int section) {
+    return 'P$section';
+  }
+
+  @override
   String get addScheduleEntryAction => 'Add schedule entry';
 
   @override
@@ -4455,6 +5630,145 @@ class AppLocalizationsEn extends AppLocalizations {
   String get holidayBadgeLabel => 'Holiday';
 
   @override
+  String get holidayStatusLabel => 'Holiday';
+
+  @override
+  String get suspendedBadgeLabel => 'Suspended';
+
+  @override
+  String get suspendedStatusLabel => 'Suspended';
+
+  @override
+  String get courseActionSuspend => 'Suspend';
+
+  @override
+  String get courseActionUnsuspend => 'Restore';
+
+  @override
+  String get courseActionEditPrimary => 'Edit course';
+
+  @override
+  String get courseActionRescheduleSecondary => 'Reschedule';
+
+  @override
+  String get courseActionSuspendSecondary => 'Suspend';
+
+  @override
+  String get courseActionDeleteSecondary => 'Delete';
+
+  @override
+  String courseActionSheetNotice(int week) {
+    return 'You are viewing Week $week. If an exam or conflict comes up, you can quickly reschedule or suspend below.';
+  }
+
+  @override
+  String get courseActionOddWeekShort => 'Odd week';
+
+  @override
+  String get courseActionEvenWeekShort => 'Even week';
+
+  @override
+  String get courseActionConflictExpandHint =>
+      'Expand to see other conflicting courses and switch actions';
+
+  @override
+  String get courseActionConflictCollapseHint =>
+      'Tap to collapse the conflict list';
+
+  @override
+  String get courseActionConflictSwitchAction => 'Switch';
+
+  @override
+  String courseActionCoupleRelatedCount(int count) {
+    return '$count more couple timetable course(s)';
+  }
+
+  @override
+  String get courseActionCoupleExpandHint =>
+      'Expand to preview partner or shared classes. Tap to switch.';
+
+  @override
+  String get courseActionCoupleCollapseHint =>
+      'Tap to collapse couple timetable courses';
+
+  @override
+  String courseActionMixedRelatedCount(int count) {
+    return '$count more related course(s)';
+  }
+
+  @override
+  String get courseActionPartnerReadOnlyNotice =>
+      'This course is from your partner\'s timetable and is read-only.';
+
+  @override
+  String get suspendSheetTitle => 'Suspend';
+
+  @override
+  String get suspendSheetSubtitle => 'Choose suspension scope';
+
+  @override
+  String get suspendThisWeek => 'This week';
+
+  @override
+  String get suspendThisWeekDesc => 'Suspend this week only';
+
+  @override
+  String get suspendAllWeeks => 'All weeks';
+
+  @override
+  String get suspendAllWeeksDesc => 'Suspend all weeks';
+
+  @override
+  String get unsuspendAllWeeks => 'Restore all';
+
+  @override
+  String get unsuspendAllWeeksDesc => 'Restore all weeks';
+
+  @override
+  String get customHolidayTitle => 'Custom Holidays';
+
+  @override
+  String get customHolidayAdd => 'Add Holiday';
+
+  @override
+  String get customHolidayEdit => 'Edit Holiday';
+
+  @override
+  String get customHolidayDelete => 'Delete';
+
+  @override
+  String get customHolidayDeleteConfirm => 'Delete this custom holiday?';
+
+  @override
+  String get customHolidayNameLabel => 'Holiday name';
+
+  @override
+  String get customHolidayStartDate => 'Start date';
+
+  @override
+  String get customHolidayEndDate => 'End date';
+
+  @override
+  String get customHolidayType => 'Type';
+
+  @override
+  String get customHolidayTypeVacation => 'Holiday';
+
+  @override
+  String get customHolidayTypeWorkday => 'Workday';
+
+  @override
+  String get customHolidayEmpty => 'No custom holidays';
+
+  @override
+  String get customHolidayNameRequired => 'Please enter a holiday name';
+
+  @override
+  String customHolidayDateRange(Object start, Object end) {
+    return '$start ~ $end';
+  }
+
+  @override
   String get selectTeacherTitle => 'Select teacher';
 
   @override
@@ -4474,4 +5788,2796 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get manageTimeSchemesAction => 'Manage time schemes';
+
+  @override
+  String get examDefaultName => 'Final Exam';
+
+  @override
+  String get examDateWeekPickerTitle => 'Select exam date';
+
+  @override
+  String get weekPickerCalendarTooltip => 'Use calendar picker';
+
+  @override
+  String get thisWeekLabel => 'This week';
+
+  @override
+  String get guidePrivacyPageTitle => 'Privacy Policy';
+
+  @override
+  String get guidePermissionsPageTitle => 'Permissions';
+
+  @override
+  String get guideTipsPageTitle => 'Tips';
+
+  @override
+  String get guidePrevButton => 'Previous';
+
+  @override
+  String get guideNextButton => 'Next';
+
+  @override
+  String get guidePermissionsHeader => 'System Permissions';
+
+  @override
+  String get guidePermissionsSubtitle =>
+      'Complete these settings for Super Island and reminders to work properly';
+
+  @override
+  String get guidePermissionsFooterHint =>
+      'Tap to open system settings. Statuses that can be detected will refresh automatically when you return. Auto-start is limited by the system; use the switch on the system page as the source of truth.';
+
+  @override
+  String get guideTipsHeader => 'Tips';
+
+  @override
+  String get guideTipsSubtitle => 'These can always be found in Settings';
+
+  @override
+  String get guidePrivacyReadBeforeUse => 'Please read and agree before use';
+
+  @override
+  String get guidePrivacyViewOnly =>
+      'Privacy, third-party SDKs, and disclaimer';
+
+  @override
+  String holidayDataYearLabel(Object year) {
+    return '$year Official Holidays';
+  }
+
+  @override
+  String get holidayUpdateLog => 'Update Log';
+
+  @override
+  String holidayUpdateLogCount(int count) {
+    return '$count entries';
+  }
+
+  @override
+  String holidayDateSameMonth(int month, int start, int end) {
+    return '$month/$start - $end';
+  }
+
+  @override
+  String holidayDateSameDay(int month, int day) {
+    return '$month/$day';
+  }
+
+  @override
+  String holidayDateDiffMonth(
+    int startMonth,
+    int startDay,
+    int endMonth,
+    int endDay,
+  ) {
+    return '$startMonth/$startDay - $endMonth/$endDay';
+  }
+
+  @override
+  String get liveTestingHolidayOverride => 'Holiday Status Override';
+
+  @override
+  String get liveTestingHolidayOverrideSubtitle =>
+      'Simulate holiday status for testing reminders and widgets';
+
+  @override
+  String get liveTestingHolidayModeEnabled => 'Holiday Mode Enabled';
+
+  @override
+  String get liveTestingHolidayModeDisabled => 'Holiday Mode Disabled';
+
+  @override
+  String get liveTestingHolidayModeEnabledDesc =>
+      'Reminders and widgets will hide all courses';
+
+  @override
+  String get liveTestingHolidayModeDisabledDesc => 'Using normal holiday data';
+
+  @override
+  String get textColorTitle => 'Text Colors';
+
+  @override
+  String get textColorSubtitle =>
+      'Customize text colors for each area of the timetable';
+
+  @override
+  String get textColorIndependentDetail => 'Set detail colors independently';
+
+  @override
+  String get textColorCourseCardTitle => 'Course card title color';
+
+  @override
+  String get textColorCourseCardDetail => 'Course card detail color';
+
+  @override
+  String get textColorWeekdayBar => 'Weekday bar font color';
+
+  @override
+  String get textColorWeekdayBarAccent => 'Weekday bar accent color';
+
+  @override
+  String get textColorTimeAxis => 'Time axis font color';
+
+  @override
+  String get textColorSelectColor => 'Select Color';
+
+  @override
+  String get textColorCurrentColor => 'Current color';
+
+  @override
+  String get themeExport => 'Export Theme';
+
+  @override
+  String get themeImport => 'Import Theme';
+
+  @override
+  String get themeExportSuccess => 'Theme copied to clipboard';
+
+  @override
+  String get themeImportSuccess => 'Theme imported';
+
+  @override
+  String get themeImportFailed => 'Clipboard content format error';
+
+  @override
+  String get themeManageTitle => 'Theme Manager';
+
+  @override
+  String get themeManageSubtitle => 'Export, import and switch themes';
+
+  @override
+  String get themePreset => 'Preset Themes';
+
+  @override
+  String get themeSaved => 'My Themes';
+
+  @override
+  String get themeSaveCurrent => 'Save Current Theme';
+
+  @override
+  String get themeApply => 'Apply';
+
+  @override
+  String get themeDelete => 'Delete';
+
+  @override
+  String themeDeleteConfirmMessage(String name) {
+    return 'Are you sure you want to delete theme \"$name\"?';
+  }
+
+  @override
+  String get textColorLowContrastWarning =>
+      'Low color contrast may affect readability';
+
+  @override
+  String get themeCurrentTheme => 'Current Theme';
+
+  @override
+  String themeBasedOnModified(String baseName) {
+    return 'Based on $baseName (modified)';
+  }
+
+  @override
+  String get themeResetToPreset => 'Reset';
+
+  @override
+  String get themeUnsavedChangesTitle => 'Unsaved Changes';
+
+  @override
+  String get themeUnsavedChangesMessage =>
+      'Current theme has unsaved changes. Do you want to save?';
+
+  @override
+  String get themeDiscardAndApply => 'Discard & Apply';
+
+  @override
+  String get themeNameHint => 'Enter theme name';
+
+  @override
+  String get themePresetBlue => 'Default Blue';
+
+  @override
+  String get themePresetPurple => 'Night Purple';
+
+  @override
+  String get themePresetGreen => 'Forest Green';
+
+  @override
+  String get themePresetOrange => 'Warm Orange';
+
+  @override
+  String get themePresetEyeCare => 'Eye Care';
+
+  @override
+  String get themePresetHighContrast => 'High Contrast';
+
+  @override
+  String get themePresetDarkMinimal => 'Dark Minimal';
+
+  @override
+  String get themeUndo => 'Undo';
+
+  @override
+  String themeChanged(String themeName) {
+    return 'Switched to $themeName';
+  }
+
+  @override
+  String get themeRename => 'Rename';
+
+  @override
+  String get themeDuplicate => 'Duplicate';
+
+  @override
+  String themeDuplicateCopyName(String name) {
+    return '$name (copy)';
+  }
+
+  @override
+  String get themeMoreActions => 'More actions';
+
+  @override
+  String get courseNatureRequired => 'Required';
+
+  @override
+  String get courseNatureElective => 'Elective';
+
+  @override
+  String get homeMenuStatisticsTitle => 'Statistics';
+
+  @override
+  String get statisticsTitle => 'Course Statistics';
+
+  @override
+  String get statisticsOverview => 'This Week';
+
+  @override
+  String get statisticsCourseCount => 'Courses';
+
+  @override
+  String get statisticsSectionCount => 'Sections';
+
+  @override
+  String get statisticsWeeklyCourses => 'This Week';
+
+  @override
+  String get statisticsDailyDistribution => 'Daily Distribution';
+
+  @override
+  String get statisticsNatureRatio => 'Required / Elective';
+
+  @override
+  String get statisticsCourseList => 'Course List';
+
+  @override
+  String get statisticsSectionsUnit => 'sections';
+
+  @override
+  String get statisticsSectionUnit => '';
+
+  @override
+  String get statisticsNoData => 'No course data';
+
+  @override
+  String get statisticsCourseCountRatio => 'By Count';
+
+  @override
+  String get statisticsSectionCountRatio => 'By Sections';
+
+  @override
+  String statisticsWeekSelector(int week) {
+    return 'Week $week';
+  }
+
+  @override
+  String get statisticsStoryBusiestDayTitle => 'Busiest Day';
+
+  @override
+  String statisticsStoryBusiestDayContent(int week, String day, String avg) {
+    return 'Through week $week, your busiest day is **$day**, averaging **$avg** sections';
+  }
+
+  @override
+  String get statisticsStoryLightestDayTitle => 'Lightest Day';
+
+  @override
+  String statisticsStoryLightestDayContent(int week, String day, String avg) {
+    return 'Through week $week, your lightest day is **$day**, with only **$avg** sections';
+  }
+
+  @override
+  String get statisticsStoryFavoriteRoomTitle => 'Favorite Room';
+
+  @override
+  String statisticsStoryFavoriteRoomContent(int week, String room, int count) {
+    return 'Through week $week, your most visited room is **$room**, **$count** visits';
+  }
+
+  @override
+  String get statisticsStoryBuildingCountTitle => 'Campus Explorer';
+
+  @override
+  String statisticsStoryBuildingCountContent(int week, int count) {
+    return 'Through week $week, your classes span **$count** buildings';
+  }
+
+  @override
+  String get statisticsStoryTimeRangeTitle => 'Time Range';
+
+  @override
+  String statisticsStoryTimeRangeContent(String earliest, String latest) {
+    return 'Your earliest class is **$earliest**, latest is **$latest**';
+  }
+
+  @override
+  String get statisticsSemesterLabelCourses => 'courses';
+
+  @override
+  String get statisticsSemesterLabelSections => 'sections';
+
+  @override
+  String get statisticsSemesterLabelWeeks => 'weeks';
+
+  @override
+  String get statisticsSemesterLabelDayStreak => 'day streak';
+
+  @override
+  String get statisticsAchievementsTitle => 'Achievements';
+
+  @override
+  String get statisticsStoriesTitle => 'Data Stories';
+
+  @override
+  String get statisticsRankingTitle => 'Course Ranking';
+
+  @override
+  String get statisticsNoDataHint => 'Add courses to view statistics';
+
+  @override
+  String get statisticsShareLabel => 'Share statistics';
+
+  @override
+  String get statisticsShareTitle => 'My Semester Stats';
+
+  @override
+  String statisticsRankingSlotDetail(
+    String day,
+    int startSection,
+    int endSection,
+  ) {
+    return '$day Periods $startSection-$endSection';
+  }
+
+  @override
+  String get statisticsAchievementEarlyBirdName => 'Early Bird';
+
+  @override
+  String get statisticsAchievementEarlyBirdDescription =>
+      'Has a class at 8:00 AM';
+
+  @override
+  String get statisticsAchievementPerfectAttendanceName => 'Perfect Attendance';
+
+  @override
+  String get statisticsAchievementPerfectAttendanceDescription =>
+      'Every scheduled week for a course';
+
+  @override
+  String get statisticsAchievementWeekendWarriorName => 'Weekend Warrior';
+
+  @override
+  String get statisticsAchievementWeekendWarriorDescription =>
+      'Has weekend classes';
+
+  @override
+  String get statisticsAchievementClassKingName => 'Class King';
+
+  @override
+  String get statisticsAchievementClassKingDescription =>
+      '6+ classes in one day';
+
+  @override
+  String get statisticsAchievementScholarName => 'Scholar';
+
+  @override
+  String get statisticsAchievementScholarDescription => '100+ total sections';
+
+  @override
+  String get statisticsAchievementBalancedName => 'Balance Master';
+
+  @override
+  String get statisticsAchievementBalancedDescription =>
+      'Daily section gap ≤ 2';
+
+  @override
+  String get statisticsAchievementNightOwlName => 'Night Owl';
+
+  @override
+  String get statisticsAchievementNightOwlDescription =>
+      'Has classes after 18:00';
+
+  @override
+  String get statisticsAchievementExplorerName => 'Explorer';
+
+  @override
+  String get statisticsAchievementExplorerDescription =>
+      'Used 5+ different rooms';
+
+  @override
+  String statisticsNatureLegendDetail(int count, int sections) {
+    return '$count courses · $sections sections';
+  }
+
+  @override
+  String get weekListSeparator => ', ';
+
+  @override
+  String courseWeekListLabel(String weeks) {
+    return 'Weeks $weeks';
+  }
+
+  @override
+  String courseWeekRangeLabel(int startWeek, int endWeek, String mode) {
+    return 'Weeks $startWeek-$endWeek$mode';
+  }
+
+  @override
+  String courseWeekSuspendedLabel(String weeks) {
+    return 'Suspended weeks $weeks';
+  }
+
+  @override
+  String get importSemesterStartDateTitle => 'Semester start date';
+
+  @override
+  String get importSemesterStartDateSubtitle =>
+      'Treat the week containing this date as calendar week 1';
+
+  @override
+  String get importFirstCourseWeekMappingLabel =>
+      'Timetable week 1 maps to calendar week';
+
+  @override
+  String get importFirstCourseWeekMappingSubtitle =>
+      'If the first school week has no classes, choose week 2; if the first two weeks are empty, choose week 3.';
+
+  @override
+  String get importSemesterMappingNoShiftHint =>
+      'After import, timetable week 1 will be treated as calendar week 1.';
+
+  @override
+  String importSemesterMappingShiftHint(int shiftedWeeks, int calendarWeek) {
+    return 'All course weeks will shift forward by $shiftedWeeks so timetable week 1 lands on calendar week $calendarWeek.';
+  }
+
+  @override
+  String calendarWeekOption(int week) {
+    return 'Calendar week $week';
+  }
+
+  @override
+  String get aboutDownloadPackageMethodTitle => 'Download install method';
+
+  @override
+  String get aboutInAppDownloadTitle => 'In-app download';
+
+  @override
+  String get aboutInAppDownloadSubtitle =>
+      'Install directly in the app after download completes';
+
+  @override
+  String get aboutSystemDownloaderTitle => 'System download manager';
+
+  @override
+  String get aboutSystemDownloaderChoiceSubtitle =>
+      'Hand off to the system download manager';
+
+  @override
+  String get syncErrorAuthFailed => 'Invalid username or password';
+
+  @override
+  String get syncErrorAccessDenied => 'Access denied';
+
+  @override
+  String get syncErrorCertificateError => 'Certificate error';
+
+  @override
+  String get syncErrorConnectionTimeout => 'Connection timed out';
+
+  @override
+  String get syncErrorConnectionFailed => 'Could not connect to server';
+
+  @override
+  String get syncErrorNetworkError => 'Network error';
+
+  @override
+  String get syncErrorInvalidResponse => 'Invalid server response';
+
+  @override
+  String get syncErrorLocalChangesPendingSync =>
+      'Skipped auto sync because local changes are pending';
+
+  @override
+  String get syncErrorMissingCredentials => 'Configure sync account first';
+
+  @override
+  String get syncErrorBackupNotFound => 'Backup not found';
+
+  @override
+  String get syncErrorMissingBackupSnapshot => 'Backup snapshot is missing';
+
+  @override
+  String get syncErrorCannotDeleteCurrentBackup =>
+      'Cannot delete the current backup';
+
+  @override
+  String get syncErrorProviderNotReady => 'Timetable is not ready';
+
+  @override
+  String get syncErrorSyncFailed => 'Sync failed';
+
+  @override
+  String get sectionTimeDisplayHidden => 'Hidden';
+
+  @override
+  String get sectionTimeDisplayStartOnly => 'Start time only';
+
+  @override
+  String get sectionTimeDisplayStartAndEnd => 'Start and end times';
+
+  @override
+  String get examReminderNone => 'No reminder';
+
+  @override
+  String get examReminderMin30 => '30 minutes before';
+
+  @override
+  String get examReminderHour1 => '1 hour before';
+
+  @override
+  String get examReminderHour1AndMin30 => '1 hour and 30 minutes before';
+
+  @override
+  String get examReminderDay1 => '1 day before';
+
+  @override
+  String get examReminderDay1AndHour1 => '1 day and 1 hour before';
+
+  @override
+  String get examReminderCustom => 'Custom';
+
+  @override
+  String get debugCopiedJson => 'JSON copied';
+
+  @override
+  String get liveDuringClassTimeNearest => 'Nearest time';
+
+  @override
+  String get liveDuringClassTimeTotal => 'Total time';
+
+  @override
+  String get liveCountdownTextStyleSmart => 'Smart (localized)';
+
+  @override
+  String get liveCountdownTextStyleSmartMinS => 'Smart (min/s)';
+
+  @override
+  String get liveCountdownTextStyleMinuteSecondCn =>
+      'Minutes and seconds (5m19s)';
+
+  @override
+  String get liveCountdownTextStyleMinuteSecondColon => 'mm:ss (05:19)';
+
+  @override
+  String get liveCountdownTextStyleMinuteSecondMinS => 'min+s (5min19s)';
+
+  @override
+  String get liveCountdownTextStyleMinuteSecondMinSlashS => 'min/s (5min/19s)';
+
+  @override
+  String get liveCountdownTextStyleMinuteOnlyCn => 'Minutes only (5 min)';
+
+  @override
+  String get liveCountdownTextStyleMinuteOnlyMin => 'min (5min)';
+
+  @override
+  String get liveCountdownTextStyleMinuteOnlySlash => '/min (5/min)';
+
+  @override
+  String get liveCountdownTextStyleSecondOnlyCn => 'Seconds only (5 s)';
+
+  @override
+  String get liveCountdownTextStyleSecondOnlyShort => 's (5s)';
+
+  @override
+  String get liveCountdownTextStyleSecondOnlySlash => '/s (5/s)';
+
+  @override
+  String get miuiIslandLabelStyleTextOnly => 'Text only';
+
+  @override
+  String get miuiIslandLabelStyleIconAndText => 'Icon + text';
+
+  @override
+  String get miuiIslandLabelContentCourseName => 'Course name';
+
+  @override
+  String get miuiIslandLabelContentLocation => 'Room';
+
+  @override
+  String get miuiIslandLabelContentCourseNameAndLocation => 'Course + room';
+
+  @override
+  String get miuiIslandLabelFontWeightRegular => 'Regular';
+
+  @override
+  String get miuiIslandLabelFontWeightMedium => 'Medium';
+
+  @override
+  String get miuiIslandLabelFontWeightBold => 'Bold';
+
+  @override
+  String get miuiIslandLabelRenderQualityStandard => 'Standard';
+
+  @override
+  String get miuiIslandLabelRenderQualityHigh => 'High';
+
+  @override
+  String get miuiIslandLabelRenderQualityUltra => 'Ultra';
+
+  @override
+  String get miuiIslandExpandedIconAppIcon => 'App icon';
+
+  @override
+  String get miuiIslandExpandedIconCustomImage => 'Custom image';
+
+  @override
+  String get miuiIslandExpandedIconHidden => 'Hidden';
+
+  @override
+  String get liveBeforeClassQuickActionNone => 'Hidden';
+
+  @override
+  String get liveBeforeClassQuickActionSilent => 'Turn on silent mode';
+
+  @override
+  String get liveBeforeClassQuickActionDoNotDisturb => 'Turn on Do Not Disturb';
+
+  @override
+  String get courseCardVerticalAlignTop => 'Top';
+
+  @override
+  String get courseCardVerticalAlignCenter => 'Center';
+
+  @override
+  String get courseCardVerticalAlignBottom => 'Bottom';
+
+  @override
+  String get courseCardVerticalAlignSpaceEvenly => 'Space evenly';
+
+  @override
+  String get courseCardHorizontalAlignLeft => 'Left';
+
+  @override
+  String get courseCardHorizontalAlignCenter => 'Center';
+
+  @override
+  String get courseCardHorizontalAlignRight => 'Right';
+
+  @override
+  String get timetableTimeColumnWidthNarrow => 'Narrow';
+
+  @override
+  String get timetableTimeColumnWidthWide => 'Wide';
+
+  @override
+  String get timetableCourseSpacingNarrow => 'Narrow';
+
+  @override
+  String get timetableCourseSpacingWide => 'Wide';
+
+  @override
+  String get appUpdateDownloadSourceOriginal => 'GitHub original';
+
+  @override
+  String get appUpdateDownloadSourceMirror => 'Mirror';
+
+  @override
+  String get appUpdateDownloadChannelPgyer => 'Pgyer download';
+
+  @override
+  String get appUpdateDownloadChannelGithub => 'GitHub download';
+
+  @override
+  String get appUpdateDownloadChannelPgyerDescription =>
+      'Fast download in China, recommended';
+
+  @override
+  String get appUpdateDownloadChannelGithubDescription => 'GitHub plus mirrors';
+
+  @override
+  String get holidayStatutoryLabel => 'Public holiday';
+
+  @override
+  String get serviceMsgImportFileUnrecognized =>
+      'Import failed. The file content could not be recognized.';
+
+  @override
+  String get serviceMsgImportUseOverwriteForFullBackup =>
+      'This is a full data backup. Please import using overwrite current timetable.';
+
+  @override
+  String get serviceMsgImportNoProfilesInBackup =>
+      'No recoverable timetables were found in the backup file.';
+
+  @override
+  String get serviceMsgUnrecognizedMikcbDataFile =>
+      'Not a recognizable mikcb data file.';
+
+  @override
+  String get serviceMsgMissingSettingsData => 'Settings data is missing.';
+
+  @override
+  String get serviceMsgUnrecognizedMikcbFullBackup =>
+      'Not a recognizable mikcb full backup file.';
+
+  @override
+  String get serviceMsgMissingFullBackupData =>
+      'Complete backup data is missing.';
+
+  @override
+  String get serviceMsgUseProfileBackupNotFull =>
+      'Use a timetable profile backup JSON, not a full data backup.';
+
+  @override
+  String get serviceMsgUnrecognizedSyncSnapshot =>
+      'Not a recognizable mikcb cloud sync snapshot.';
+
+  @override
+  String get serviceMsgMissingSyncTimetableData =>
+      'Cloud sync timetable data is missing.';
+
+  @override
+  String get serviceMsgSyncSnapshotChecksumFailed =>
+      'Cloud sync snapshot verification failed.';
+
+  @override
+  String get serviceMsgSyncSnapshotNoProfiles =>
+      'No recoverable timetables in the cloud sync snapshot.';
+
+  @override
+  String get serviceMsgSyncSnapshotUnrecognized =>
+      'Cloud sync snapshot could not be recognized.';
+
+  @override
+  String get serviceMsgTimeSchemeNotFound => 'Time scheme not found.';
+
+  @override
+  String get serviceMsgTimeSchemeConfigUnavailable =>
+      'Current timetable time configuration is unavailable.';
+
+  @override
+  String get serviceMsgTimeSchemeNotFoundSelected =>
+      'Selected time scheme was not found.';
+
+  @override
+  String serviceMsgTimeSchemeSectionsInsufficient(
+    int startSection,
+    int endSection,
+  ) {
+    return 'Selected time scheme does not have enough sections for sections $startSection-$endSection.';
+  }
+
+  @override
+  String serviceMsgSectionCountBelowUsage(int requiredMaxSection) {
+    return 'Section count cannot be less than the maximum section in use (section $requiredMaxSection).';
+  }
+
+  @override
+  String serviceMsgSectionCountBelowUsageDetail(
+    int requiredMaxSection,
+    String profileName,
+    String courseName,
+    int dayOfWeek,
+    int startSection,
+    int endSection,
+    String usageType,
+  ) {
+    return 'Section count cannot be less than the maximum section in use (section $requiredMaxSection). In use: $profileName · $courseName (weekday $dayOfWeek sections $startSection-$endSection, $usageType)';
+  }
+
+  @override
+  String get serviceMsgAtLeastOneSectionRequired =>
+      'At least one section time must be kept.';
+
+  @override
+  String serviceMsgSectionEndMustAfterStart(int sectionNumber) {
+    return 'Section $sectionNumber end time must be later than start time. Overnight classes are not supported.';
+  }
+
+  @override
+  String serviceMsgSectionStartBeforePreviousEnd(int sectionNumber) {
+    return 'Section $sectionNumber start time cannot be earlier than the previous section end time.';
+  }
+
+  @override
+  String get serviceMsgPeriodStartTimeRequired =>
+      'Set the first section start time for periods that have sections.';
+
+  @override
+  String serviceMsgSectionCrossesMidnight(int sectionNumber) {
+    return 'Section $sectionNumber would cross midnight. Overnight classes are not supported.';
+  }
+
+  @override
+  String get serviceMsgClassDurationMustPositive =>
+      'Class duration must be greater than 0.';
+
+  @override
+  String get serviceMsgBreakDurationMustNonNegative =>
+      'Break duration cannot be less than 0.';
+
+  @override
+  String get serviceMsgAtLeastOnePeriodSection =>
+      'At least one period must have sections.';
+
+  @override
+  String get serviceMsgInvalidTimeFormat => 'Time format is invalid.';
+
+  @override
+  String get serviceMsgLinkedCourseNotFound => 'Linked course was not found.';
+
+  @override
+  String get serviceMsgCourseNotFoundForDelete =>
+      'Course to delete was not found.';
+
+  @override
+  String serviceMsgCourseNotScheduledWeek(int sourceWeek) {
+    return 'This course is not scheduled in week $sourceWeek.';
+  }
+
+  @override
+  String get serviceMsgCourseNotFoundForReschedule =>
+      'Course to reschedule was not found.';
+
+  @override
+  String get serviceMsgTargetWeekOutOfRange =>
+      'Target week is outside the current semester range.';
+
+  @override
+  String get serviceMsgAtLeastOneScheduleSlot =>
+      'At least one class time slot must be kept.';
+
+  @override
+  String get serviceMsgCourseNameRequired => 'Course name cannot be empty.';
+
+  @override
+  String get serviceMsgBackupContentRequired =>
+      'Backup content cannot be empty.';
+
+  @override
+  String get serviceMsgSpreadsheetFormatOrEncodingUnrecognized =>
+      'Could not recognize spreadsheet format or encoding. Save CSV as UTF-8 and try again.';
+
+  @override
+  String serviceMsgSpreadsheetXlsxParseFailed(String error) {
+    return 'Failed to parse XLSX file: $error';
+  }
+
+  @override
+  String serviceMsgSpreadsheetRowWarning(int rowNumber, String message) {
+    return 'Row $rowNumber: $message';
+  }
+
+  @override
+  String serviceMsgSpreadsheetWakeupInsufficientColumns(
+    int rowNumber,
+    int columnCount,
+  ) {
+    return 'WakeUp format needs at least 7 columns, but row $rowNumber has only $columnCount.';
+  }
+
+  @override
+  String get serviceMsgWeekdayMustBe1To7 => 'Weekday must be between 1 and 7.';
+
+  @override
+  String get serviceMsgCustomWeeksRequired => 'Weeks cannot be empty.';
+
+  @override
+  String get serviceMsgClassWeeksRequired => 'Class weeks cannot be empty.';
+
+  @override
+  String get serviceMsgStartWeekMustBeAtLeast1 =>
+      'Start week must be at least 1.';
+
+  @override
+  String serviceMsgStartWeekExceedsSemester(
+    int startWeek,
+    int semesterWeekCount,
+  ) {
+    return 'Start week $startWeek exceeds semester week count $semesterWeekCount.';
+  }
+
+  @override
+  String get serviceMsgEndWeekBeforeStartWeek =>
+      'End week cannot be earlier than start week.';
+
+  @override
+  String get serviceMsgWeeksRangeRequired =>
+      'Class weeks or start week + end week must be provided.';
+
+  @override
+  String serviceMsgFieldMustBeAtLeast1(String field) {
+    return '$field must be at least 1.';
+  }
+
+  @override
+  String serviceMsgFieldCannotBeLessThan(String startField, String endField) {
+    return '$endField cannot be less than $startField.';
+  }
+
+  @override
+  String serviceMsgSectionOutOfRange(int section, int maxSection) {
+    return 'Section $section is outside the time scheme range (1-$maxSection).';
+  }
+
+  @override
+  String serviceMsgFieldMustBeInteger(String field) {
+    return '$field must be an integer.';
+  }
+
+  @override
+  String serviceMsgFieldCannotBeEmpty(String field) {
+    return '$field cannot be empty.';
+  }
+
+  @override
+  String serviceMsgSpreadsheetEndWeekClamped(
+    int rowNumber,
+    int endWeek,
+    int semesterWeekCount,
+  ) {
+    return 'Row $rowNumber: end week $endWeek exceeds semester week count $semesterWeekCount; adjusted to $semesterWeekCount.';
+  }
+
+  @override
+  String serviceMsgSpreadsheetOddEvenBoth(int rowNumber) {
+    return 'Row $rowNumber: odd and even weeks cannot both be selected; treated as odd weeks.';
+  }
+
+  @override
+  String get serviceMsgFieldCourseName => 'Course name';
+
+  @override
+  String get serviceMsgFieldWeekday => 'Weekday';
+
+  @override
+  String get serviceMsgFieldStartSection => 'Start section';
+
+  @override
+  String get serviceMsgFieldEndSection => 'End section';
+
+  @override
+  String get serviceMsgFieldCustomWeeks => 'Weeks';
+
+  @override
+  String get serviceMsgFieldClassWeeks => 'Class weeks';
+
+  @override
+  String get serviceMsgFieldStartWeek => 'Start week';
+
+  @override
+  String get serviceMsgFieldEndWeek => 'End week';
+
+  @override
+  String serviceMsgWeekStartInvalid(String itemName) {
+    return '$itemName: week range start is invalid.';
+  }
+
+  @override
+  String serviceMsgWeekRangeInvalid(String itemName) {
+    return '$itemName: week range is invalid.';
+  }
+
+  @override
+  String serviceMsgWeekRangeTooLarge(String itemName) {
+    return '$itemName: week range is too large. Please check.';
+  }
+
+  @override
+  String serviceMsgWeekTokenUnrecognized(String itemName, String token) {
+    return '$itemName: unrecognized week token: $token';
+  }
+
+  @override
+  String serviceMsgWeeksExceedSemesterClamped(
+    String itemName,
+    int semesterWeekCount,
+    String weeks,
+  ) {
+    return '$itemName contains weeks beyond semester week count $semesterWeekCount ($weeks); excess weeks were ignored.';
+  }
+
+  @override
+  String get serviceMsgAiResultNotObject =>
+      'AI result is not a valid JSON object. Copy the full JSON again.';
+
+  @override
+  String serviceMsgAiSchemaMustBe(String schema) {
+    return 'schema must be $schema';
+  }
+
+  @override
+  String get serviceMsgAiCoursesMustBeArray => 'courses must be an array.';
+
+  @override
+  String get serviceMsgAiWarningsMustBeArray =>
+      'warnings must be a string array.';
+
+  @override
+  String get serviceMsgAiWarningItemMustBeString =>
+      'Each warnings item must be a string.';
+
+  @override
+  String serviceMsgAiCourseNotObject(int index) {
+    return 'courses[$index] is not a valid object.';
+  }
+
+  @override
+  String serviceMsgAiCourseNameEmpty(int index) {
+    return 'courses[$index].name cannot be empty.';
+  }
+
+  @override
+  String serviceMsgAiCourseDayOfWeekInvalid(int index) {
+    return 'courses[$index].dayOfWeek must be between 1 and 7.';
+  }
+
+  @override
+  String serviceMsgAiCourseStartSectionInvalid(int index) {
+    return 'courses[$index].startSection must be at least 1.';
+  }
+
+  @override
+  String serviceMsgAiCourseEndSectionInvalid(int index) {
+    return 'courses[$index].endSection cannot be less than startSection.';
+  }
+
+  @override
+  String serviceMsgAiCourseCustomWeeksEmpty(int index) {
+    return 'courses[$index].customWeeks cannot be empty.';
+  }
+
+  @override
+  String serviceMsgAiCourseNatureInvalid(int index) {
+    return 'courses[$index].courseNature must be required or elective.';
+  }
+
+  @override
+  String serviceMsgAiUnknownFields(String targetName, String fields) {
+    return '$targetName contains unsupported fields: $fields';
+  }
+
+  @override
+  String serviceMsgAiFieldMustBeString(String field) {
+    return '$field must be a string.';
+  }
+
+  @override
+  String serviceMsgAiFieldMustBeInteger(String field) {
+    return '$field must be an integer.';
+  }
+
+  @override
+  String serviceMsgAiWeekListInvalid(String itemName) {
+    return '$itemName can only contain integers greater than or equal to 1.';
+  }
+
+  @override
+  String serviceMsgAiWeekListTypeInvalid(String field) {
+    return '$field must be an integer array or week string.';
+  }
+
+  @override
+  String get serviceMsgNoReleaseAvailable =>
+      'No release has been published yet.';
+
+  @override
+  String get serviceMsgNoReleaseWithPrerelease =>
+      'No stable or prerelease version is available yet.';
+
+  @override
+  String serviceMsgUpdateCheckHttpFailed(int statusCode) {
+    return 'Update check failed (HTTP $statusCode).';
+  }
+
+  @override
+  String get serviceMsgUpdateCheckNetworkFailed =>
+      'Network error. Unable to check for updates right now.';
+
+  @override
+  String get serviceMsgUpdateDownloadUrlUntrusted =>
+      'Update download URL failed security validation.';
+
+  @override
+  String serviceMsgUpdateDownloadHttpFailed(int statusCode) {
+    return 'Download failed (HTTP $statusCode).';
+  }
+
+  @override
+  String serviceMsgUpdateOpenInstallerFailed(String detail) {
+    return 'Failed to open installer: $detail';
+  }
+
+  @override
+  String serviceMsgUpdateDownloadInstallError(String detail) {
+    return 'Download or installation error: $detail';
+  }
+
+  @override
+  String get serviceMsgInvalidUrl => 'Invalid URL.';
+
+  @override
+  String get serviceMsgUpdateAvailablePrerelease =>
+      'A new prerelease version is available.';
+
+  @override
+  String get serviceMsgUpdateAvailable => 'A new version is available.';
+
+  @override
+  String get serviceMsgAlreadyLatest =>
+      'You are already on the latest version.';
+
+  @override
+  String get serviceMsgShareBackupText =>
+      'This is a full backup of the current timetable. Import it to restore courses and settings.';
+
+  @override
+  String get serviceMsgShareBackupSubject => 'Qingyu Timetable backup';
+
+  @override
+  String serviceMsgShareBackupSubjectNamed(String profileName) {
+    return '$profileName - Qingyu Timetable backup';
+  }
+
+  @override
+  String get serviceMsgShareFullBackupText =>
+      'This is a full data backup containing all timetables, the active timetable, and time schemes.';
+
+  @override
+  String get serviceMsgShareFullBackupSubject =>
+      'Qingyu Timetable - full data backup';
+
+  @override
+  String get serviceMsgInvalidRepositoryUrl =>
+      'Repository URL format is invalid.';
+
+  @override
+  String get serviceMsgIncompleteGithubRepoUrl =>
+      'GitHub repository URL is incomplete.';
+
+  @override
+  String get serviceMsgIncompleteRawGithubUrl =>
+      'raw.githubusercontent.com URL is incomplete.';
+
+  @override
+  String get serviceMsgGithubOnlySupported =>
+      'Only GitHub repository URLs are supported.';
+
+  @override
+  String get serviceMsgWarehouseNoSchoolsIndex =>
+      'No school or tool index was found.';
+
+  @override
+  String serviceMsgWarehouseNoAdapters(String schoolName) {
+    return 'No adapter information was found for $schoolName.';
+  }
+
+  @override
+  String serviceMsgWarehouseFetchFailedMirror(int candidatesCount) {
+    return 'Unable to read the adapter repository. Tried $candidatesCount mirror endpoints. Check your network or switch mirror in Version Update.';
+  }
+
+  @override
+  String get serviceMsgWarehouseFetchFailedGithub =>
+      'Unable to read the adapter repository on GitHub. Check your network or switch to a mirror in Version Update.';
+
+  @override
+  String get serviceMsgManualInputCaptcha =>
+      'Enter the captcha manually, then tap Continue.';
+
+  @override
+  String get serviceMsgManualInputPassword =>
+      'Enter the password manually. If it was auto-filled, tap Continue.';
+
+  @override
+  String get serviceMsgMacroNoSteps => 'No recorded steps.';
+
+  @override
+  String get serviceMsgMacroUserCancelled => 'Cancelled by user.';
+
+  @override
+  String serviceMsgMacroStepFailed(
+    int stepIndex,
+    int totalSteps,
+    String detail,
+  ) {
+    return 'Step $stepIndex/$totalSteps failed: $detail';
+  }
+
+  @override
+  String get serviceMsgMacroNavigateUrlEmpty => 'Navigation URL is empty.';
+
+  @override
+  String serviceMsgMacroNavigateUrlInvalid(String url) {
+    return 'Invalid URL: $url';
+  }
+
+  @override
+  String get serviceMsgMacroFillSelectorEmpty =>
+      'Fill-field selector is empty.';
+
+  @override
+  String serviceMsgMacroElementNotFound(String selector) {
+    return 'Element not found: $selector';
+  }
+
+  @override
+  String get serviceMsgMacroClickSelectorEmpty => 'Click selector is empty.';
+
+  @override
+  String get serviceMsgMacroUrlPatternEmpty => 'URL pattern is empty.';
+
+  @override
+  String get serviceMsgMacroWaitSelectorEmpty => 'Wait selector is empty.';
+
+  @override
+  String get serviceMsgMacroManualInputDefault => 'Manual action required.';
+
+  @override
+  String serviceMsgMacroPollTimeout(
+    String stepLabel,
+    int timeoutSeconds,
+    String lastError,
+  ) {
+    return '$stepLabel timed out (${timeoutSeconds}s)$lastError';
+  }
+
+  @override
+  String get serviceMsgMacroReplayNavigate => 'Navigating…';
+
+  @override
+  String get serviceMsgMacroReplayFillField => 'Filling form…';
+
+  @override
+  String get serviceMsgMacroReplayClick => 'Clicking…';
+
+  @override
+  String get serviceMsgMacroReplayWaitUrl => 'Waiting for navigation…';
+
+  @override
+  String get serviceMsgMacroReplayWaitSelector => 'Waiting for page element…';
+
+  @override
+  String get serviceMsgMacroReplayWaitManual => 'Waiting for user action…';
+
+  @override
+  String get serviceMsgMacroReplayExecuteScript => 'Running import script…';
+
+  @override
+  String get serviceMsgMacroReplayDelay => 'Waiting…';
+
+  @override
+  String serviceMsgMacroReplayFailed(String detail) {
+    return 'Failed: $detail';
+  }
+
+  @override
+  String serviceMsgMacroReplayPaused(String reason) {
+    return 'Waiting for manual action: $reason';
+  }
+
+  @override
+  String serviceMsgSupportDonorsLoadFailed(String detail) {
+    return 'Failed to load supporters list: $detail';
+  }
+
+  @override
+  String serviceMsgStatisticsShareFailed(String detail) {
+    return 'Share failed: $detail';
+  }
+
+  @override
+  String get serviceMsgAuthFailed => 'Invalid username or password.';
+
+  @override
+  String get serviceMsgAccessDenied => 'Access denied.';
+
+  @override
+  String get serviceMsgCertificateError => 'Certificate validation failed.';
+
+  @override
+  String get serviceMsgConnectionTimeout => 'Connection timed out.';
+
+  @override
+  String get serviceMsgConnectionFailed => 'Could not connect to the server.';
+
+  @override
+  String get serviceMsgInvalidResponse => 'Invalid server response.';
+
+  @override
+  String get serviceMsgSyncFailed => 'Sync failed.';
+
+  @override
+  String get serviceMsgUsageTypeOverride => 'override time scheme';
+
+  @override
+  String get serviceMsgUsageTypeProfile => 'profile main time scheme';
+
+  @override
+  String get dataTransferProfileShareText =>
+      'This is a full backup of the current timetable from Qingyu Timetable. Import it to restore courses and settings.';
+
+  @override
+  String get dataTransferProfileShareSubject => 'Qingyu Timetable backup';
+
+  @override
+  String dataTransferProfileShareSubjectNamed(String profileName) {
+    return '$profileName - Qingyu Timetable backup';
+  }
+
+  @override
+  String get dataTransferFullBackupShareText =>
+      'This is a full data backup from Qingyu Timetable, including all timetables, the active timetable, and time schemes.';
+
+  @override
+  String get dataTransferFullBackupShareSubject =>
+      'Qingyu Timetable - Full data backup';
+
+  @override
+  String courseWeekCustomDescription(String weeks) {
+    return 'Weeks $weeks';
+  }
+
+  @override
+  String courseWeekRangeDescription(int startWeek, int endWeek, String mode) {
+    return 'Weeks $startWeek-$endWeek$mode';
+  }
+
+  @override
+  String get courseWeekOddModeSuffix => ' odd weeks';
+
+  @override
+  String get courseWeekEvenModeSuffix => ' even weeks';
+
+  @override
+  String courseWeekSuspensionDescription(String weeks) {
+    return 'Suspended weeks $weeks';
+  }
+
+  @override
+  String get courseWeekListSeparator => ', ';
+
+  @override
+  String holidayLogMemoryCacheHit(int year, int count) {
+    return '$year: memory cache hit ($count entries), refreshing in background…';
+  }
+
+  @override
+  String holidayLogLocalCacheHit(int year, int count) {
+    return '$year: local cache hit ($count entries), refreshing in background…';
+  }
+
+  @override
+  String holidayLogNoCacheFetching(int year) {
+    return '$year: no cache, fetching remote data…';
+  }
+
+  @override
+  String holidayLogRemoteSuccess(int year, int count) {
+    return '$year: remote fetch succeeded ($count entries), cached';
+  }
+
+  @override
+  String holidayLogRemoteFailedBuiltin(int year) {
+    return '$year: remote fetch failed, using built-in fallback';
+  }
+
+  @override
+  String holidayLogBuiltinLoaded(int year, int count) {
+    return '$year: loaded built-in data ($count entries)';
+  }
+
+  @override
+  String holidayLogBackgroundSuccess(int year, int count) {
+    return '$year: background update succeeded ($count entries), cache updated';
+  }
+
+  @override
+  String holidayLogBackgroundNoData(int year) {
+    return '$year: background update returned no new data';
+  }
+
+  @override
+  String get holidayLogPrimaryApiFailed =>
+      'Primary API failed, trying fallback API…';
+
+  @override
+  String holidayLogRequesting(String uri) {
+    return 'Requesting $uri …';
+  }
+
+  @override
+  String holidayLogPrimaryApiStatus(int statusCode) {
+    return 'Primary API responded $statusCode, skipping';
+  }
+
+  @override
+  String holidayLogPrimaryApiError(String message) {
+    return 'Primary API error: $message';
+  }
+
+  @override
+  String holidayLogPrimaryApiException(String error) {
+    return 'Primary API exception: $error';
+  }
+
+  @override
+  String holidayLogPrimaryApiParsing(int count) {
+    return 'Primary API returned $count raw entries, parsing…';
+  }
+
+  @override
+  String get holidayLogNoValidEntries =>
+      'No valid entries after parsing, skipping';
+
+  @override
+  String holidayLogFallbackApiStatus(int statusCode) {
+    return 'Fallback API responded $statusCode, skipping';
+  }
+
+  @override
+  String get holidayLogFallbackApiError => 'Fallback API returned an error';
+
+  @override
+  String holidayLogFallbackApiParsing(int count) {
+    return 'Fallback API returned $count raw entries, parsing…';
+  }
+
+  @override
+  String holidayLogFallbackApiException(String error) {
+    return 'Fallback API exception: $error';
+  }
+
+  @override
+  String get holidayNameNewYear => 'New Year';
+
+  @override
+  String get holidayNameLaborDay => 'Labor Day';
+
+  @override
+  String get holidayNameNationalDay => 'National Day';
+
+  @override
+  String get holidayNameSpringFestival => 'Spring Festival';
+
+  @override
+  String get holidayNameQingming => 'Qingming Festival';
+
+  @override
+  String get holidayNameDragonBoat => 'Dragon Boat Festival';
+
+  @override
+  String get holidayNameMidAutumn => 'Mid-Autumn Festival';
+
+  @override
+  String macroReplayStatusFailed(String error) {
+    return 'Failed: $error';
+  }
+
+  @override
+  String macroReplayStatusPaused(String reason) {
+    return 'Waiting for manual action: $reason';
+  }
+
+  @override
+  String get macroReplayStepNavigating => 'Navigating…';
+
+  @override
+  String get macroReplayStepFilling => 'Filling form…';
+
+  @override
+  String get macroReplayStepClicking => 'Clicking…';
+
+  @override
+  String get macroReplayStepWaitUrl => 'Waiting for navigation…';
+
+  @override
+  String get macroReplayStepWaitSelector => 'Waiting for page element…';
+
+  @override
+  String get macroReplayStepWaitManual => 'Waiting for user action';
+
+  @override
+  String get macroReplayStepExecuteScript => 'Running import script…';
+
+  @override
+  String get macroReplayStepDelay => 'Waiting…';
+
+  @override
+  String get macroReplayNoSteps => 'No recorded steps';
+
+  @override
+  String get macroReplayUserCancelled => 'Cancelled by user';
+
+  @override
+  String macroReplayStepFailed(int current, int total, String error) {
+    return 'Step $current/$total failed: $error';
+  }
+
+  @override
+  String get macroReplayEmptyNavigateUrl => 'Navigation URL is empty';
+
+  @override
+  String macroReplayInvalidUrl(String url) {
+    return 'Invalid URL: $url';
+  }
+
+  @override
+  String get macroReplayEmptyFillSelector => 'Fill selector is empty';
+
+  @override
+  String macroReplayFieldNotFound(String selector) {
+    return 'Form field not found: $selector';
+  }
+
+  @override
+  String get macroReplayEmptyClickSelector => 'Click selector is empty';
+
+  @override
+  String macroReplayClickNotFound(String selector) {
+    return 'Click target not found: $selector';
+  }
+
+  @override
+  String macroReplayWaitUrlPattern(String pattern) {
+    return 'Waiting for URL match: $pattern';
+  }
+
+  @override
+  String get macroReplayEmptyWaitSelector => 'Wait selector is empty';
+
+  @override
+  String macroReplayWaitSelector(String selector) {
+    return 'Waiting for element: $selector';
+  }
+
+  @override
+  String get macroReplayManualActionRequired => 'Manual action required';
+
+  @override
+  String macroReplayNavigateTo(String url) {
+    return 'Navigate to $url';
+  }
+
+  @override
+  String get macroReplayWaitPageLoad => 'Waiting for page load';
+
+  @override
+  String get macroReplayWaitDomReady => 'Waiting for DOM ready';
+
+  @override
+  String get hyperosShowcaseTitle => 'HyperOS UI Kit';
+
+  @override
+  String get hyperosShowcaseSectionSummary => 'Summary card';
+
+  @override
+  String get hyperosShowcaseKitSubtitle => 'mikcb HyperOS-style components';
+
+  @override
+  String get hyperosShowcaseSectionTags => 'Tags / Accordion / Hints';
+
+  @override
+  String get hyperosShowcaseAccordionSection1 => 'Section 1';
+
+  @override
+  String get hyperosShowcaseAccordionSection1Body =>
+      'Content shown after expanding.';
+
+  @override
+  String get hyperosShowcaseAccordionSection2 => 'Section 2';
+
+  @override
+  String get hyperosShowcaseAccordionSection2Body =>
+      'Collapsible group replacing FAccordion.';
+
+  @override
+  String get hyperosShowcaseSectionNavRows => 'List rows · Navigation';
+
+  @override
+  String get hyperosShowcaseNavRowWithIcon => 'With icon';
+
+  @override
+  String get hyperosShowcaseNavRowNoIconSubtitle => 'No leading tinted icon';
+
+  @override
+  String get hyperosShowcaseNavRowDetails => 'Details';
+
+  @override
+  String get hyperosShowcaseSectionSwitchRows =>
+      'List rows · Switch / Destructive';
+
+  @override
+  String get hyperosShowcaseSwitchRowSubtitle => 'Switch row with icon';
+
+  @override
+  String get hyperosShowcaseSwitchRowPlain => 'Plain switch row';
+
+  @override
+  String get hyperosShowcaseSectionChoiceRows =>
+      'List rows · Radio / Select / Date';
+
+  @override
+  String get hyperosShowcaseOptionA => 'Option A';
+
+  @override
+  String get hyperosShowcaseOptionB => 'Option B';
+
+  @override
+  String get hyperosShowcaseOptionC => 'Option C';
+
+  @override
+  String get hyperosShowcaseSelectSizeTitle => 'Choose size';
+
+  @override
+  String get hyperosShowcaseSizeSmall => 'S';
+
+  @override
+  String get hyperosShowcaseSizeMedium => 'M';
+
+  @override
+  String get hyperosShowcaseSizeLarge => 'L';
+
+  @override
+  String get hyperosShowcaseSectionControls => 'Control card';
+
+  @override
+  String get hyperosShowcaseControlsSubtitle => 'Slider, segments, buttons';
+
+  @override
+  String get hyperosShowcaseSegmentLeft => 'Left';
+
+  @override
+  String get hyperosShowcaseSegmentRight => 'Right';
+
+  @override
+  String get hyperosShowcaseSectionInput => 'Input';
+
+  @override
+  String get hyperosShowcaseInputHint => 'Enter content';
+
+  @override
+  String get hyperosShowcaseInputCardLabel => 'Input in card';
+
+  @override
+  String get hyperosShowcaseSectionPicker => 'Wheel picker';
+
+  @override
+  String hyperosShowcasePickerCurrentValue(int value) {
+    return 'Current value: $value';
+  }
+
+  @override
+  String get hyperosShowcaseSectionInline => 'Inline basics';
+
+  @override
+  String get hyperosShowcaseCheckboxSubtitle => 'Multi-select preference row';
+
+  @override
+  String get hyperosShowcaseSectionNavActions => 'Navigation & actions';
+
+  @override
+  String get hyperosShowcaseTooltipButton => 'Button with tooltip';
+
+  @override
+  String get hyperosShowcaseSectionProgress => 'Progress & refresh';
+
+  @override
+  String get hyperosShowcaseSectionColorChip => 'ColorChip';
+
+  @override
+  String get hyperosShowcaseSectionNavBar => 'HyperosNavigationBar';
+
+  @override
+  String get hyperosShowcaseNavHome => 'Home';
+
+  @override
+  String get hyperosShowcaseNavTimetable => 'Timetable';
+
+  @override
+  String get hyperosShowcaseNavSettings => 'Settings';
+
+  @override
+  String get hyperosShowcaseSectionEmpty => 'Empty / Divider / Decoration';
+
+  @override
+  String get hyperosShowcaseEmptySubtitle => 'Placeholder when list is empty';
+
+  @override
+  String get hyperosShowcaseActionButton => 'Action';
+
+  @override
+  String get hyperosShowcaseDividerRowTitle =>
+      'Second row (indented divider above)';
+
+  @override
+  String get hyperosShowcaseSectionPressable => 'HyperosPressableRow';
+
+  @override
+  String get hyperosShowcaseSectionShell => 'Page shell';
+
+  @override
+  String get hyperosShowcaseRootPageDetails => 'Root page without back button';
+
+  @override
+  String get hyperosShowcaseSubpageSubtitle =>
+      'Current page is Subpage + HyperosListView';
+
+  @override
+  String get hyperosShowcaseAlreadyInSubpage => 'Already in Subpage';
+
+  @override
+  String get hyperosShowcaseSectionFrosted => 'Frosted header · scroll physics';
+
+  @override
+  String get hyperosShowcaseSectionFeedback => 'Feedback · overlays';
+
+  @override
+  String get hyperosShowcaseSectionIconColors => 'HyperosIconColors';
+
+  @override
+  String get hyperosShowcaseFooterNote =>
+      'Visible on the settings home page in non-release builds for component QA.';
+
+  @override
+  String get hyperosShowcaseUndoAction => 'Undo';
+
+  @override
+  String get hyperosShowcaseDialogMessage => 'System-style dialog example.';
+
+  @override
+  String get hyperosShowcaseConfirmTitle => 'Confirm action';
+
+  @override
+  String get hyperosShowcaseConfirmed => 'Confirmed';
+
+  @override
+  String get hyperosShowcaseToastDescription =>
+      'With icon and subtitle, same as app toast';
+
+  @override
+  String get hyperosShowcaseMenuCopy => 'Copy';
+
+  @override
+  String get hyperosShowcaseMenuShare => 'Share';
+
+  @override
+  String get hyperosShowcaseMenuDelete => 'Delete';
+
+  @override
+  String get hyperosShowcaseRefreshDone => 'Refresh complete';
+
+  @override
+  String get hyperosShowcaseSearchTooltip => 'Search';
+
+  @override
+  String get hyperosShowcaseRootShellLabel => 'Root shell';
+
+  @override
+  String get hyperosShowcasePushSubtitle => 'Enter via HyperosNavigation.push';
+
+  @override
+  String get hyperosShowcaseSampleText => 'Sample text';
+
+  @override
+  String courseImportQuickImportDescription(
+    String schoolName,
+    String adapterName,
+  ) {
+    return 'Quick import $schoolName $adapterName';
+  }
+
+  @override
+  String get courseImportScriptNoCourses =>
+      'Import script returned no course data';
+
+  @override
+  String get courseImportScriptFailed => 'Script execution failed';
+
+  @override
+  String get courseImportRecordingStatus => 'Recording… tap Stop to finish';
+
+  @override
+  String get courseImportRecordingStartedTip =>
+      'Recording started. Continue through the academic portal as usual.';
+
+  @override
+  String get courseImportRecordingEmptyStatus => 'No actions recorded';
+
+  @override
+  String get courseImportRecordingEmptyTip => 'No actions recorded';
+
+  @override
+  String get courseImportSaveRecordingTitle => 'Save recording';
+
+  @override
+  String courseImportSaveRecordingMessage(int count) {
+    return 'Recorded $count steps. Save as quick import?';
+  }
+
+  @override
+  String courseImportRecordingSavedStatus(int count) {
+    return 'Recording saved ($count steps)';
+  }
+
+  @override
+  String get courseImportWeekNotProvided => 'Weeks not provided';
+
+  @override
+  String get courseImportLocationNotFilled => 'Location not filled';
+
+  @override
+  String courseImportPreviewLine(
+    String weekday,
+    int startSection,
+    int endSection,
+    String name,
+    String location,
+    String weekText,
+  ) {
+    return 'Weekday $weekday Sections $startSection-$endSection  $name  $location  Weeks: $weekText';
+  }
+
+  @override
+  String courseImportCalendarWeekLabel(int week) {
+    return 'Calendar week $week';
+  }
+
+  @override
+  String get courseImportTermStartDateTitle => 'Term start date';
+
+  @override
+  String get courseImportFirstWeekMappingLabel =>
+      'Which calendar week is timetable week 1';
+
+  @override
+  String get courseImportFirstWeekMappingSubtitle =>
+      'If week 1 has no classes, choose week 2; if weeks 1-2 have none, choose week 3.';
+
+  @override
+  String get courseImportFirstWeekNoShift =>
+      'Import will treat timetable week 1 as calendar week 1.';
+
+  @override
+  String courseImportFirstWeekShifted(int weeks, int targetWeek) {
+    return 'Import will shift all course weeks by $weeks so timetable week 1 lands on calendar week $targetWeek.';
+  }
+
+  @override
+  String get courseImportContinueAction => 'Continue import';
+
+  @override
+  String get courseImportUpdateRecommendedAction =>
+      'Update timetable (recommended)';
+
+  @override
+  String get courseImportOverwriteAction => 'Overwrite import';
+
+  @override
+  String get courseImportSectionCountInsufficientTitle =>
+      'Not enough sections in time scheme';
+
+  @override
+  String courseImportSectionCountInsufficientMessage(
+    int current,
+    int required,
+  ) {
+    return 'Current time scheme has only $current sections, but import needs up to section $required. Auto-fill and continue?';
+  }
+
+  @override
+  String get courseImportAutoFillAndImportAction => 'Auto-fill and import';
+
+  @override
+  String get courseImportPortalUrlTitle => 'Enter academic portal URL';
+
+  @override
+  String get courseImportPortalUrlSaveContinue => 'Save and continue';
+
+  @override
+  String get courseImportPortalUrlLabel => 'Portal URL';
+
+  @override
+  String get courseImportPortalUrlHint =>
+      'Saved URL will be reused next time. You can also edit it on the adapter info page.';
+
+  @override
+  String get courseImportPortalUrlInvalid => 'Invalid login URL format';
+
+  @override
+  String get logAppLoggerInitialized => 'App log service initialized';
+
+  @override
+  String get logPrivacyConsentUpdated => 'Privacy consent status updated';
+
+  @override
+  String get logAppLogRecordingEnabled => 'App log recording enabled';
+
+  @override
+  String get logAppLogRecordingRemainsEnabled =>
+      'App log recording remains enabled';
+
+  @override
+  String get logStartupFlowStarted => 'Startup flow started';
+
+  @override
+  String get logStartupFlowCompletedNoOnboarding =>
+      'Startup flow completed (no onboarding)';
+
+  @override
+  String get logStartupFlowCompletedAfterGuide =>
+      'Startup flow completed (after guide)';
+
+  @override
+  String get logStartupFlowFailed =>
+      'Startup flow failed; entering degraded mode';
+
+  @override
+  String get logAppLifecycleChanged => 'App lifecycle changed';
+
+  @override
+  String get logNavigatorRouteReplaced => 'Navigation route replaced';
+
+  @override
+  String get logNavigatorRouteChanged => 'Navigation route changed';
+
+  @override
+  String get logAppLogsDefaultMigrated =>
+      'App log recording enabled by default during migration';
+
+  @override
+  String get logTimetableLoadSettingsFailed =>
+      'Failed to load timetable settings';
+
+  @override
+  String get logTimetableLoadCoursesFailed => 'Failed to load course data';
+
+  @override
+  String get logTimetableLoadCurrentWeekFailed => 'Failed to load current week';
+
+  @override
+  String get logHomeWidgetPinSupportFailed =>
+      'Failed to check home widget pin support';
+
+  @override
+  String get logHomeWidgetPinRequestFailed =>
+      'Failed to request home widget pin';
+
+  @override
+  String get logHomeWidgetSyncFailed => 'Failed to sync home widget snapshot';
+
+  @override
+  String get logHomeWidgetClearFailed => 'Failed to clear home widget snapshot';
+
+  @override
+  String get logHomeWidgetScheduleFailed =>
+      'Failed to schedule home widget refresh';
+
+  @override
+  String get logMiuiLiveInitializeFailed =>
+      'Failed to initialize MIUI Live Island channel';
+
+  @override
+  String get logMiuiLiveOpenPromotedSettingsFailed =>
+      'Failed to open Live Island permission settings';
+
+  @override
+  String get logMiuiLiveOpenNotificationSettingsFailed =>
+      'Failed to open notification settings';
+
+  @override
+  String get logMiuiLiveOpenAutostartSettingsFailed =>
+      'Failed to open autostart settings';
+
+  @override
+  String get logMiuiLiveOpenBatterySettingsFailed =>
+      'Failed to open battery optimization settings';
+
+  @override
+  String get logMiuiLiveOpenAccessibilitySettingsFailed =>
+      'Failed to open accessibility settings';
+
+  @override
+  String get logMiuiLiveHideFromRecentsFailed =>
+      'Failed to update hide-from-recents';
+
+  @override
+  String get logLiveUpdateStartFailed =>
+      'Failed to start Live Island from Flutter';
+
+  @override
+  String get logLiveUpdateStopFailed =>
+      'Failed to stop Live Island from Flutter';
+
+  @override
+  String get logLiveUpdateDebugStatusFailed =>
+      'Failed to get native Live Island debug status';
+
+  @override
+  String get logLiveUpdateSnapshotSyncFailed =>
+      'Failed to sync Live Island timetable snapshot';
+
+  @override
+  String get logLiveUpdateSnapshotClearFailed =>
+      'Failed to clear Live Island timetable snapshot';
+
+  @override
+  String get logLiveUpdateSuspendTriggersFailed =>
+      'Failed to suspend Live Island schedule triggers';
+
+  @override
+  String get logLanEditAuthFailed => 'LAN edit: authentication failed';
+
+  @override
+  String get logLanEditCourseCreated => 'LAN edit: course created';
+
+  @override
+  String get logLanEditCourseUpdated => 'LAN edit: course updated';
+
+  @override
+  String get logLanEditCourseDeleted => 'LAN edit: course deleted';
+
+  @override
+  String get logLanEditCourseGroupSaved => 'LAN edit: course group saved';
+
+  @override
+  String get logLanEditMergeImported => 'LAN edit: merge backup imported';
+
+  @override
+  String get logLanEditCoursesBatchDeleted => 'LAN edit: courses batch deleted';
+
+  @override
+  String get logLanEditCurrentWeekSet => 'LAN edit: current week set';
+
+  @override
+  String get logLanEditProfileSwitched =>
+      'LAN edit: timetable profile switched';
+
+  @override
+  String get logLanEditSpreadsheetImported => 'LAN edit: spreadsheet imported';
+
+  @override
+  String get logLanEditSessionStarted => 'LAN edit: session started';
+
+  @override
+  String get logLanEditSessionStopped => 'LAN edit: session stopped';
+
+  @override
+  String get logLiveUpdateTestRequested =>
+      'User requested manual Live Island test notification';
+
+  @override
+  String get logLiveUpdateTestNoSelection =>
+      'Manual Live Island test: no course available';
+
+  @override
+  String get logLiveUpdateTestSelectionReady =>
+      'Manual Live Island test: target course resolved';
+
+  @override
+  String get logLiveUpdateTestSuspendSync =>
+      'Manual Live Island test: scheduled sync paused temporarily';
+
+  @override
+  String get logLiveUpdateTestStarting =>
+      'Manual Live Island test: starting native Live Island';
+
+  @override
+  String get logLiveUpdateTestStarted =>
+      'Manual Live Island test: native Live Island requested successfully';
+
+  @override
+  String get logLiveUpdateTestFailed =>
+      'Manual Live Island test: failed before Live Island appeared';
+
+  @override
+  String logLiveUpdateSettingsSynced(
+    String beforeClass,
+    String duringClass,
+    String beforeEnd,
+    String promote,
+    String notification,
+    String countdown,
+    String courseName,
+    String location,
+  ) {
+    return 'Flutter Live Island settings synced: beforeClass=$beforeClass, duringClass=$duringClass, beforeEnd=$beforeEnd, promote=$promote, notification=$notification, countdown=$countdown, courseName=$courseName, location=$location';
+  }
+
+  @override
+  String get logFieldSource => 'source';
+
+  @override
+  String get logFieldPlatform => 'platform';
+
+  @override
+  String get logFieldVersion => 'version';
+
+  @override
+  String get logFieldBuildNumber => 'build Number';
+
+  @override
+  String get logFieldLoggingEnabled => 'logging Enabled';
+
+  @override
+  String get logFieldPrivacyAccepted => 'privacy Accepted';
+
+  @override
+  String get logFieldAccepted => 'accepted';
+
+  @override
+  String get logFieldPrevious => 'previous';
+
+  @override
+  String get logFieldTruncated => 'truncated';
+
+  @override
+  String get logFieldTruncatedHint => 'truncated Hint';
+
+  @override
+  String get logFieldThrowable => 'throwable';
+
+  @override
+  String get logFieldExtras => 'extras';
+
+  @override
+  String get logFieldContext => 'context';
+
+  @override
+  String get logFieldError => 'error';
+
+  @override
+  String get logFieldBrand => 'brand';
+
+  @override
+  String get logFieldManufacturer => 'manufacturer';
+
+  @override
+  String get logFieldModel => 'model';
+
+  @override
+  String get logFieldSdkInt => 'sdk Int';
+
+  @override
+  String get logFieldVersionName => 'version Name';
+
+  @override
+  String get logFieldChannel => 'channel';
+
+  @override
+  String get logFieldHasNotificationPermission => 'has Notification Permission';
+
+  @override
+  String get logFieldHasPromotedPermissionDeclared =>
+      'has Promoted Permission Declared';
+
+  @override
+  String get logFieldCanPostPromotedNotifications =>
+      'can Post Promoted Notifications';
+
+  @override
+  String get logFieldIgnoringBatteryOptimizations =>
+      'ignoring Battery Optimizations';
+
+  @override
+  String get logFieldKeepAliveAccessibilityEnabled =>
+      'keep Alive Accessibility Enabled';
+
+  @override
+  String get logFieldHideFromRecentsEnabled => 'hide From Recents Enabled';
+
+  @override
+  String get logFieldTaskRemovedRecently => 'task Removed Recently';
+
+  @override
+  String get logFieldLastTaskRemovedAt => 'last Task Removed At';
+
+  @override
+  String get logFieldProcessImportance => 'process Importance';
+
+  @override
+  String get logFieldAutoStartStatus => 'auto Start Status';
+
+  @override
+  String get logFieldLiveEnableBeforeClass => 'live Enable Before Class';
+
+  @override
+  String get logFieldLiveEnableDuringClass => 'live Enable During Class';
+
+  @override
+  String get logFieldLiveEnableBeforeEnd => 'live Enable Before End';
+
+  @override
+  String get logFieldLivePromoteDuringClass => 'live Promote During Class';
+
+  @override
+  String get logFieldLiveShowDuringClassNotification =>
+      'live Show During Class Notification';
+
+  @override
+  String get logFieldLiveShowCountdown => 'live Show Countdown';
+
+  @override
+  String get logFieldLiveShowStageText => 'live Show Stage Text';
+
+  @override
+  String get logFieldLiveShowCourseName => 'live Show Course Name';
+
+  @override
+  String get logFieldLiveShowLocation => 'live Show Location';
+
+  @override
+  String get logFieldLiveUseShortName => 'live Use Short Name';
+
+  @override
+  String get logFieldLiveHidePrefixText => 'live Hide Prefix Text';
+
+  @override
+  String get logFieldLiveDuringClassTimeDisplayMode =>
+      'live During Class Time Display Mode';
+
+  @override
+  String get logFieldLiveEnableMiuiIslandLabelImage =>
+      'live Enable Miui Island Label Image';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelStyle => 'live Miui Island Label Style';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelContent =>
+      'live Miui Island Label Content';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelFontColor =>
+      'live Miui Island Label Font Color';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelFontWeight =>
+      'live Miui Island Label Font Weight';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelRenderQuality =>
+      'live Miui Island Label Render Quality';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelFontSize =>
+      'live Miui Island Label Font Size';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelOffsetX =>
+      'live Miui Island Label Offset X';
+
+  @override
+  String get logFieldLiveMiuiIslandLabelOffsetY =>
+      'live Miui Island Label Offset Y';
+
+  @override
+  String get logFieldLiveMiuiIslandExpandedIconMode =>
+      'live Miui Island Expanded Icon Mode';
+
+  @override
+  String get logFieldLiveShowBeforeClassMinutes =>
+      'live Show Before Class Minutes';
+
+  @override
+  String get logFieldLiveClassReminderStartMinutes =>
+      'live Class Reminder Start Minutes';
+
+  @override
+  String get logFieldLiveEndSecondsCountdownThreshold =>
+      'live End Seconds Countdown Threshold';
+
+  @override
+  String get logFieldState => 'state';
+
+  @override
+  String get logFieldRoute => 'route';
+
+  @override
+  String get logFieldPreviousRoute => 'previous Route';
+
+  @override
+  String get logFieldProfileId => 'profile Id';
+
+  @override
+  String get logFieldReason => 'reason';
+
+  @override
+  String get logFieldClientIp => 'client Ip';
+
+  @override
+  String get logFieldPort => 'port';
+
+  @override
+  String get logFieldCourseName => 'course Name';
+
+  @override
+  String get logFieldStage => 'stage';
+
+  @override
+  String get logFieldFrom => 'from';
+
+  @override
+  String get logFieldCurrentWeek => 'current Week';
+
+  @override
+  String get logFieldWeekday => 'weekday';
+
+  @override
+  String get logFieldUntilMillis => 'until Millis';
+
+  @override
+  String get logFieldStartAtMillis => 'start At Millis';
+
+  @override
+  String get logFieldMergedCourseCount => 'merged Course Count';
+
+  @override
+  String get logFieldDeletedCount => 'deleted Count';
+
+  @override
+  String get logFieldRequested => 'requested';
+
+  @override
+  String get logFieldTarget => 'target';
+
+  @override
+  String get logFieldCount => 'count';
+
+  @override
+  String get logFieldValue => 'value';
+
+  @override
+  String get logFieldSnapshotLength => 'snapshot Length';
+
+  @override
+  String get logFieldStoredSnapshotVersion => 'stored Snapshot Version';
+
+  @override
+  String get logFieldIntentIsNull => 'intent Is Null';
+
+  @override
+  String get logFieldAction => 'action';
+
+  @override
+  String get logFieldStep => 'step';
+
+  @override
+  String get logCatAppLoggerInitialized => 'app log: ger initialized';
+
+  @override
+  String get logCatPrivacyConsentUpdated => 'privacy consent updated';
+
+  @override
+  String get logCatAppLogRecordingEnabled => 'app log: recording enabled';
+
+  @override
+  String get logCatStartupFlowStarted => 'startup: started';
+
+  @override
+  String get logCatStartupFlowCompleted => 'startup: completed';
+
+  @override
+  String get logCatStartupFlowFailed => 'startup: failed';
+
+  @override
+  String get logCatAppLifecycleStateChanged => 'app lifecycle state changed';
+
+  @override
+  String get logCatRoutePushed => 'route pushed';
+
+  @override
+  String get logCatRoutePopped => 'route popped';
+
+  @override
+  String get logCatRouteReplaced => 'route replaced';
+
+  @override
+  String get logCatFlutterFrameworkError => 'flutter framework error';
+
+  @override
+  String get logCatFlutterPlatformError => 'flutter platform error';
+
+  @override
+  String get logCatFlutterZoneError => 'flutter zone error';
+
+  @override
+  String get logCatAppLogsDefaultMigrated => 'app log: s default migrated';
+
+  @override
+  String get logCatTimetableLoadSettingsFailed =>
+      'timetable: load settings failed';
+
+  @override
+  String get logCatTimetableLoadCoursesFailed =>
+      'timetable: load courses failed';
+
+  @override
+  String get logCatTimetableLoadCurrentWeekFailed =>
+      'timetable: load current week failed';
+
+  @override
+  String get logCatHomeWidgetPinSupportFailed =>
+      'home widget: pin support failed';
+
+  @override
+  String get logCatHomeWidgetPinRequestFailed =>
+      'home widget: pin request failed';
+
+  @override
+  String get logCatHomeWidgetSyncFailed => 'home widget: sync failed';
+
+  @override
+  String get logCatHomeWidgetClearFailed => 'home widget: clear failed';
+
+  @override
+  String get logCatHomeWidgetScheduleFailed => 'home widget: schedule failed';
+
+  @override
+  String get logCatMiuiLiveInitializeFailed => 'live island: initialize failed';
+
+  @override
+  String get logCatMiuiLiveOpenPromotedSettingsFailed =>
+      'live island: open promoted settings failed';
+
+  @override
+  String get logCatMiuiLiveOpenNotificationSettingsFailed =>
+      'live island: open notification settings failed';
+
+  @override
+  String get logCatMiuiLiveOpenAutostartSettingsFailed =>
+      'live island: open autostart settings failed';
+
+  @override
+  String get logCatMiuiLiveOpenBatterySettingsFailed =>
+      'live island: open battery settings failed';
+
+  @override
+  String get logCatMiuiLiveOpenAccessibilitySettingsFailed =>
+      'live island: open accessibility settings failed';
+
+  @override
+  String get logCatMiuiLiveHideFromRecentsFailed =>
+      'live island: hide from recents failed';
+
+  @override
+  String get logCatLiveUpdateFlutterInitializeFailed =>
+      'live island: flutter initialize failed';
+
+  @override
+  String get logCatLiveUpdateStartFailed => 'live island: start failed';
+
+  @override
+  String get logCatLiveUpdateStopFailed => 'live island: stop failed';
+
+  @override
+  String get logCatLiveUpdateDebugStatusFailed =>
+      'live island: debug status failed';
+
+  @override
+  String get logCatLiveUpdateSettingsSynced => 'live island: settings synced';
+
+  @override
+  String get logCatLiveUpdateSnapshotSyncFailed =>
+      'live island: snapshot sync failed';
+
+  @override
+  String get logCatLiveUpdateSnapshotClearFailed =>
+      'live island: snapshot clear failed';
+
+  @override
+  String get logCatLanEditAuthFailed => 'lan edit auth failed';
+
+  @override
+  String get logCatLanEditCourseCreated => 'lan edit course created';
+
+  @override
+  String get logCatLanEditCourseUpdated => 'lan edit course updated';
+
+  @override
+  String get logCatLanEditCourseDeleted => 'lan edit course deleted';
+
+  @override
+  String get logCatLanEditCourseGroupSaved => 'lan edit course group saved';
+
+  @override
+  String get logCatLanEditMergeImported => 'lan edit merge imported';
+
+  @override
+  String get logCatLanEditCoursesBatchDeleted =>
+      'lan edit courses batch deleted';
+
+  @override
+  String get logCatLanEditCurrentWeekSet => 'lan edit current week set';
+
+  @override
+  String get logCatLanEditSpreadsheetImported =>
+      'lan edit spreadsheet imported';
+
+  @override
+  String get logCatLanEditSessionStarted => 'lan edit session started';
+
+  @override
+  String get logCatLanEditSessionStopped => 'lan edit session stopped';
+
+  @override
+  String get logCatLiveUpdateTestRequested => 'live island: test requested';
+
+  @override
+  String get logCatLiveUpdateTestNoSelection =>
+      'live island: test no selection';
+
+  @override
+  String get logCatLiveUpdateTestSelectionReady =>
+      'live island: test selection ready';
+
+  @override
+  String get logCatLiveUpdateTestSuspendSync =>
+      'live island: test suspend sync';
+
+  @override
+  String get logCatLiveUpdateTestStarting => 'live island: test starting';
+
+  @override
+  String get logCatLiveUpdateTestStarted => 'live island: test started';
+
+  @override
+  String get logCatLiveUpdateTestFailed => 'live island: test failed';
+
+  @override
+  String get logCatLiveUpdateSnapshotSettings =>
+      'live island: snapshot settings';
+
+  @override
+  String get logCatLiveUpdateSnapshotSynced => 'live island: snapshot synced';
+
+  @override
+  String get logCatLiveUpdateSnapshotCleared => 'live island: snapshot cleared';
+
+  @override
+  String get logCatLiveUpdateAlarmTriggered => 'live island: alarm triggered';
+
+  @override
+  String get logCatLiveUpdateSchedulerResume => 'live island: scheduler resume';
+
+  @override
+  String get logCatLiveUpdateRescheduleHoliday =>
+      'live island: reschedule holiday';
+
+  @override
+  String get logCatLiveUpdateRescheduleActive =>
+      'live island: reschedule active';
+
+  @override
+  String get logCatLiveUpdateRescheduleScheduled =>
+      'live island: reschedule scheduled';
+
+  @override
+  String get logCatLiveUpdateSnapshotParseFailed =>
+      'live island: snapshot parse failed';
+
+  @override
+  String get logCatLiveUpdateSnapshotInvalidatedAfterUpgrade =>
+      'live island: snapshot invalidated after upgrade';
+
+  @override
+  String get logCatLiveUpdatePayloadSelected => 'live island: payload selected';
+
+  @override
+  String get logCatLiveUpdateSchedulerStartFailed =>
+      'live island: scheduler start failed';
+
+  @override
+  String get logCatLiveUpdateStartRequested => 'live island: start requested';
+
+  @override
+  String get logCatLiveUpdateStopRequested => 'live island: stop requested';
+
+  @override
+  String get logCatLiveUpdateServiceMissingPayload =>
+      'live island: service missing payload';
+
+  @override
+  String get logCatLiveUpdateServiceStarted => 'live island: service started';
+
+  @override
+  String get logCatLiveUpdateServiceStartFailed =>
+      'live island: service start failed';
+
+  @override
+  String get logCatLiveUpdateTaskRemoved => 'live island: task removed';
+
+  @override
+  String get logCatLiveUpdateTaskRemovedResumed =>
+      'live island: task removed resumed';
+
+  @override
+  String get logCatLiveUpdateBeforeClassQuickAction =>
+      'live island: before class quick action';
+
+  @override
+  String get logCatLiveUpdateBeforeClassQuickActionRestored =>
+      'live island: before class quick action restored';
+
+  @override
+  String get logCatLiveUpdateStatusBarDismissed =>
+      'live island: status bar dismissed';
+
+  @override
+  String get logCatLiveUpdateNotPromoted => 'live island: not promoted';
+
+  @override
+  String get logCatLiveUpdatePromotedNotShown =>
+      'live island: promoted not shown';
+
+  @override
+  String get logCatLiveUpdateServiceStopped => 'live island: service stopped';
+
+  @override
+  String get logCatKeepAliveAccessibilityConnected =>
+      'keep-alive: accessibility connected';
+
+  @override
+  String get logCatDiagnosticsEnabled => 'diagnostics: enabled';
+
+  @override
+  String get logCatDiagnosticsCleared => 'diagnostics: cleared';
+
+  @override
+  String get logCatDiagnosticsBootstrap => 'diagnostics: bootstrap';
+
+  @override
+  String get logCatFlutterDiagnostic => 'flutter diagnostic';
+
+  @override
+  String get logCatFlutterDiagnosticEvent => 'flutter diagnostic event';
+
+  @override
+  String get logCatRenderFailed => 'render failed';
+
+  @override
+  String get logCatDebugSnapshot => 'debug snapshot';
+
+  @override
+  String get logExportTitle => 'Qingyu Timetable - App logs';
+
+  @override
+  String get appUpdateMirrorPresetGhfast => 'Default mirror';
+
+  @override
+  String get appUpdateMirrorPresetGhproxyCn => 'Backup mirror 1';
+
+  @override
+  String get appUpdateMirrorPresetGhLlkk => 'Backup mirror 2';
+
+  @override
+  String get appUpdateMirrorPresetGhProxyCom => 'Backup mirror 3';
+
+  @override
+  String get appUpdateMirrorPresetGhproxyNet => 'Backup mirror 4';
+
+  @override
+  String get appUpdateMirrorPresetCustom => 'Custom';
+
+  @override
+  String get appUpdateMirrorPresetCustomDescription =>
+      'Enter a custom mirror URL prefix';
+
+  @override
+  String get cloudBackupRetentionTitle => 'Backup retention';
+
+  @override
+  String get cloudBackupMaxCountTitle => 'Maximum backups';
+
+  @override
+  String get cloudBackupMaxCountSubtitle =>
+      'Oldest backups are removed when exceeded';
+
+  @override
+  String cloudBackupMaxCountOption(int count) {
+    return '$count backups';
+  }
+
+  @override
+  String get cloudBackupMaxAgeTitle => 'Maximum age';
+
+  @override
+  String get cloudBackupMaxAgeSubtitle => 'Backups older than this are removed';
+
+  @override
+  String cloudBackupMaxAgeOption(int days) {
+    return '$days days';
+  }
+
+  @override
+  String get statisticsShareText => 'Semester statistics from mikcb';
+
+  @override
+  String get aboutUpdateAvailableHeadline => 'Update available';
+
+  @override
+  String get aboutAlreadyLatestHeadline => 'Already up to date';
+
+  @override
+  String get aboutDownloadChannelSectionTitle => 'Download channel';
+
+  @override
+  String get aboutMirrorProbeFailedLabel => 'Failed';
+
+  @override
+  String timeSchemeImportSupplementName(String name) {
+    return '$name (import supplement)';
+  }
+
+  @override
+  String profileTimeSchemeName(String profileName) {
+    return '$profileName schedule';
+  }
+
+  @override
+  String get currentProfileTimeSchemeName => 'Current timetable schedule';
+
+  @override
+  String get unnamedTimetableProfile => 'Unnamed timetable';
+
+  @override
+  String get cloudBackupManualProtectedTitle => 'Protect manual backups';
+
+  @override
+  String get cloudBackupManualProtectedSubtitle =>
+      'Manual backups are never auto-deleted when enabled';
+
+  @override
+  String courseImportPortalUrlMissingBody(
+    String schoolName,
+    String adapterName,
+  ) {
+    return '\"$schoolName / $adapterName\" has no default login URL. Enter the school portal URL first.';
+  }
+
+  @override
+  String guidePermissionsProgressLabel(int ready, int total) {
+    return 'Ready $ready/$total';
+  }
 }

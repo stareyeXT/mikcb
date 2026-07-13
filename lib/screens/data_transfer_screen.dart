@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/timetable_provider.dart';
 import '../services/data_transfer_service.dart';
-import '../utils/responsive.dart';
+import '../utils/app_toast.dart';
+import '../ui/hyperos/hyperos.dart';
 
 class DataTransferScreen extends StatefulWidget {
   const DataTransferScreen({super.key});
@@ -24,133 +26,95 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final provider = context.watch<TimetableProvider>();
-    final theme = Theme.of(context);
     final activeProfileName =
         provider.activeProfile?.name ?? l10n.timetableAppName;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.dataTransferTitle),
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.dataTransferTitle),
+      child: HyperosListView(
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          HyperosControlCard(
+            title: l10n.fullExportTitle,
+            subtitle: l10n.fullExportSubtitle,
+            child: HyperosControlCardInset(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Text(
-                    l10n.fullExportTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  HyperosButton(
+                    label: _isExporting
+                        ? '${l10n.fullExportTitle}...'
+                        : l10n.exportCurrentTimetable,
+                    loading: _isExporting,
+                    onPressed: _isExporting ? null : _exportCurrentProfile,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.fullExportSubtitle,
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed:
-                              _isExporting ? null : _exportCurrentProfile,
-                          icon: _isExporting
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.ios_share_rounded),
-                          label: Text(_isExporting
-                              ? '${l10n.fullExportTitle}...'
-                              : l10n.exportCurrentTimetable),
-                        ),
-                        FilledButton.tonalIcon(
-                          onPressed: _isExporting ? null : _exportFullData,
-                          icon: const Icon(Icons.storage_rounded),
-                          label: Text(l10n.exportAllData),
-                        ),
-                      ],
-                    ),
+                  HyperosButton(
+                    label: l10n.exportAllData,
+                    variant: HyperosButtonVariant.secondary,
+                    onPressed: _isExporting ? null : _exportFullData,
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.fullImportTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(l10n.fullImportSubtitle),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: _isImporting ? null : _confirmAndImport,
-                      icon: _isImporting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download_rounded),
-                      label: Text(_isImporting
-                          ? '${l10n.fullImportTitle}...'
-                          : l10n.chooseFileAndImport),
-                    ),
-                  ),
-                ],
+          const HyperosSectionGap(),
+          HyperosControlCard(
+            title: l10n.fullImportTitle,
+            subtitle: l10n.fullImportSubtitle,
+            child: HyperosControlCardInset(
+              child: HyperosButton(
+                label: _isImporting
+                    ? '${l10n.fullImportTitle}...'
+                    : l10n.chooseFileAndImport,
+                variant: HyperosButtonVariant.secondary,
+                loading: _isImporting,
+                onPressed: _isImporting ? null : _confirmAndImport,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+          const HyperosSectionGap(),
+          HyperosControlCard(
+            title: l10n.transferOverviewTitle,
+            child: HyperosControlCardInset(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    l10n.transferOverviewTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  _buildOverviewRow(
+                    context,
+                    l10n.courseCountBullet(provider.courses.length),
                   ),
-                  const SizedBox(height: 10),
-                  _buildBullet(l10n.courseCountBullet(provider.courses.length)),
-                  _buildBullet(l10n.currentTimetableBullet(activeProfileName)),
-                  _buildBullet(
-                      l10n.allTimetablesBullet(provider.profiles.length)),
-                  _buildBullet(
-                      l10n.timeSchemeCountBullet(provider.timeSchemes.length)),
-                  _buildBullet(l10n.currentWeekBullet(provider.currentWeek)),
-                  _buildBullet(
+                  _buildOverviewRow(
+                    context,
+                    l10n.currentTimetableBullet(activeProfileName),
+                  ),
+                  _buildOverviewRow(
+                    context,
+                    l10n.allTimetablesBullet(provider.profiles.length),
+                  ),
+                  _buildOverviewRow(
+                    context,
+                    l10n.timeSchemeCountBullet(provider.timeSchemes.length),
+                  ),
+                  _buildOverviewRow(
+                    context,
+                    l10n.currentWeekBullet(provider.currentWeek),
+                  ),
+                  _buildOverviewRow(
+                    context,
                     provider.settings.semesterStartDate == null
                         ? l10n.semesterStartUnsetBullet
                         : l10n.semesterStartBullet(
                             _formatDate(provider.settings.semesterStartDate!),
                           ),
                   ),
-                  _buildBullet(l10n
-                      .fileExtensionBullet(DataTransferService.fileExtension)),
+                  _buildOverviewRow(
+                    context,
+                    l10n.fileExtensionBullet(
+                      DataTransferService.fileExtension,
+                    ),
+                    isLast: true,
+                  ),
                 ],
               ),
             ),
@@ -160,18 +124,48 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
     );
   }
 
-  Widget _buildBullet(String text) {
+  (String, String) _splitOverviewLabelValue(String text) {
+    final fullWidthColon = text.indexOf('：');
+    if (fullWidthColon != -1) {
+      return (
+        text.substring(0, fullWidthColon),
+        text.substring(fullWidthColon + 1).trim(),
+      );
+    }
+
+    final halfWidthColon = text.indexOf(': ');
+    if (halfWidthColon != -1) {
+      return (
+        text.substring(0, halfWidthColon),
+        text.substring(halfWidthColon + 2).trim(),
+      );
+    }
+
+    return ('', text);
+  }
+
+  Widget _buildOverviewRow(
+    BuildContext context,
+    String text, {
+    bool isLast = false,
+  }) {
+    final (label, value) = _splitOverviewLabelValue(text);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Icon(Icons.circle, size: 6),
+          Expanded(
+            child: Text(label, style: HyperosTypography.listDetail(context)),
           ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: HyperosTypography.listDetail(context),
+            ),
+          ),
         ],
       ),
     );
@@ -179,6 +173,7 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
 
   Future<void> _exportCurrentProfile() async {
     final provider = context.read<TimetableProvider>();
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _isExporting = true;
     });
@@ -189,6 +184,12 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
         exams: provider.exams,
         settings: provider.settings,
         currentWeek: provider.currentWeek,
+        shareText: l10n.dataTransferProfileShareText,
+        shareSubject: provider.activeProfile?.name == null
+            ? l10n.dataTransferProfileShareSubject
+            : l10n.dataTransferProfileShareSubjectNamed(
+                provider.activeProfile!.name,
+              ),
       );
     } finally {
       if (mounted) {
@@ -201,6 +202,7 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
 
   Future<void> _exportFullData() async {
     final provider = context.read<TimetableProvider>();
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _isExporting = true;
     });
@@ -209,6 +211,8 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
         profiles: provider.profiles,
         activeProfileId: provider.activeProfileId,
         timeSchemes: provider.timeSchemes,
+        shareText: l10n.dataTransferFullBackupShareText,
+        shareSubject: l10n.dataTransferFullBackupShareSubject,
       );
     } finally {
       if (mounted) {
@@ -220,31 +224,28 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
   }
 
   Future<void> _confirmAndImport() async {
-    final importMode = await showDialog<_BackupImportMode>(
+    final l10n = AppLocalizations.of(context)!;
+    final importMode = await showHyperosDialog<_BackupImportMode>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(AppLocalizations.of(context)!.selectImportModeTitle),
-          content: Text(AppLocalizations.of(context)!.selectImportModeMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(AppLocalizations.of(context)!.cancelAction),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, _BackupImportMode.replaceCurrent),
-              child:
-                  Text(AppLocalizations.of(context)!.replaceCurrentTimetable),
-            ),
-            FilledButton.tonal(
-              onPressed: () =>
-                  Navigator.pop(context, _BackupImportMode.importAsNew),
-              child: Text(AppLocalizations.of(context)!.importAsNewTimetable),
-            ),
-          ],
-        );
-      },
+      title: l10n.selectImportModeTitle,
+      message: l10n.selectImportModeMessage,
+      actions: [
+        HyperosDialogAction(
+          label: l10n.cancelAction,
+          onPressed: () => Navigator.pop(context),
+        ),
+        HyperosDialogAction(
+          label: l10n.replaceCurrentTimetable,
+          isPrimary: true,
+          onPressed: () =>
+              Navigator.pop(context, _BackupImportMode.replaceCurrent),
+        ),
+        HyperosDialogAction(
+          label: l10n.importAsNewTimetable,
+          onPressed: () =>
+              Navigator.pop(context, _BackupImportMode.importAsNew),
+        ),
+      ],
     );
 
     if (importMode == null || !mounted) {
@@ -256,7 +257,7 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         withData: true,
         allowedExtensions: const ['json', 'mikcb'],
@@ -272,7 +273,7 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
         return;
       }
       if (content.isEmpty) {
-        throw FormatException(AppLocalizations.of(context)!.importFileReadFailed);
+        throw FormatException(l10n.importFileReadFailed);
       }
       if (!mounted) {
         return;
@@ -280,40 +281,41 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
 
       final provider = context.read<TimetableProvider>();
       final message = switch (importMode) {
-        _BackupImportMode.replaceCurrent =>
-          await provider.importAppDataBackup(content),
+        _BackupImportMode.replaceCurrent => await provider.importAppDataBackup(
+          content,
+        ),
         _BackupImportMode.importAsNew =>
           await provider.importAppDataBackupAsNewProfile(content),
       };
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            message ??
-                (importMode == _BackupImportMode.importAsNew
-                    ? AppLocalizations.of(context)!
-                        .createdNewTimetableAfterImport
-                    : AppLocalizations.of(context)!.backupRestoredSuccess),
-          ),
-        ),
+      showAppToast(
+        context,
+        message: message != null
+            ? localizeServiceMessage(l10n, message)
+            : (importMode == _BackupImportMode.importAsNew
+                  ? l10n.createdNewTimetableAfterImport
+                  : l10n.backupRestoredSuccess),
+        kind: message != null ? AppToastKind.error : AppToastKind.success,
       );
     } on FormatException catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+      showAppToast(
+        context,
+        message: localizeServiceMessage(l10n, e.message),
+        kind: AppToastKind.error,
       );
     } catch (_) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(AppLocalizations.of(context)!.importFailedInvalidFile)),
+      showAppToast(
+        context,
+        message: l10n.importFailedInvalidFile,
+        kind: AppToastKind.error,
       );
     } finally {
       if (mounted) {
@@ -329,8 +331,4 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
   }
 }
 
-enum _BackupImportMode {
-  replaceCurrent,
-  importAsNew,
-}
-
+enum _BackupImportMode { replaceCurrent, importAsNew }

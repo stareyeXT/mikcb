@@ -14,10 +14,10 @@ enum HolidayType {
 
 extension HolidayTypeX on HolidayType {
   String get value => switch (this) {
-        HolidayType.vacation => 'vacation',
-        HolidayType.adjustedWorkday => 'adjusted_workday',
-        HolidayType.adjustedRestday => 'adjusted_restday',
-      };
+    HolidayType.vacation => 'vacation',
+    HolidayType.adjustedWorkday => 'adjusted_workday',
+    HolidayType.adjustedRestday => 'adjusted_restday',
+  };
 
   static HolidayType fromValue(String? value) {
     return HolidayType.values.firstWhere(
@@ -56,11 +56,11 @@ class HolidayEntry {
   bool get isAdjustedWorkday => type == HolidayType.adjustedWorkday;
 
   Map<String, dynamic> toJson() => {
-        'date': date.toIso8601String().substring(0, 10),
-        'name': name,
-        'type': type.value,
-        'groupId': groupId,
-      };
+    'date': date.toIso8601String().substring(0, 10),
+    'name': name,
+    'type': type.value,
+    'groupId': groupId,
+  };
 
   factory HolidayEntry.fromJson(Map<String, dynamic> json) {
     return HolidayEntry(
@@ -93,20 +93,52 @@ class HolidayData {
   HolidayEntry? entryForDate(DateTime date) {
     final dateOnly = DateTime(date.year, date.month, date.day);
     try {
-      return entries.firstWhere(
-        (e) => _isSameDate(e.date, dateOnly),
-      );
+      return entries.firstWhere((e) => _isSameDate(e.date, dateOnly));
     } catch (_) {
       return null;
     }
   }
 
   /// 某日期是否为假期（应隐藏课程）
-  bool isHoliday(DateTime date) => entryForDate(date)?.shouldHideCourses ?? false;
+  /// 调休上班日优先级高于假期——同一天既有假期又有调休上班时，按上班处理。
+  /// 但用户手动设置的自定义假期优先级最高，覆盖调休上班日。
+  bool isHoliday(DateTime date) {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    // 自定义假期优先级最高
+    if (entries.any(
+      (e) =>
+          _isSameDate(e.date, dateOnly) &&
+          e.shouldHideCourses &&
+          _isCustomEntry(e),
+    )) {
+      return true;
+    }
+    if (entries.any(
+      (e) => _isSameDate(e.date, dateOnly) && e.isAdjustedWorkday,
+    )) {
+      return false;
+    }
+    return entries.any(
+      (e) => _isSameDate(e.date, dateOnly) && e.shouldHideCourses,
+    );
+  }
 
-  /// 某日期是否为调休上班日
-  bool isAdjustedWorkday(DateTime date) =>
-      entryForDate(date)?.isAdjustedWorkday ?? false;
+  /// 某日期是否为调休上班日（排除被自定义假期覆盖的情况）
+  bool isAdjustedWorkday(DateTime date) {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    // 如果该日期有自定义假期覆盖，则不算调休上班日
+    if (entries.any(
+      (e) =>
+          _isSameDate(e.date, dateOnly) &&
+          e.shouldHideCourses &&
+          _isCustomEntry(e),
+    )) {
+      return false;
+    }
+    return entries.any(
+      (e) => _isSameDate(e.date, dateOnly) && e.isAdjustedWorkday,
+    );
+  }
 
   /// 获取连续假期组
   List<HolidayEntry> entriesForGroup(String groupId) {
@@ -117,19 +149,23 @@ class HolidayData {
   static bool _isSameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  static bool _isCustomEntry(HolidayEntry e) =>
+      e.groupId != null && e.groupId!.startsWith('custom-');
+
   Map<String, dynamic> toJson() => {
-        'year': year,
-        'version': version,
-        'entries': entries.map((e) => e.toJson()).toList(),
-      };
+    'year': year,
+    'version': version,
+    'entries': entries.map((e) => e.toJson()).toList(),
+  };
 
   factory HolidayData.fromJson(Map<String, dynamic> json) {
     return HolidayData(
       year: json['year'] as int,
       version: json['version'] as int? ?? 1,
       entries: (json['entries'] as List<dynamic>? ?? const [])
-          .map((e) =>
-              HolidayEntry.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => HolidayEntry.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList(),
     );
   }

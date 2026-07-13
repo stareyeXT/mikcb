@@ -23,10 +23,13 @@ class CourseCard extends StatelessWidget {
   final double compactVerticalPadding;
   final double compactOuterInset;
   final String? overrideColorHex;
+  final String? titleColorHex;
+  final String? detailColorHex;
   final String? compactOverlineText;
   final String? topRightBadgeText;
   final bool isHighlighted;
   final bool isHoliday;
+  final bool isSuspended;
 
   const CourseCard({
     super.key,
@@ -47,34 +50,51 @@ class CourseCard extends StatelessWidget {
     this.compactVerticalPadding = 6,
     this.compactOuterInset = 2,
     this.overrideColorHex,
+    this.titleColorHex,
+    this.detailColorHex,
     this.compactOverlineText,
     this.topRightBadgeText,
     this.isHighlighted = false,
     this.isHoliday = false,
+    this.isSuspended = false,
   });
 
   Color _parseColor(String colorString) {
-    return parseHexColorOrFallback(colorString, fallback: const Color(0xFF2196F3));
+    return parseHexColorOrFallback(
+      colorString,
+      fallback: const Color(0xFF2196F3),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final color = _parseColor(overrideColorHex ?? course.color);
+    final titleColor = titleColorHex != null
+        ? _parseColor(titleColorHex!)
+        : Colors.white;
+    final detailColor = detailColorHex != null
+        ? _parseColor(detailColorHex!).withValues(alpha: 0.7)
+        : Colors.white70;
 
     if (isCompact) {
-      return _buildCompactCard(context, color);
+      return _buildCompactCard(context, color, titleColor, detailColor);
     }
 
-    return _buildFullCard(context, color);
+    return _buildFullCard(context, color, titleColor, detailColor);
   }
 
-  Widget _buildFullCard(BuildContext context, Color color) {
+  Widget _buildFullCard(
+    BuildContext context,
+    Color color,
+    Color titleColor,
+    Color detailColor,
+  ) {
     final l10n = AppLocalizations.of(context)!;
-    final detailLines = _buildDetailLines(context);
+    final detailLines = _buildDetailLines(context, detailColor);
     final titleAlignment = _contentAlignment;
     final titleTextAlign = _textAlign;
 
-    return Card(
+    final card = Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       elevation: isHighlighted ? 6 : 2,
       shape: RoundedRectangleBorder(
@@ -124,10 +144,10 @@ class CourseCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               course.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: titleColor,
                               ),
                               textAlign: titleTextAlign,
                               softWrap: true,
@@ -151,9 +171,9 @@ class CourseCard extends StatelessWidget {
                                     course.startSection,
                                     course.endSection,
                                   ),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.white,
+                                    color: titleColor,
                                   ),
                                 ),
                               ),
@@ -170,24 +190,52 @@ class CourseCard extends StatelessWidget {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: _buildBadge(topRightBadgeText!),
+                  child: _buildBadgeRow(
+                    context,
+                    customBadgeText: topRightBadgeText,
+                  ),
+                ),
+              if (isHoliday && topRightBadgeText == null)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: _buildBadgeRow(context, showHoliday: true),
+                ),
+              if (isSuspended && topRightBadgeText == null && !isHoliday)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: _buildBadgeRow(context, showSuspended: true),
                 ),
             ],
           ),
         ),
       ),
     );
+
+    if (isHoliday) {
+      return Opacity(opacity: 0.3, child: card);
+    }
+    if (isSuspended) {
+      return Opacity(opacity: 0.4, child: card);
+    }
+    return card;
   }
 
-  Widget _buildCompactCard(BuildContext context, Color color) {
-    final textLines = _buildCompactTextLines(context);
+  Widget _buildCompactCard(
+    BuildContext context,
+    Color color,
+    Color titleColor,
+    Color detailColor,
+  ) {
+    final textLines = _buildCompactTextLines(context, titleColor, detailColor);
     final crossAxisAlignment = _crossAxisAlignment;
     final textAlign = _textAlign;
 
     final card = GestureDetector(
       onTap: onTap,
       child: SizedBox.expand(
-              child: Stack(
+        child: Stack(
           fit: StackFit.expand,
           children: [
             Container(
@@ -292,16 +340,22 @@ class CourseCard extends StatelessWidget {
               Positioned(
                 top: 6,
                 right: 6,
-                child: _buildBadge(topRightBadgeText!),
+                child: _buildBadgeRow(
+                  context,
+                  customBadgeText: topRightBadgeText,
+                ),
               ),
             if (isHoliday && topRightBadgeText == null)
               Positioned(
                 top: 6,
                 right: 6,
-                child: _buildBadge(
-                  AppLocalizations.of(context)!.holidayBadgeLabel,
-                  color: Colors.orange.shade700,
-                ),
+                child: _buildBadgeRow(context, showHoliday: true),
+              ),
+            if (isSuspended && topRightBadgeText == null && !isHoliday)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: _buildBadgeRow(context, showSuspended: true),
               ),
           ],
         ),
@@ -310,6 +364,9 @@ class CourseCard extends StatelessWidget {
 
     if (isHoliday) {
       return Opacity(opacity: 0.3, child: card);
+    }
+    if (isSuspended) {
+      return Opacity(opacity: 0.4, child: card);
     }
     return card;
   }
@@ -339,14 +396,50 @@ class CourseCard extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildDetailLines(BuildContext context) {
+  Widget _buildBadgeRow(
+    BuildContext context, {
+    String? customBadgeText,
+    bool showHoliday = false,
+    bool showSuspended = false,
+  }) {
+    final l10n = AppLocalizations.of(context);
+    final badges = <Widget>[];
+    if (showHoliday && l10n != null) {
+      badges.add(
+        _buildBadge(l10n.holidayBadgeLabel, color: Colors.orange.shade700),
+      );
+    }
+    if (showSuspended && l10n != null) {
+      badges.add(
+        _buildBadge(l10n.suspendedBadgeLabel, color: Colors.red.shade700),
+      );
+    }
+    if (customBadgeText != null) {
+      badges.add(_buildBadge(customBadgeText));
+    }
+    if (badges.isEmpty) return const SizedBox.shrink();
+    if (badges.length == 1) return badges.first;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < badges.length; i++) ...[
+          if (i > 0) const SizedBox(width: 3),
+          badges[i],
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _buildDetailLines(BuildContext context, Color detailColor) {
     final lines = <Widget>[];
     if (showTeacher && course.teacher.trim().isNotEmpty) {
-      lines.add(_buildDetailRow(Icons.person, course.teacher));
+      lines.add(_buildDetailRow(Icons.person, course.teacher, detailColor));
     }
     if (showLocation && course.location.trim().isNotEmpty) {
       if (lines.isNotEmpty) lines.add(const SizedBox(height: 4));
-      lines.add(_buildDetailRow(Icons.location_on, course.location));
+      lines.add(
+        _buildDetailRow(Icons.location_on, course.location, detailColor),
+      );
     }
     if (showTime) {
       if (lines.isNotEmpty) lines.add(const SizedBox(height: 4));
@@ -354,6 +447,7 @@ class CourseCard extends StatelessWidget {
         _buildDetailRow(
           Icons.access_time,
           _buildTimeText(context, isCompact: false),
+          detailColor,
         ),
       );
     }
@@ -362,32 +456,34 @@ class CourseCard extends StatelessWidget {
       lines.add(
         _buildDetailRow(
           Icons.date_range_rounded,
-          _buildWeekText(),
+          _buildWeekText(context),
+          detailColor,
         ),
       );
     }
     if (showDescription && (course.description?.trim().isNotEmpty ?? false)) {
       if (lines.isNotEmpty) lines.add(const SizedBox(height: 4));
       lines.add(
-          _buildDetailRow(Icons.notes_rounded, course.description!.trim()));
+        _buildDetailRow(
+          Icons.notes_rounded,
+          course.description!.trim(),
+          detailColor,
+        ),
+      );
     }
     return lines;
   }
 
-  Widget _buildDetailRow(IconData icon, String text) {
+  Widget _buildDetailRow(IconData icon, String text, Color detailColor) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.white70),
+        Icon(icon, size: 16, color: detailColor),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Colors.white70,
-              height: 1.15,
-            ),
+            style: TextStyle(fontSize: 13, color: detailColor, height: 1.15),
             softWrap: true,
           ),
         ),
@@ -395,7 +491,11 @@ class CourseCard extends StatelessWidget {
     );
   }
 
-  List<_CompactTextLine> _buildCompactTextLines(BuildContext context) {
+  List<_CompactTextLine> _buildCompactTextLines(
+    BuildContext context,
+    Color titleColor,
+    Color detailColor,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     final lines = <_CompactTextLine>[];
     if (compactOverlineText?.trim().isNotEmpty ?? false) {
@@ -405,7 +505,7 @@ class CourseCard extends StatelessWidget {
           flex: 1,
           style: TextStyle(
             fontSize: (compactSubtitleFontSize - 1).clamp(6.0, 12.0),
-            color: Colors.white.withValues(alpha: 0.78),
+            color: detailColor,
             height: 1.05,
           ),
         ),
@@ -419,7 +519,7 @@ class CourseCard extends StatelessWidget {
           style: TextStyle(
             fontSize: compactTitleFontSize,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: titleColor,
             height: 1.15,
           ),
         ),
@@ -432,7 +532,7 @@ class CourseCard extends StatelessWidget {
           flex: 2,
           style: TextStyle(
             fontSize: compactSubtitleFontSize,
-            color: Colors.white70,
+            color: detailColor,
             height: 1.1,
           ),
         ),
@@ -445,7 +545,7 @@ class CourseCard extends StatelessWidget {
           flex: 2,
           style: TextStyle(
             fontSize: compactSubtitleFontSize,
-            color: Colors.white70,
+            color: detailColor,
             height: 1.1,
           ),
         ),
@@ -460,7 +560,7 @@ class CourseCard extends StatelessWidget {
           flex: 2,
           style: TextStyle(
             fontSize: compactSubtitleFontSize,
-            color: Colors.white70,
+            color: detailColor,
             height: 1.1,
           ),
         ),
@@ -471,7 +571,7 @@ class CourseCard extends StatelessWidget {
           flex: 2,
           style: TextStyle(
             fontSize: compactSubtitleFontSize,
-            color: Colors.white70,
+            color: detailColor,
             height: 1.1,
           ),
         ),
@@ -480,11 +580,11 @@ class CourseCard extends StatelessWidget {
     if (showWeeks) {
       lines.add(
         _CompactTextLine(
-          text: _buildWeekText(),
+          text: _buildWeekText(context),
           flex: 2,
           style: TextStyle(
             fontSize: compactSubtitleFontSize,
-            color: Colors.white70,
+            color: detailColor,
             height: 1.1,
           ),
         ),
@@ -497,7 +597,7 @@ class CourseCard extends StatelessWidget {
           flex: 3,
           style: TextStyle(
             fontSize: compactSubtitleFontSize,
-            color: Colors.white70,
+            color: detailColor,
             height: 1.1,
           ),
         ),
@@ -511,7 +611,7 @@ class CourseCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: compactTitleFontSize,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: titleColor,
                 height: 1.15,
               ),
             ),
@@ -519,8 +619,9 @@ class CourseCard extends StatelessWidget {
         : lines;
   }
 
-  String _buildWeekText() {
-    return course.weekDescription;
+  String _buildWeekText(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return course.weekDescription(l10n);
   }
 
   String _buildTimeText(BuildContext context, {required bool isCompact}) {
@@ -528,35 +629,36 @@ class CourseCard extends StatelessWidget {
     final start = showTimeLabels
         ? l10n.classStartsAtLabel(course.startTime)
         : course.startTime;
-    final end =
-        showTimeLabels ? l10n.classEndsAtLabel(course.endTime) : course.endTime;
+    final end = showTimeLabels
+        ? l10n.classEndsAtLabel(course.endTime)
+        : course.endTime;
     return isCompact ? '$start\n$end' : '$start\n$end';
   }
 
   Alignment get _verticalContentAlignment => switch (verticalAlign) {
-        CourseCardVerticalAlign.top => Alignment.topCenter,
-        CourseCardVerticalAlign.center => Alignment.center,
-        CourseCardVerticalAlign.bottom => Alignment.bottomCenter,
-        CourseCardVerticalAlign.spaceEvenly => Alignment.center,
-      };
+    CourseCardVerticalAlign.top => Alignment.topCenter,
+    CourseCardVerticalAlign.center => Alignment.center,
+    CourseCardVerticalAlign.bottom => Alignment.bottomCenter,
+    CourseCardVerticalAlign.spaceEvenly => Alignment.center,
+  };
 
   CrossAxisAlignment get _crossAxisAlignment => switch (horizontalAlign) {
-        CourseCardHorizontalAlign.left => CrossAxisAlignment.start,
-        CourseCardHorizontalAlign.center => CrossAxisAlignment.center,
-        CourseCardHorizontalAlign.right => CrossAxisAlignment.end,
-      };
+    CourseCardHorizontalAlign.left => CrossAxisAlignment.start,
+    CourseCardHorizontalAlign.center => CrossAxisAlignment.center,
+    CourseCardHorizontalAlign.right => CrossAxisAlignment.end,
+  };
 
   Alignment get _contentAlignment => switch (horizontalAlign) {
-        CourseCardHorizontalAlign.left => Alignment.centerLeft,
-        CourseCardHorizontalAlign.center => Alignment.center,
-        CourseCardHorizontalAlign.right => Alignment.centerRight,
-      };
+    CourseCardHorizontalAlign.left => Alignment.centerLeft,
+    CourseCardHorizontalAlign.center => Alignment.center,
+    CourseCardHorizontalAlign.right => Alignment.centerRight,
+  };
 
   TextAlign get _textAlign => switch (horizontalAlign) {
-        CourseCardHorizontalAlign.left => TextAlign.left,
-        CourseCardHorizontalAlign.center => TextAlign.center,
-        CourseCardHorizontalAlign.right => TextAlign.right,
-      };
+    CourseCardHorizontalAlign.left => TextAlign.left,
+    CourseCardHorizontalAlign.center => TextAlign.center,
+    CourseCardHorizontalAlign.right => TextAlign.right,
+  };
 }
 
 class _CompactTextLine {
@@ -570,4 +672,3 @@ class _CompactTextLine {
     required this.style,
   });
 }
-

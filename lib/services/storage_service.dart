@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/partner_timetable_binding.dart';
 import '../models/course.dart';
 import '../models/time_scheme.dart';
 import '../models/timetable_profile.dart';
@@ -19,10 +22,11 @@ class StorageService {
   static const String _hasCompletedOnboardingKey = 'has_completed_onboarding';
   static const String _hasHandledPackageMigrationKey =
       'has_handled_package_migration';
-  static const String _hidePrefixDefaultMigrationKey =
-      'did_migrate_live_hide_prefix_default';
   static const String _appLogsDefaultMigrationKey =
       'did_migrate_app_logs_default';
+  static const String _hidePrefixDefaultMigrationKey =
+      'did_migrate_live_hide_prefix_default';
+  static const String _partnerTimetableBindingKey = 'partner_timetable_binding';
 
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
@@ -32,9 +36,47 @@ class StorageService {
   SharedPreferences? _ensuredForPrefs;
   bool _profilesEnsured = false;
   bool _timeSchemesEnsured = false;
+  List<TimetableProfile>? _profilesListCache;
+  List<TimeScheme>? _timeSchemesListCache;
+
+  void _invalidateProfilesListCache() {
+    _profilesListCache = null;
+    _profilesEnsured = false;
+  }
+
+  void _invalidateTimeSchemesListCache() {
+    _timeSchemesListCache = null;
+    _timeSchemesEnsured = false;
+  }
+
   bool _hidePrefixMigrated = false;
 
+  Future<void>? _initFuture;
+  Future<void> _profilesWriteChain = Future<void>.value();
+
+  /// 仅用于测试：重置缓存的初始化状态
+  @visibleForTesting
+  void resetForTesting() {
+    _initFuture = null;
+    _prefs = null;
+    _profilesListCache = null;
+    _timeSchemesListCache = null;
+    _profilesEnsured = false;
+    _timeSchemesEnsured = false;
+    _profilesWriteChain = Future<void>.value();
+  }
+
   Future<void> init() async {
+    _initFuture ??= _doInit();
+    try {
+      return await _initFuture!;
+    } catch (e) {
+      _initFuture = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _doInit() async {
     _prefs = await SharedPreferences.getInstance();
   }
 
@@ -83,8 +125,8 @@ class StorageService {
   void _resetEnsureCacheIfNeeded() {
     if (_ensuredForPrefs != _prefs) {
       _ensuredForPrefs = _prefs;
-      _profilesEnsured = false;
-      _timeSchemesEnsured = false;
+      _invalidateProfilesListCache();
+      _invalidateTimeSchemesListCache();
       _hidePrefixMigrated = false;
     }
   }
@@ -186,6 +228,9 @@ class StorageService {
   Future<void> setHasSeenUserGuide(bool value) async {
     if (_prefs == null) await init();
     await _prefs?.setBool(_hasSeenUserGuideKey, value);
+    if (_prefs?.getBool(_hasSeenUserGuideKey) != value) {
+      await _prefs?.setBool(_hasSeenUserGuideKey, value);
+    }
   }
 
   Future<bool> hasAcceptedPrivacyPolicy() async {
@@ -196,6 +241,9 @@ class StorageService {
   Future<void> setAcceptedPrivacyPolicy(bool value) async {
     if (_prefs == null) await init();
     await _prefs?.setBool(_acceptedPrivacyPolicyKey, value);
+    if (_prefs?.getBool(_acceptedPrivacyPolicyKey) != value) {
+      await _prefs?.setBool(_acceptedPrivacyPolicyKey, value);
+    }
   }
 
   Future<bool> hasCompletedOnboarding() async {
@@ -206,6 +254,10 @@ class StorageService {
   Future<void> setCompletedOnboarding(bool value) async {
     if (_prefs == null) await init();
     await _prefs?.setBool(_hasCompletedOnboardingKey, value);
+    // 防御性验证：某些国产 ROM 的 commit() 可能不可靠
+    if (_prefs?.getBool(_hasCompletedOnboardingKey) != value) {
+      await _prefs?.setBool(_hasCompletedOnboardingKey, value);
+    }
   }
 
   Future<bool> hasHandledPackageMigration() async {
@@ -382,38 +434,61 @@ class StorageService {
     await _ensureProfilesInitialized();
     await _ensureTimeSchemesInitialized();
     await _migrateHidePrefixDefault();
+    final cached = _profilesListCache;
+    if (cached != null) {
+      return cached;
+    }
+
     final profilesJson = _prefs?.getString(_profilesKey);
     if (profilesJson == null || profilesJson.isEmpty) {
+      _profilesListCache = const [];
       return const [];
     }
 
     final rawProfiles = await _readJsonListPreference(_profilesKey);
     if (rawProfiles == null) {
+      _profilesListCache = const [];
       return const [];
     }
     try {
-      return rawProfiles
+      final profiles = rawProfiles
           .map(
             (item) => TimetableProfile.fromJson(
               Map<String, dynamic>.from(item as Map),
             ),
           )
           .toList();
+      _profilesListCache = profiles;
+      return profiles;
     } catch (_) {
       final raw = _prefs?.getString(_profilesKey);
       if (raw != null) {
         await _backupAndRemoveCorruptString(_profilesKey, raw);
       }
+      _profilesListCache = const [];
       return const [];
     }
   }
 
   Future<void> saveProfiles(List<TimetableProfile> profiles) async {
-    if (_prefs == null) await init();
-    final payload = jsonEncode(
-      profiles.map((profile) => profile.toJson()).toList(),
-    );
-    await _prefs?.setString(_profilesKey, payload);
+    // Serialize concurrent profile writes so a later read-modify-write cannot
+    // flush an older snapshot over a newer one.
+    final previousWrite = _profilesWriteChain;
+    final writeCompleter = Completer<void>();
+    _profilesWriteChain = writeCompleter.future;
+    await previousWrite.catchError((_) {});
+    try {
+      if (_prefs == null) await init();
+      final payload = jsonEncode(
+        profiles.map((profile) => profile.toJson()).toList(),
+      );
+      await _prefs?.setString(_profilesKey, payload);
+      _profilesListCache = List<TimetableProfile>.from(profiles);
+      writeCompleter.complete();
+    } catch (error, stackTrace) {
+      writeCompleter.completeError(error, stackTrace);
+      rethrow;
+    }
   }
 
   Future<String?> getActiveProfileId() async {
@@ -433,27 +508,37 @@ class StorageService {
     if (_prefs == null) await init();
     await _ensureProfilesInitialized();
     await _ensureTimeSchemesInitialized();
+    final cached = _timeSchemesListCache;
+    if (cached != null) {
+      return cached;
+    }
+
     final rawSchemes = _prefs?.getString(_timeSchemesKey);
     if (rawSchemes == null || rawSchemes.isEmpty) {
+      _timeSchemesListCache = const [];
       return const [];
     }
 
     final decoded = await _readJsonListPreference(_timeSchemesKey);
     if (decoded == null) {
+      _timeSchemesListCache = const [];
       return const [];
     }
     try {
-      return decoded
+      final schemes = decoded
           .map(
             (item) =>
                 TimeScheme.fromJson(Map<String, dynamic>.from(item as Map)),
           )
           .toList();
+      _timeSchemesListCache = schemes;
+      return schemes;
     } catch (_) {
       final raw = _prefs?.getString(_timeSchemesKey);
       if (raw != null) {
         await _backupAndRemoveCorruptString(_timeSchemesKey, raw);
       }
+      _timeSchemesListCache = const [];
       return const [];
     }
   }
@@ -464,6 +549,7 @@ class StorageService {
       schemes.map((scheme) => scheme.toJson()).toList(),
     );
     await _prefs?.setString(_timeSchemesKey, payload);
+    _timeSchemesListCache = List<TimeScheme>.from(schemes);
   }
 
   // ---------------------------------------------------------------------------
@@ -472,9 +558,6 @@ class StorageService {
 
   static const String _teacherRecordsKey = 'teacher_records';
   static const String _locationRecordsKey = 'location_records';
-  static const String _htmlImportBaseUrlKey = 'html_import_base_url';
-  static const String _htmlImportWeekFetchTimesKey =
-      'html_import_week_fetch_times';
 
   Future<List<String>> getTeacherRecords() async {
     if (_prefs == null) await init();
@@ -496,67 +579,6 @@ class StorageService {
   Future<void> saveLocationRecords(List<String> locations) async {
     if (_prefs == null) await init();
     await _prefs?.setStringList(_locationRecordsKey, locations);
-  }
-
-  String _profileScopedKey(String key, String profileId) {
-    return '${profileId}_$key';
-  }
-
-  Future<String?> getHtmlImportBaseUrl(String profileId) async {
-    if (_prefs == null) await init();
-    return _prefs?.getString(_profileScopedKey(_htmlImportBaseUrlKey, profileId));
-  }
-
-  Future<void> saveHtmlImportBaseUrl(String profileId, String url) async {
-    if (_prefs == null) await init();
-    await _prefs?.setString(
-      _profileScopedKey(_htmlImportBaseUrlKey, profileId),
-      url,
-    );
-  }
-
-  Future<void> clearHtmlImportBaseUrl(String profileId) async {
-    if (_prefs == null) await init();
-    await _prefs?.remove(
-      _profileScopedKey(_htmlImportBaseUrlKey, profileId),
-    );
-  }
-
-  Future<Map<int, DateTime>> getHtmlImportWeekFetchTimes(
-    String profileId,
-  ) async {
-    if (_prefs == null) await init();
-    final raw = _prefs?.getString(
-      _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
-    );
-    if (raw == null || raw.isEmpty) return {};
-    try {
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      return decoded.map((k, v) => MapEntry(int.parse(k), DateTime.parse(v as String)));
-    } catch (_) {
-      return {};
-    }
-  }
-
-  Future<void> saveHtmlImportWeekFetchTimes(
-    String profileId,
-    Map<int, DateTime> fetchTimes,
-  ) async {
-    if (_prefs == null) await init();
-    final encoded = jsonEncode(
-      fetchTimes.map((k, v) => MapEntry(k.toString(), v.toIso8601String())),
-    );
-    await _prefs?.setString(
-      _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
-      encoded,
-    );
-  }
-
-  Future<void> clearHtmlImportWeekFetchTimes(String profileId) async {
-    if (_prefs == null) await init();
-    await _prefs?.remove(
-      _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
-    );
   }
 
   Future<void> _ensureProfilesInitialized() async {
@@ -774,5 +796,39 @@ class StorageService {
     await saveProfiles(migratedProfiles);
     await _prefs?.setBool(_hidePrefixDefaultMigrationKey, true);
     _hidePrefixMigrated = true;
+  }
+
+  Future<PartnerTimetableBinding?> getPartnerTimetableBinding() async {
+    if (_prefs == null) await init();
+    final raw = _prefs?.getString(_partnerTimetableBindingKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+      return PartnerTimetableBinding.fromJson(
+        Map<String, dynamic>.from(decoded),
+      );
+    } catch (_) {
+      await _backupAndRemoveCorruptString(_partnerTimetableBindingKey, raw);
+      return null;
+    }
+  }
+
+  Future<void> savePartnerTimetableBinding(
+    PartnerTimetableBinding? binding,
+  ) async {
+    if (_prefs == null) await init();
+    if (binding == null) {
+      await _prefs?.remove(_partnerTimetableBindingKey);
+      return;
+    }
+    await _prefs?.setString(
+      _partnerTimetableBindingKey,
+      jsonEncode(binding.toJson()),
+    );
   }
 }

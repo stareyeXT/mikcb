@@ -40,6 +40,358 @@ internal fun liveSchedulerCourseIsInWeek(
     return true
 }
 
+internal fun liveSchedulerCourseIsActiveInWeek(
+    week: Int,
+    suspendedWeeks: List<Int>?,
+    startWeek: Int,
+    endWeek: Int,
+    isOddWeek: Boolean,
+    isEvenWeek: Boolean,
+    customWeeks: List<Int>?,
+): Boolean {
+    if (suspendedWeeks?.contains(week) == true) {
+        return false
+    }
+    return liveSchedulerCourseIsInWeek(
+        week = week,
+        startWeek = startWeek,
+        endWeek = endWeek,
+        isOddWeek = isOddWeek,
+        isEvenWeek = isEvenWeek,
+        customWeeks = customWeeks,
+    )
+}
+
+/**
+ * The legacy snapshot-level `isHoliday` flag captures Flutter's full holiday
+ * semantics (including adjusted workdays) but only for the day the snapshot
+ * was synced. It must never be applied to later days, otherwise one holiday
+ * sync would suppress the island for every following day until the app is
+ * reopened.
+ */
+internal fun liveSchedulerIsLegacyHolidayFlagActive(
+    isHoliday: Boolean,
+    isHolidayDate: String?,
+    year: Int,
+    month: Int,
+    dayOfMonth: Int,
+): Boolean {
+    if (!isHoliday) {
+        return false
+    }
+    if (isHolidayDate.isNullOrBlank()) {
+        return false
+    }
+    return isHolidayDate == String.format("%04d-%02d-%02d", year, month, dayOfMonth)
+}
+
+internal fun liveSchedulerIsDateHoliday(
+    holidayDates: Set<String>,
+    holidayOverrideEnabled: Boolean,
+    enableHolidayMarking: Boolean,
+    year: Int,
+    month: Int,
+    dayOfMonth: Int,
+): Boolean {
+    if (holidayOverrideEnabled) {
+        return true
+    }
+    if (!enableHolidayMarking || holidayDates.isEmpty()) {
+        return false
+    }
+    val dateStr = String.format("%04d-%02d-%02d", year, month, dayOfMonth)
+    return holidayDates.contains(dateStr)
+}
+
+internal fun liveSchedulerCanDisplayDuring(
+    liveEnableDuringClass: Boolean,
+    livePromoteDuringClass: Boolean,
+    liveShowDuringClassNotification: Boolean,
+): Boolean {
+    return liveEnableDuringClass &&
+        (livePromoteDuringClass || liveShowDuringClassNotification)
+}
+
+internal fun liveSchedulerResolveStage(
+    nowMillis: Long,
+    startAtMillis: Long,
+    endAtMillis: Long,
+    blockedUntilMillis: Long?,
+    liveShowBeforeClassMinutes: Int,
+    liveClassReminderStartMinutes: Int,
+    endReminderLeadMillis: Long,
+    liveEnableBeforeClass: Boolean,
+    liveEnableDuringClass: Boolean,
+    liveEnableBeforeEnd: Boolean,
+    livePromoteDuringClass: Boolean,
+    liveShowDuringClassNotification: Boolean,
+): String? {
+    val beforeClassLeadMillis = liveShowBeforeClassMinutes * 60_000L
+    val aheadTime = maxOf(
+        startAtMillis - beforeClassLeadMillis,
+        blockedUntilMillis ?: Long.MIN_VALUE,
+    )
+    if (nowMillis < aheadTime || nowMillis >= endAtMillis) {
+        return null
+    }
+    if (nowMillis < startAtMillis) {
+        return if (liveEnableBeforeClass) "beforeClass" else null
+    }
+    val reminderStartMillis = if (liveClassReminderStartMinutes == 0) {
+        startAtMillis
+    } else {
+        maxOf(startAtMillis, endAtMillis - liveClassReminderStartMinutes * 60_000L)
+    }
+    if (liveClassReminderStartMinutes > 0 && nowMillis < reminderStartMillis) {
+        return if (liveEnableDuringClass && liveShowDuringClassNotification) {
+            "duringClassStatusBar"
+        } else {
+            null
+        }
+    }
+    if (liveClassReminderStartMinutes > 0) {
+        if (liveEnableBeforeEnd) {
+            return "beforeEnd"
+        }
+        return if (
+            liveSchedulerCanDisplayDuring(
+                liveEnableDuringClass,
+                livePromoteDuringClass,
+                liveShowDuringClassNotification,
+            )
+        ) {
+            "duringClass"
+        } else {
+            null
+        }
+    }
+    val endReminderStart = maxOf(startAtMillis, endAtMillis - endReminderLeadMillis)
+    if (nowMillis >= endReminderStart) {
+        if (liveEnableBeforeEnd) {
+            return "beforeEnd"
+        }
+        if (
+            liveSchedulerCanDisplayDuring(
+                liveEnableDuringClass,
+                livePromoteDuringClass,
+                liveShowDuringClassNotification,
+            )
+        ) {
+            return "duringClass"
+        }
+        return null
+    }
+    return if (
+        liveSchedulerCanDisplayDuring(
+            liveEnableDuringClass,
+            livePromoteDuringClass,
+            liveShowDuringClassNotification,
+        )
+    ) {
+        "duringClass"
+    } else {
+        null
+    }
+}
+
+internal data class LiveSchedulerTestCourse(
+    val id: String,
+    val dayOfWeek: Int,
+    val startSection: Int,
+    val endSection: Int,
+    val startTime: String,
+    val endTime: String,
+    val startWeek: Int,
+    val endWeek: Int,
+    val isOddWeek: Boolean = false,
+    val isEvenWeek: Boolean = false,
+    val customWeeks: List<Int>? = null,
+    val suspendedWeeks: List<Int>? = null,
+)
+
+internal data class LiveSchedulerTestSettings(
+    val liveShowBeforeClassMinutes: Int = 20,
+    val liveClassReminderStartMinutes: Int = 0,
+    val liveEnableBeforeClass: Boolean = true,
+    val liveEnableDuringClass: Boolean = true,
+    val liveEnableBeforeEnd: Boolean = true,
+    val livePromoteDuringClass: Boolean = true,
+    val liveShowDuringClassNotification: Boolean = true,
+    val liveTimeCorrectionSeconds: Int = 0,
+)
+
+internal data class LiveSchedulerTestSnapshot(
+    val currentWeek: Int,
+    val semesterStartMillis: Long?,
+    val endReminderLeadMillis: Long = 600_000L,
+    val holidayDates: Set<String> = emptySet(),
+    val holidayOverrideEnabled: Boolean = false,
+    val enableHolidayMarking: Boolean = true,
+    val courses: List<LiveSchedulerTestCourse>,
+    val settings: LiveSchedulerTestSettings = LiveSchedulerTestSettings(),
+)
+
+internal data class LiveSchedulerActiveSelection(
+    val courseId: String,
+    val stage: String,
+)
+
+internal fun liveSchedulerFindActiveSelection(
+    snapshot: LiveSchedulerTestSnapshot,
+    nowMillis: Long,
+): LiveSchedulerActiveSelection? {
+    if (snapshot.semesterStartMillis == null) {
+        return null
+    }
+
+    val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    if (
+        liveSchedulerIsDateHoliday(
+            holidayDates = snapshot.holidayDates,
+            holidayOverrideEnabled = snapshot.holidayOverrideEnabled,
+            enableHolidayMarking = snapshot.enableHolidayMarking,
+            year = nowCalendar.get(Calendar.YEAR),
+            month = nowCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = nowCalendar.get(Calendar.DAY_OF_MONTH),
+        )
+    ) {
+        return null
+    }
+
+    val targetWeek = liveSchedulerCalculateCalendarWeekForDate(
+        semesterStartMillis = snapshot.semesterStartMillis,
+        currentWeek = snapshot.currentWeek,
+        dateMillis = nowMillis,
+    )
+    if (targetWeek < 1) {
+        return null
+    }
+
+    val todayCourses = snapshot.courses
+        .filter { course ->
+            course.dayOfWeek ==
+                nowCalendar.get(Calendar.DAY_OF_WEEK).toWeekday() &&
+                liveSchedulerCourseIsActiveInWeek(
+                    week = targetWeek,
+                    suspendedWeeks = course.suspendedWeeks,
+                    startWeek = course.startWeek,
+                    endWeek = course.endWeek,
+                    isOddWeek = course.isOddWeek,
+                    isEvenWeek = course.isEvenWeek,
+                    customWeeks = course.customWeeks,
+                )
+        }
+        .sortedBy { it.startSection }
+    if (todayCourses.isEmpty()) {
+        return null
+    }
+
+    for ((index, course) in todayCourses.withIndex()) {
+        val startAtMillis = liveSchedulerBuildCorrectedCourseDateTimeMillis(
+            nowCalendar,
+            course.startTime,
+            snapshot.settings.liveTimeCorrectionSeconds,
+        ) ?: continue
+        val endAtMillis = liveSchedulerBuildCorrectedCourseDateTimeMillis(
+            nowCalendar,
+            course.endTime,
+            snapshot.settings.liveTimeCorrectionSeconds,
+        ) ?: continue
+        val blockedUntilMillis = liveSchedulerResolveBeforeClassBlockedUntil(
+            todayCourses,
+            index,
+            nowCalendar,
+            snapshot.settings.liveTimeCorrectionSeconds,
+        )
+        val stage = liveSchedulerResolveStage(
+            nowMillis = nowMillis,
+            startAtMillis = startAtMillis,
+            endAtMillis = endAtMillis,
+            blockedUntilMillis = blockedUntilMillis,
+            liveShowBeforeClassMinutes = snapshot.settings.liveShowBeforeClassMinutes,
+            liveClassReminderStartMinutes = snapshot.settings.liveClassReminderStartMinutes,
+            endReminderLeadMillis = snapshot.endReminderLeadMillis,
+            liveEnableBeforeClass = snapshot.settings.liveEnableBeforeClass,
+            liveEnableDuringClass = snapshot.settings.liveEnableDuringClass,
+            liveEnableBeforeEnd = snapshot.settings.liveEnableBeforeEnd,
+            livePromoteDuringClass = snapshot.settings.livePromoteDuringClass,
+            liveShowDuringClassNotification = snapshot.settings.liveShowDuringClassNotification,
+        ) ?: continue
+        return LiveSchedulerActiveSelection(courseId = course.id, stage = stage)
+    }
+    return null
+}
+
+private fun liveSchedulerBuildCourseDateTimeMillis(
+    dateCalendar: Calendar,
+    courseTime: String,
+): Long? {
+    val parts = courseTime.split(":")
+    if (parts.size != 2) {
+        return null
+    }
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].toIntOrNull() ?: return null
+    return Calendar.getInstance().apply {
+        timeInMillis = dateCalendar.timeInMillis
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+private fun liveSchedulerBuildCorrectedCourseDateTimeMillis(
+    dateCalendar: Calendar,
+    courseTime: String,
+    liveTimeCorrectionSeconds: Int,
+): Long? {
+    val baseMillis = liveSchedulerBuildCourseDateTimeMillis(dateCalendar, courseTime) ?: return null
+    return baseMillis + liveTimeCorrectionSeconds * 1000L
+}
+
+private fun liveSchedulerResolveBeforeClassBlockedUntil(
+    sameDayCourses: List<LiveSchedulerTestCourse>,
+    courseIndex: Int,
+    dateCalendar: Calendar,
+    liveTimeCorrectionSeconds: Int,
+): Long? {
+    if (courseIndex <= 0 || courseIndex >= sameDayCourses.size) {
+        return null
+    }
+
+    val course = sameDayCourses[courseIndex]
+    val courseStartAtMillis = liveSchedulerBuildCorrectedCourseDateTimeMillis(
+        dateCalendar,
+        course.startTime,
+        liveTimeCorrectionSeconds,
+    ) ?: return null
+
+    var blockedUntilMillis: Long? = null
+    for (index in 0 until courseIndex) {
+        val previousCourse = sameDayCourses[index]
+        val previousStartAtMillis = liveSchedulerBuildCorrectedCourseDateTimeMillis(
+            dateCalendar,
+            previousCourse.startTime,
+            liveTimeCorrectionSeconds,
+        ) ?: continue
+        val previousEndAtMillis = liveSchedulerBuildCorrectedCourseDateTimeMillis(
+            dateCalendar,
+            previousCourse.endTime,
+            liveTimeCorrectionSeconds,
+        ) ?: continue
+        if (previousStartAtMillis > courseStartAtMillis) {
+            continue
+        }
+        blockedUntilMillis = maxOf(
+            blockedUntilMillis ?: Long.MIN_VALUE,
+            previousEndAtMillis,
+        )
+    }
+
+    return blockedUntilMillis
+}
+
 internal fun liveSchedulerCalculateWeekForDate(
     semesterStartMillis: Long?,
     currentWeek: Int,
@@ -65,16 +417,33 @@ internal fun liveSchedulerCalculateWeekForDate(
         set(Calendar.MILLISECOND, 0)
         add(Calendar.DAY_OF_YEAR, -(get(Calendar.DAY_OF_WEEK).toWeekday() - 1))
     }
-    val diffDays =
-        ((normalizedDate.timeInMillis - normalizedStart.timeInMillis) / 86_400_000L).toInt()
+    // Round instead of truncate so a DST transition inside the range
+    // (23h/25h day) cannot shift the whole diff down by one day.
+    val diffDays = Math.round(
+        (normalizedDate.timeInMillis - normalizedStart.timeInMillis) / 86_400_000.0
+    ).toInt()
     val week = (diffDays / 7) + 1
     if (week < 1) {
-        return 1
+        return 0
     }
     if (semesterWeekCount != null && week > semesterWeekCount) {
         return semesterWeekCount
     }
     return week
+}
+
+/** Calendar week for live-activity scheduling (no [semesterWeekCount] clamp). */
+internal fun liveSchedulerCalculateCalendarWeekForDate(
+    semesterStartMillis: Long?,
+    currentWeek: Int,
+    dateMillis: Long,
+): Int {
+    return liveSchedulerCalculateWeekForDate(
+        semesterStartMillis = semesterStartMillis,
+        currentWeek = currentWeek,
+        dateMillis = dateMillis,
+        semesterWeekCount = null,
+    )
 }
 
 private data class NativeSectionTime(
@@ -98,9 +467,11 @@ private data class NativeCourse(
     val isOddWeek: Boolean,
     val isEvenWeek: Boolean,
     val customWeeks: List<Int>?,
+    val suspendedWeeks: List<Int>?,
     val note: String?,
 ) {
     fun isInWeek(week: Int): Boolean {
+        if (suspendedWeeks?.contains(week) == true) return false
         return liveSchedulerCourseIsInWeek(
             week = week,
             startWeek = startWeek,
@@ -174,6 +545,12 @@ private data class NativeScheduleSnapshot(
     val currentWeek: Int,
     val semesterStartMillis: Long?,
     val endReminderLeadMillis: Long,
+    val isHoliday: Boolean,
+    /** Date (yyyy-MM-dd) the [isHoliday] flag was computed for; flag is only valid on that day. */
+    val isHolidayDate: String?,
+    val holidayDates: Set<String>,
+    val holidayOverrideEnabled: Boolean,
+    val enableHolidayMarking: Boolean,
     val courses: List<NativeCourse>,
     val settings: NativeLiveSettings,
 )
@@ -235,6 +612,8 @@ private data class LiveUpdatePayload(
     val progressBreakOffsetsMillis: LongArray,
     val progressMilestoneLabels: List<String>,
     val progressMilestoneTimeTexts: List<String>,
+    /** When true, ticker re-validates against the schedule snapshot (scheduler path). */
+    val validateAgainstSchedule: Boolean = true,
 )
 
 private fun normalizeNullableText(value: String?): String? {
@@ -274,7 +653,17 @@ object LiveUpdateScheduler {
     private const val PREFS_NAME = "live_update_scheduler"
     private const val KEY_SNAPSHOT_JSON = "snapshot_json"
     private const val KEY_SNAPSHOT_VERSION = "snapshot_version"
+    private const val KEY_SUSPEND_UNTIL_MILLIS = "suspend_until_millis"
     private const val REQUEST_CODE_TRIGGER = 2002
+
+    /** Retry delay when an in-window foreground-service start is blocked;
+     *  the exact alarm callback grants a temporary FGS-start exemption. */
+    private const val FGS_RETRY_DELAY_MILLIS = 60_000L
+
+    /** Upper bound for the week lookahead scan so a corrupt/huge endWeek
+     *  cannot make [findNextSelection] loop over thousands of weeks. */
+    private const val MAX_LOOKAHEAD_WEEKS = 104
+
     const val ACTION_TRIGGER = "com.mutx163.qingyu.ACTION_TRIGGER_LIVE_UPDATE"
 
     fun syncSnapshot(context: Context, snapshotJson: String) {
@@ -283,15 +672,39 @@ object LiveUpdateScheduler {
             .putString(KEY_SNAPSHOT_JSON, snapshotJson)
             .putString(KEY_SNAPSHOT_VERSION, resolveAppVersionToken(context))
             .apply()
+        // Diagnostic: log key settings from the synced snapshot
+        try {
+            val settingsJson = JSONObject(snapshotJson).optJSONObject("settings")
+            if (settingsJson != null) {
+                UmengDiagnosticReporter.record(
+                    context = context.applicationContext,
+                    category = "live_update_snapshot_settings",
+                    message = DiagnosticLogMessages.LIVE_UPDATE_SNAPSHOT_SETTINGS,
+                    extras = mapOf(
+                        "liveEnableDuringClass" to settingsJson.optBoolean("liveEnableDuringClass", true),
+                        "liveEnableBeforeEnd" to settingsJson.optBoolean("liveEnableBeforeEnd", true),
+                        "liveEnableBeforeClass" to settingsJson.optBoolean("liveEnableBeforeClass", true),
+                        "livePromoteDuringClass" to settingsJson.optBoolean("livePromoteDuringClass", true),
+                    )
+                )
+            }
+        } catch (_: Exception) {}
         UmengDiagnosticReporter.record(
             context = context.applicationContext,
             category = "live_update_snapshot_synced",
-            message = "Live update schedule snapshot synced",
+            message = DiagnosticLogMessages.LIVE_UPDATE_SNAPSHOT_SYNCED,
             extras = mapOf(
                 "snapshotLength" to snapshotJson.length
             )
         )
-        reschedule(context, allowImmediateStart = false)
+        // Allow immediate start: syncing inside an already-open before-class
+        // window must show the island right away. Otherwise resolveNextTrigger
+        // only finds future triggers and the reminder is silently skipped
+        // until the next stage boundary.
+        reschedule(context, allowImmediateStart = true)
+        // WorkManager backup: ensures live update can still trigger
+        // when AlarmManager is suppressed (e.g. MIUI + accessibility).
+        LiveUpdateRefreshWorker.ensureScheduled(context)
     }
 
     fun clearSnapshot(context: Context) {
@@ -303,8 +716,14 @@ object LiveUpdateScheduler {
         UmengDiagnosticReporter.record(
             context = context.applicationContext,
             category = "live_update_snapshot_cleared",
-            message = "Live update schedule snapshot cleared",
+            message = DiagnosticLogMessages.LIVE_UPDATE_SNAPSHOT_CLEARED,
         )
+        cancelPendingTriggers(context)
+        LiveUpdateRefreshWorker.cancel(context)
+    }
+
+    /** Cancel AlarmManager triggers without clearing the schedule snapshot. */
+    fun cancelPendingTriggers(context: Context) {
         cancelScheduledAlarm(context)
     }
 
@@ -312,20 +731,53 @@ object LiveUpdateScheduler {
         UmengDiagnosticReporter.record(
             context = context.applicationContext,
             category = "live_update_alarm_triggered",
-            message = "Alarm triggered live update reschedule",
+            message = DiagnosticLogMessages.LIVE_UPDATE_ALARM_TRIGGERED,
         )
-        reschedule(context, allowImmediateStart = true)
+        reschedule(context, allowImmediateStart = true, stopStaleSessions = true)
     }
 
-    fun handleSystemReschedule(context: Context) {
-        reschedule(context, allowImmediateStart = true)
+    /** Pause scheduler-driven session management until [untilMillis] (used by live-update tests). */
+    fun suspendScheduleTriggers(context: Context, untilMillis: Long) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_SUSPEND_UNTIL_MILLIS, untilMillis)
+            .apply()
+        cancelScheduledAlarm(context)
+        if (untilMillis > System.currentTimeMillis()) {
+            scheduleAlarm(context, untilMillis)
+        }
+    }
+
+    private fun suspendedUntilMillis(context: Context): Long {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(KEY_SUSPEND_UNTIL_MILLIS, 0L)
+    }
+
+    /** Whether the persisted schedule snapshot still has a course to show right now. */
+    fun hasActiveLiveSelection(context: Context, nowMillis: Long = System.currentTimeMillis()): Boolean {
+        val snapshot = loadSnapshot(context) ?: return false
+        return hasActiveLiveSelection(snapshot, context, nowMillis)
+    }
+
+    /** Stop the foreground live-update service without clearing the schedule snapshot. */
+    fun stopRunningLiveUpdate(context: Context) {
+        context.stopService(Intent(context, LiveUpdateService::class.java))
+    }
+
+    fun handleBootReschedule(context: Context) {
+        BeforeClassQuickActionRestore.restoreOnBoot(context.applicationContext)
+        reschedule(context, allowImmediateStart = true, stopStaleSessions = true)
+    }
+
+    fun handleTimeReschedule(context: Context) {
+        reschedule(context, allowImmediateStart = true, stopStaleSessions = true)
     }
 
     fun onLiveUpdateStopped(context: Context) {
         UmengDiagnosticReporter.record(
             context = context.applicationContext,
             category = "live_update_scheduler_resume",
-            message = "Scheduler resumed after live update stop",
+            message = DiagnosticLogMessages.LIVE_UPDATE_SCHEDULER_RESUME,
         )
         reschedule(context, allowImmediateStart = false)
     }
@@ -407,34 +859,99 @@ object LiveUpdateScheduler {
             progressBreakOffsetsMillis = progressBreakOffsetsMillis,
             progressMilestoneLabels = progressMilestoneLabels,
             progressMilestoneTimeTexts = progressMilestoneTimeTexts,
+            // Production Flutter starts pass true so the ticker keeps
+            // re-validating against the schedule snapshot after the app goes
+            // to the background. Test sessions omit the flag (false) because
+            // their fixture course is intentionally absent from the snapshot.
+            validateAgainstSchedule =
+                data["validateAgainstSchedule"] as? Boolean ?: false,
         )
         return buildServiceIntent(context, payload)
     }
 
-    fun reschedule(context: Context, allowImmediateStart: Boolean): Boolean {
+    fun reschedule(
+        context: Context,
+        allowImmediateStart: Boolean,
+        stopStaleSessions: Boolean = false,
+    ): Boolean {
         cancelScheduledAlarm(context)
-        val snapshot = loadSnapshot(context) ?: return false
-        val now = System.currentTimeMillis()
-        val activeSelection = findActiveSelection(snapshot, now)
-        if (allowImmediateStart && activeSelection != null) {
+        val suspendUntil = suspendedUntilMillis(context)
+        if (suspendUntil > System.currentTimeMillis()) {
+            // A live-update test session owns the island right now; defer any
+            // scheduler-driven start/stop so it cannot overwrite the test.
+            scheduleAlarm(context, suspendUntil)
+            return false
+        }
+        val snapshot = loadSnapshot(context) ?: run {
+            if (stopStaleSessions) {
+                stopRunningLiveUpdate(context)
+            }
+            return false
+        }
+        if (stopStaleSessions && snapshot.semesterStartMillis == null) {
+            stopRunningLiveUpdate(context)
             UmengDiagnosticReporter.record(
                 context = context.applicationContext,
-                category = "live_update_reschedule_active",
-                message = "Reschedule found active selection and started immediately",
-                extras = mapOf(
-                    "courseName" to activeSelection.currentCourse.name,
-                    "stage" to activeSelection.stage,
-                )
+                category = "live_update_semester_start_missing",
+                message = DiagnosticLogMessages.LIVE_UPDATE_SEMESTER_START_MISSING,
             )
-            startForegroundService(context, selectionToPayload(snapshot, activeSelection))
-            return true
+            return false
+        }
+        // Check if today is a holiday (uses both legacy isHoliday flag and full date list)
+        val nowCalendar = Calendar.getInstance()
+        if (isLegacyHolidayFlagActive(snapshot, nowCalendar) ||
+            isDateHoliday(snapshot, nowCalendar)
+        ) {
+            if (stopStaleSessions) {
+                stopRunningLiveUpdate(context)
+            }
+            UmengDiagnosticReporter.record(
+                context = context.applicationContext,
+                category = "live_update_reschedule_holiday",
+                message = DiagnosticLogMessages.LIVE_UPDATE_RESCHEDULE_HOLIDAY,
+            )
+            return false
+        }
+        val now = System.currentTimeMillis()
+        val activeSelection = findActiveSelection(context, snapshot, now)
+        if (allowImmediateStart) {
+            if (activeSelection != null) {
+                UmengDiagnosticReporter.record(
+                    context = context.applicationContext,
+                    category = "live_update_reschedule_active",
+                    message = DiagnosticLogMessages.LIVE_UPDATE_RESCHEDULE_ACTIVE,
+                    extras = mapOf(
+                        "courseName" to activeSelection.currentCourse.name,
+                        "stage" to activeSelection.stage,
+                    )
+                )
+                val started = startForegroundService(
+                    context,
+                    selectionToPayload(snapshot, activeSelection),
+                )
+                if (!started) {
+                    // FGS start can be blocked in the background. Schedule an
+                    // exact alarm retry: its broadcast grants a temporary
+                    // FGS-start exemption, so the session is not lost.
+                    scheduleAlarm(context, now + FGS_RETRY_DELAY_MILLIS)
+                }
+                return started
+            }
+            if (stopStaleSessions) {
+                stopRunningLiveUpdate(context)
+                UmengDiagnosticReporter.record(
+                    context = context.applicationContext,
+                    category = "live_update_stopped_no_active_selection",
+                    message = DiagnosticLogMessages.LIVE_UPDATE_STOPPED_NO_ACTIVE_SELECTION,
+                )
+            }
         }
 
-        val nextSelection = findNextSelection(snapshot, now) ?: return false
+        val nextSelection = findNextSelection(context, snapshot, now) ?: return false
         UmengDiagnosticReporter.record(
             context = context.applicationContext,
             category = "live_update_reschedule_scheduled",
-            message = "Reschedule scheduled next live update trigger",
+            message = DiagnosticLogMessages.LIVE_UPDATE_RESCHEDULE_SCHEDULED,
             extras = mapOf(
                 "courseName" to nextSelection.currentCourse.name,
                 "stage" to nextSelection.stage,
@@ -465,11 +982,11 @@ object LiveUpdateScheduler {
         return try {
             parseSnapshot(JSONObject(snapshotJson))
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse snapshot", e)
+            Log.w(TAG, DiagnosticLogMessages.LOG_PARSE_SNAPSHOT_FAILED, e)
             UmengDiagnosticReporter.report(
                 context = context.applicationContext,
                 category = "live_update_snapshot_parse_failed",
-                message = "Failed to parse live update schedule snapshot",
+                message = DiagnosticLogMessages.LIVE_UPDATE_SNAPSHOT_PARSE_FAILED,
                 throwable = e,
                 dedupeKey = "live_update_snapshot_parse_failed",
             )
@@ -492,7 +1009,7 @@ object LiveUpdateScheduler {
         UmengDiagnosticReporter.record(
             context = context.applicationContext,
             category = "live_update_snapshot_invalidated_after_upgrade",
-            message = "Invalidated stale live update snapshot after app version change",
+            message = DiagnosticLogMessages.LIVE_UPDATE_SNAPSHOT_INVALIDATED,
             extras = mapOf(
                 "storedSnapshotVersion" to (storedSnapshotVersion ?: "missing"),
                 "currentVersion" to (currentVersion ?: "unknown"),
@@ -519,7 +1036,7 @@ object LiveUpdateScheduler {
             }
             "${packageInfo.versionName ?: ""}:$versionCode"
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to resolve app version token", e)
+            Log.w(TAG, DiagnosticLogMessages.LOG_RESOLVE_APP_VERSION_FAILED, e)
             null
         }
     }
@@ -718,14 +1235,29 @@ object LiveUpdateScheduler {
                 isOddWeek = courseJson.optBoolean("isOddWeek", false),
                 isEvenWeek = courseJson.optBoolean("isEvenWeek", false),
                 customWeeks = parseIntList(courseJson.opt("customWeeks")),
+                suspendedWeeks = parseIntList(courseJson.opt("suspendedWeeks")),
                 note = normalizeNullableText(courseJson.opt("note")?.toString()),
             )
+        }
+
+        val holidayDatesArray = json.optJSONArray("holidayDates")
+        val holidayDates = mutableSetOf<String>()
+        if (holidayDatesArray != null) {
+            for (i in 0 until holidayDatesArray.length()) {
+                val dateStr = holidayDatesArray.optString(i)
+                if (dateStr.isNotBlank()) holidayDates.add(dateStr)
+            }
         }
 
         return NativeScheduleSnapshot(
             currentWeek = json.optInt("currentWeek", 1),
             semesterStartMillis = json.optLong("semesterStartMillis").takeIf { it > 0L },
             endReminderLeadMillis = json.optLong("endReminderLeadMillis", 600_000L),
+            isHoliday = json.optBoolean("isHoliday", false),
+            isHolidayDate = json.optString("isHolidayDate").takeIf { it.isNotBlank() },
+            holidayDates = holidayDates,
+            holidayOverrideEnabled = json.optBoolean("holidayOverrideEnabled", false),
+            enableHolidayMarking = json.optBoolean("enableHolidayMarking", true),
             courses = courses,
             settings = settings,
         )
@@ -794,6 +1326,7 @@ object LiveUpdateScheduler {
             putExtra("miuiIslandExpandedIconMode", payload.miuiIslandExpandedIconMode)
             putExtra("miuiIslandExpandedIconPath", payload.miuiIslandExpandedIconPath)
             putExtra("beforeClassQuickAction", payload.beforeClassQuickAction)
+            putExtra("validateAgainstSchedule", payload.validateAgainstSchedule)
         }
     }
 
@@ -814,16 +1347,52 @@ object LiveUpdateScheduler {
             isOddWeek = data["isOddWeek"] as? Boolean ?: false,
             isEvenWeek = data["isEvenWeek"] as? Boolean ?: false,
             customWeeks = parseIntList(data["customWeeks"]),
+            suspendedWeeks = parseIntList(data["suspendedWeeks"]),
             note = normalizeNullableText(data["note"] as? String),
         )
     }
 
+    private fun hasActiveLiveSelection(
+        snapshot: NativeScheduleSnapshot,
+        context: Context,
+        nowMillis: Long,
+    ): Boolean {
+        if (snapshot.semesterStartMillis == null) {
+            return false
+        }
+        val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        if (isLegacyHolidayFlagActive(snapshot, nowCalendar) ||
+            isDateHoliday(snapshot, nowCalendar)
+        ) {
+            return false
+        }
+        return findActiveSelection(context, snapshot, nowMillis) != null
+    }
+
+    private fun isLegacyHolidayFlagActive(
+        snapshot: NativeScheduleSnapshot,
+        dateCalendar: Calendar,
+    ): Boolean {
+        return liveSchedulerIsLegacyHolidayFlagActive(
+            isHoliday = snapshot.isHoliday,
+            isHolidayDate = snapshot.isHolidayDate,
+            year = dateCalendar.get(Calendar.YEAR),
+            month = dateCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = dateCalendar.get(Calendar.DAY_OF_MONTH),
+        )
+    }
+
     private fun findActiveSelection(
+        context: Context,
         snapshot: NativeScheduleSnapshot,
         nowMillis: Long,
     ): ScheduledSelection? {
         val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
-        val targetWeek = calculateWeekForDate(snapshot, nowCalendar)
+        // Skip if today is a holiday
+        if (isDateHoliday(snapshot, nowCalendar)) {
+            return null
+        }
+        val targetWeek = calculateCalendarWeekForDate(snapshot, nowCalendar)
         val todayCourses = snapshot.courses
             .filter { it.dayOfWeek == nowCalendar.get(Calendar.DAY_OF_WEEK).toWeekday() && it.isInWeek(targetWeek) }
             .sortedBy { it.startSection }
@@ -860,7 +1429,7 @@ object LiveUpdateScheduler {
                     blockedUntilMillis,
                 ) ?: continue
             val progressMilestones =
-                buildProgressMilestones(snapshot.settings.sections, course, startAtMillis, endAtMillis)
+                buildProgressMilestones(context, snapshot.settings.sections, course, startAtMillis, endAtMillis)
             return ScheduledSelection(
                 currentCourse = course,
                 nextCourse = todayCourses.getOrNull(index + 1),
@@ -878,11 +1447,12 @@ object LiveUpdateScheduler {
     }
 
     private fun findNextSelection(
+        context: Context,
         snapshot: NativeScheduleSnapshot,
         nowMillis: Long,
     ): ScheduledSelection? {
         val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
-        val targetWeek = calculateWeekForDate(snapshot, nowCalendar)
+        val targetWeek = calculateCalendarWeekForDate(snapshot, nowCalendar)
         val todayStart = Calendar.getInstance().apply {
             timeInMillis = nowMillis
             set(Calendar.HOUR_OF_DAY, 0)
@@ -890,7 +1460,8 @@ object LiveUpdateScheduler {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val maxWeek = snapshot.courses.maxOfOrNull { it.endWeek } ?: targetWeek
+        val maxWeek = (snapshot.courses.maxOfOrNull { it.endWeek } ?: targetWeek)
+            .coerceAtMost(targetWeek + MAX_LOOKAHEAD_WEEKS)
 
         var bestSelection: ScheduledSelection? = null
 
@@ -907,6 +1478,10 @@ object LiveUpdateScheduler {
                 val candidateDate = Calendar.getInstance().apply {
                     timeInMillis = todayStart.timeInMillis
                     add(Calendar.DAY_OF_YEAR, dayOffset)
+                }
+                // Skip courses that fall on a holiday
+                if (isDateHoliday(snapshot, candidateDate)) {
+                    continue
                 }
                 val startAtMillis =
                     buildCorrectedCourseDateTimeMillis(
@@ -946,7 +1521,7 @@ object LiveUpdateScheduler {
                     continue
                 }
                 val progressMilestones =
-                    buildProgressMilestones(snapshot.settings.sections, course, startAtMillis, endAtMillis)
+                    buildProgressMilestones(context, snapshot.settings.sections, course, startAtMillis, endAtMillis)
                 val selection = ScheduledSelection(
                     currentCourse = course,
                     nextCourse = sameDayCourses.getOrNull(currentIndex + 1),
@@ -1177,6 +1752,7 @@ object LiveUpdateScheduler {
             progressBreakOffsetsMillis = selection.progressBreakOffsetsMillis,
             progressMilestoneLabels = selection.progressMilestoneLabels,
             progressMilestoneTimeTexts = selection.progressMilestoneTimeTexts,
+            validateAgainstSchedule = true,
         )
     }
 
@@ -1235,46 +1811,20 @@ object LiveUpdateScheduler {
         blockedUntilMillis: Long?,
     ): String? {
         val settings = snapshot.settings
-        val beforeClassLeadMillis = settings.liveShowBeforeClassMinutes * 60_000L
-        val aheadTime = maxOf(
-            startAtMillis - beforeClassLeadMillis,
-            blockedUntilMillis ?: Long.MIN_VALUE,
+        return liveSchedulerResolveStage(
+            nowMillis = nowMillis,
+            startAtMillis = startAtMillis,
+            endAtMillis = endAtMillis,
+            blockedUntilMillis = blockedUntilMillis,
+            liveShowBeforeClassMinutes = settings.liveShowBeforeClassMinutes,
+            liveClassReminderStartMinutes = settings.liveClassReminderStartMinutes,
+            endReminderLeadMillis = snapshot.endReminderLeadMillis,
+            liveEnableBeforeClass = settings.liveEnableBeforeClass,
+            liveEnableDuringClass = settings.liveEnableDuringClass,
+            liveEnableBeforeEnd = settings.liveEnableBeforeEnd,
+            livePromoteDuringClass = settings.livePromoteDuringClass,
+            liveShowDuringClassNotification = settings.liveShowDuringClassNotification,
         )
-        if (nowMillis < aheadTime || nowMillis >= endAtMillis) {
-            return null
-        }
-        if (nowMillis < startAtMillis) {
-            return if (settings.liveEnableBeforeClass) "beforeClass" else null
-        }
-        val reminderStartMillis = if (settings.liveClassReminderStartMinutes == 0) {
-            startAtMillis
-        } else {
-            maxOf(startAtMillis, endAtMillis - settings.liveClassReminderStartMinutes * 60_000L)
-        }
-        if (settings.liveClassReminderStartMinutes > 0 && nowMillis < reminderStartMillis) {
-            return if (settings.liveEnableDuringClass && settings.liveShowDuringClassNotification) {
-                "duringClassStatusBar"
-            } else {
-                null
-            }
-        }
-        if (settings.liveClassReminderStartMinutes > 0) {
-            if (settings.liveEnableBeforeEnd) {
-                return "beforeEnd"
-            }
-            return if (canDisplayDuring(settings)) "duringClass" else null
-        }
-        val endReminderStart = maxOf(startAtMillis, endAtMillis - snapshot.endReminderLeadMillis)
-        if (nowMillis >= endReminderStart) {
-            if (settings.liveEnableBeforeEnd) {
-                return "beforeEnd"
-            }
-            if (canDisplayDuring(settings)) {
-                return "duringClass"
-            }
-            return null
-        }
-        return if (canDisplayDuring(settings)) "duringClass" else null
     }
 
     private fun resolveBeforeClassBlockedUntil(
@@ -1332,8 +1882,11 @@ object LiveUpdateScheduler {
     }
 
     private fun canDisplayDuring(settings: NativeLiveSettings): Boolean {
-        return settings.liveEnableDuringClass &&
-            (settings.livePromoteDuringClass || settings.liveShowDuringClassNotification)
+        return liveSchedulerCanDisplayDuring(
+            liveEnableDuringClass = settings.liveEnableDuringClass,
+            livePromoteDuringClass = settings.livePromoteDuringClass,
+            liveShowDuringClassNotification = settings.liveShowDuringClassNotification,
+        )
     }
 
     private fun calculateWeekForDate(
@@ -1345,6 +1898,33 @@ object LiveUpdateScheduler {
             currentWeek = snapshot.currentWeek,
             dateMillis = dateCalendar.timeInMillis,
             semesterWeekCount = snapshot.settings.semesterWeekCount,
+        )
+    }
+
+    private fun calculateCalendarWeekForDate(
+        snapshot: NativeScheduleSnapshot,
+        dateCalendar: Calendar,
+    ): Int {
+        return liveSchedulerCalculateCalendarWeekForDate(
+            semesterStartMillis = snapshot.semesterStartMillis,
+            currentWeek = snapshot.currentWeek,
+            dateMillis = dateCalendar.timeInMillis,
+        )
+    }
+
+    /** Check whether a specific date should be treated as a holiday
+     *  (courses should be hidden) based on the snapshot's holiday data. */
+    private fun isDateHoliday(
+        snapshot: NativeScheduleSnapshot,
+        dateCalendar: Calendar,
+    ): Boolean {
+        return liveSchedulerIsDateHoliday(
+            holidayDates = snapshot.holidayDates,
+            holidayOverrideEnabled = snapshot.holidayOverrideEnabled,
+            enableHolidayMarking = snapshot.enableHolidayMarking,
+            year = dateCalendar.get(Calendar.YEAR),
+            month = dateCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = dateCalendar.get(Calendar.DAY_OF_MONTH),
         )
     }
 
@@ -1368,6 +1948,7 @@ object LiveUpdateScheduler {
     }
 
     private fun buildProgressMilestones(
+        context: Context,
         sections: List<NativeSectionTime>,
         course: NativeCourse,
         startAtMillis: Long,
@@ -1407,8 +1988,12 @@ object LiveUpdateScheduler {
             val breakEndOffsetMillis =
                 ((((nextStartMinutes - sectionStartMinutes).toDouble() / referenceTotalMinutes) *
                     totalDurationMillis).toLong()).coerceIn(1L, totalDurationMillis - 1L)
-            milestones += breakStartOffsetMillis to ("Class ending soon" to currentSection.endTime)
-            milestones += breakEndOffsetMillis to ("Next class starts" to nextSection.startTime)
+            milestones += breakStartOffsetMillis to (
+                context.getString(R.string.milestone_recent_end) to currentSection.endTime
+            )
+            milestones += breakEndOffsetMillis to (
+                context.getString(R.string.milestone_next_start) to nextSection.startTime
+            )
         }
         return milestones.sortedBy { it.first }
     }
@@ -1463,12 +2048,12 @@ object LiveUpdateScheduler {
         )
     }
 
-    private fun startForegroundService(context: Context, payload: LiveUpdatePayload) {
-        try {
+    private fun startForegroundService(context: Context, payload: LiveUpdatePayload): Boolean {
+        return try {
             UmengDiagnosticReporter.record(
                 context = context.applicationContext,
                 category = "live_update_payload_selected",
-                message = "Scheduler selected live update payload for native service",
+                message = DiagnosticLogMessages.LIVE_UPDATE_PAYLOAD_SELECTED,
                 extras = mapOf(
                     "stage" to payload.stage,
                     "courseName" to payload.currentCourse.name,
@@ -1486,12 +2071,13 @@ object LiveUpdateScheduler {
                 )
             )
             ContextCompat.startForegroundService(context, buildServiceIntent(context, payload))
+            true
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to start live update service", e)
+            Log.w(TAG, DiagnosticLogMessages.LOG_START_LIVE_UPDATE_SERVICE_FAILED, e)
             UmengDiagnosticReporter.report(
                 context = context.applicationContext,
                 category = "live_update_scheduler_start_failed",
-                message = "Scheduler failed to start live update service",
+                message = DiagnosticLogMessages.LIVE_UPDATE_SCHEDULER_START_FAILED,
                 throwable = e,
                 dedupeKey = "live_update_scheduler_start_failed",
                 extras = mapOf(
@@ -1499,6 +2085,7 @@ object LiveUpdateScheduler {
                     "stage" to payload.stage,
                 )
             )
+            false
         }
     }
 }
@@ -1507,9 +2094,11 @@ class LiveUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
             Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_MY_PACKAGE_REPLACED ->
+                LiveUpdateScheduler.handleBootReschedule(context)
             Intent.ACTION_TIME_CHANGED,
-            Intent.ACTION_TIMEZONE_CHANGED -> LiveUpdateScheduler.handleSystemReschedule(context)
+            Intent.ACTION_TIMEZONE_CHANGED ->
+                LiveUpdateScheduler.handleTimeReschedule(context)
             LiveUpdateScheduler.ACTION_TRIGGER -> LiveUpdateScheduler.handleAlarm(context)
         }
     }

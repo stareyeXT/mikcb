@@ -83,20 +83,39 @@ class TodayMiniListWidgetProvider : AppWidgetProvider() {
                 TodayWidgetSupport.statusBackgroundRes(snapshot?.state ?: "no_course", style)
             )
 
+            val isShowingTomorrow = snapshot != null
+                && (snapshot.state == "completed" || snapshot.state == "no_course")
+                && snapshot.tomorrowCourses.isNotEmpty()
             if (snapshot == null) {
-                views.setTextViewText(R.id.widget_mini_heading, "今日课程")
-                views.setTextViewText(R.id.widget_mini_week, "轻屿课表")
+                views.setTextViewText(R.id.widget_mini_heading, context.getString(R.string.widget_today_courses))
+                views.setTextViewText(R.id.widget_mini_week, context.getString(R.string.widget_app_name))
                 views.setViewVisibility(R.id.widget_mini_empty, View.VISIBLE)
                 views.setViewVisibility(R.id.widget_mini_more, View.GONE)
-                views.setTextViewText(R.id.widget_mini_empty, "打开应用后同步")
+                views.setTextViewText(R.id.widget_mini_empty, context.getString(R.string.widget_open_app_sync))
                 bindRow(views, 0, null, primaryColor, secondaryColor, false, style)
                 bindRow(views, 1, null, primaryColor, secondaryColor, false, style)
                 bindRow(views, 2, null, primaryColor, secondaryColor, false, style)
             } else {
-                views.setTextViewText(R.id.widget_mini_heading, "今日课程")
-                views.setTextViewText(R.id.widget_mini_week, "第${snapshot.currentWeek}周")
+                views.setTextViewText(
+                    R.id.widget_mini_heading,
+                    if (isShowingTomorrow) {
+                        context.getString(R.string.widget_tomorrow_courses)
+                    } else {
+                        context.getString(R.string.widget_today_courses)
+                    }
+                )
+                views.setTextViewText(
+                    R.id.widget_mini_week,
+                    if (isShowingTomorrow) {
+                        context.getString(R.string.widget_week_number, snapshot.tomorrowWeek)
+                    } else {
+                        context.getString(R.string.widget_week_number, snapshot.currentWeek)
+                    }
+                )
                 val maxRows = TodayWidgetSupport.miniListVisibleRows(profile)
-                val rows = if (snapshot.state == "completed") {
+                val rows = if (isShowingTomorrow) {
+                    snapshot.tomorrowCourses.take(maxRows)
+                } else if (snapshot.state == "completed") {
                     emptyList()
                 } else {
                     val highlighted = snapshot.highlightedCourse
@@ -113,35 +132,37 @@ class TodayMiniListWidgetProvider : AppWidgetProvider() {
                 }
                 val emptyText = when {
                     rows.isNotEmpty() -> ""
-                    snapshot.state == "completed" -> "今天课程已结束"
-                    else -> "今日无课"
+                    snapshot.state == "completed" && snapshot.tomorrowCourses.isEmpty() ->
+                        context.getString(R.string.widget_today_ended)
+                    snapshot.state == "no_course" -> context.getString(R.string.widget_no_course_today)
+                    else -> ""
                 }
                 views.setViewVisibility(
                     R.id.widget_mini_empty,
                     if (emptyText.isBlank()) View.GONE else View.VISIBLE
                 )
                 views.setTextViewText(R.id.widget_mini_empty, emptyText)
-                val remainingCount = if (snapshot.state == "completed") {
-                    0
-                } else {
-                    (snapshot.visibleTodayCourses.size - rows.size).coerceAtLeast(0)
+                val remainingCount = when {
+                    isShowingTomorrow -> (snapshot.tomorrowCourses.size - rows.size).coerceAtLeast(0)
+                    snapshot.state == "completed" -> 0
+                    else -> (snapshot.visibleTodayCourses.size - rows.size).coerceAtLeast(0)
                 }
                 views.setViewVisibility(
                     R.id.widget_mini_more,
                     if (remainingCount > 0) View.VISIBLE else View.GONE
                 )
-                views.setTextViewText(R.id.widget_mini_more, "还有 $remainingCount 节")
-                val highlightedId = snapshot.highlightedCourse?.id
-                val countdown = TodayWidgetSupport.countdownText(snapshot)
+                views.setTextViewText(
+                    R.id.widget_mini_more,
+                    context.getString(R.string.widget_more_courses, remainingCount),
+                )
                 bindRow(
                     views,
                     0,
                     rows.getOrNull(0),
                     primaryColor,
                     secondaryColor,
-                    rows.getOrNull(0)?.id == highlightedId,
+                    isShowingTomorrow,
                     style,
-                    if (rows.getOrNull(0)?.id == highlightedId) countdown else null,
                 )
                 bindRow(
                     views,
@@ -149,9 +170,8 @@ class TodayMiniListWidgetProvider : AppWidgetProvider() {
                     rows.getOrNull(1),
                     primaryColor,
                     secondaryColor,
-                    rows.getOrNull(1)?.id == highlightedId,
+                    false,
                     style,
-                    if (rows.getOrNull(1)?.id == highlightedId) countdown else null,
                 )
                 bindRow(
                     views,
@@ -159,9 +179,8 @@ class TodayMiniListWidgetProvider : AppWidgetProvider() {
                     if (maxRows >= 3) rows.getOrNull(2) else null,
                     primaryColor,
                     secondaryColor,
-                    maxRows >= 3 && rows.getOrNull(2)?.id == highlightedId,
+                    false,
                     style,
-                    if (maxRows >= 3 && rows.getOrNull(2)?.id == highlightedId) countdown else null,
                 )
             }
 

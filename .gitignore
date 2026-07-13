@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.fusion/
 
 # IntelliJ related
 *.iml
@@ -18,15 +19,9 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code / Cursor 个人配置
 .vscode/
-.gradle-home/
-.metadata
-.reasonix/
-AGENTS.md
+.cursor/
 .codex
 .codex_tmp/
 .claude/
@@ -44,8 +39,6 @@ windows/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.flutter
-.flutter_tool_state
 .pub-cache/
 .pub/
 /build/
@@ -65,5 +58,47 @@ app.*.map.json
 /android/key.properties
 /android/app/*.jks
 /android/app/*.keystore
-/.metadata
-/AGENTS.md
+
+# Flutter工具内部文件
+.flutter
+.flutter_tool_state
+.metadata
+
+# Gradle缓存
+.gradle-home/
+
+# 临时文件
+nul
+pi.ico
+stderr.txt
+layout_dump.json
+package-lock.json
+_grep.ps1
+_layout.json
+
+# 审查输出
+reviews/
+.adversarial-review/
+progress.md
+.review_changed_files.txt
+.codebuddy/
+
+# 测试覆盖率
+coverage/
+
+# Pi 工具目录
+.pi/
+
+# Firecrawl scrape/cache artifacts
+.firecrawl/
+
+# MCP 工具指南
+tool/chrome-devtools-mcp-guide.md
+*.heapsnapshot
+
+# Antigravity CLI config
+.antigravitycli/
+
+# Android堆转储文件
+*.hprof
+*.patch

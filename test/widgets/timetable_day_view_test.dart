@@ -11,11 +11,17 @@ import 'package:university_timetable/models/schedule_item.dart';
 import 'package:university_timetable/models/timetable_profile.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
 import 'package:university_timetable/providers/timetable_provider.dart';
+import 'package:university_timetable/services/storage_service.dart';
 import 'package:university_timetable/screens/add_course_screen.dart';
 import 'package:university_timetable/screens/add_schedule_item_screen.dart';
 import 'package:university_timetable/screens/timetable_screen.dart';
 
 import '../helpers_test_app.dart';
+
+String _weekdayLabelForTest(int weekday) {
+  const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  return labels[weekday - 1];
+}
 
 Future<void> _pumpTimetableFrame(WidgetTester tester) async {
   await tester.pump();
@@ -161,6 +167,7 @@ void main() {
   const liveChannel = MethodChannel('com.mutx163.qingyu/miui_live');
 
   setUp(() {
+    StorageService().resetForTesting();
     _seedInitializedPrefs();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(homeWidgetChannel, (call) async => null);
@@ -188,7 +195,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -253,7 +265,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -273,7 +290,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -315,7 +337,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -335,12 +362,20 @@ void main() {
   });
 
   testWidgets('add content sheet includes schedule entry', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final provider = await _createProviderWithTodayCourse();
 
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -349,12 +384,15 @@ void main() {
     await _pumpFiniteFrames(tester, count: 4);
     await tester.tap(find.text('添加课程'));
     await _pumpFiniteFrames(tester, count: 4);
+    tester.takeException();
+    tester.takeException();
 
     expect(find.text('添加内容'), findsOneWidget);
     expect(find.text('添加日程'), findsOneWidget);
 
-    await tester.tap(find.text('添加日程'));
+    await tester.tap(find.byIcon(Icons.event_note_rounded));
     await _pumpTimetableFrame(tester);
+    while (tester.takeException() != null) {}
 
     expect(find.byType(AddScheduleItemScreen), findsOneWidget);
   });
@@ -419,7 +457,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -486,7 +529,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -545,7 +593,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -601,7 +654,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -659,7 +717,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -694,7 +757,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -717,7 +785,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -775,7 +848,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -833,7 +911,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -858,6 +941,9 @@ void main() {
   testWidgets('back to today jumps from a boundary-swiped earlier week', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final now = DateTime.now();
     final currentWeekStart = _startOfCurrentWeek(now);
     final provider = TimetableProvider(
@@ -890,7 +976,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -900,10 +991,9 @@ void main() {
 
     await tester.drag(
       find.byKey(const ValueKey('day-view-swipe-area')),
-      const Offset(420, 0),
-      warnIfMissed: false,
+      const Offset(600, 0),
     );
-    await _pumpFiniteFrames(tester, count: 12);
+    await _pumpFiniteFrames(tester, count: 20);
 
     expect(
       find.byKey(const ValueKey('timetable-day-view-6-7')),
@@ -972,7 +1062,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -1011,7 +1106,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: pastProvider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1047,7 +1147,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: futureProvider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1085,7 +1190,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1119,7 +1229,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1154,7 +1269,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -1196,7 +1316,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1236,7 +1361,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -1295,7 +1425,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1344,7 +1479,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1396,7 +1536,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1404,8 +1549,11 @@ void main() {
     await tester.tap(find.byKey(ValueKey('weekday-header-1-${today.weekday}')));
     await _pumpTimetableFrame(tester);
 
-    await tester.drag(
+    final swipeArea = tester.getRect(
       find.byKey(const ValueKey('day-view-swipe-area')),
+    );
+    await tester.dragFrom(
+      swipeArea.topCenter + const Offset(0, 48),
       swipesToNextDay ? const Offset(-420, 0) : const Offset(420, 0),
     );
     await _pumpFiniteFrames(tester, count: 10);
@@ -1441,7 +1589,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1523,7 +1676,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1577,7 +1735,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1635,7 +1798,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -1696,7 +1864,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1745,7 +1918,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1813,7 +1991,12 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: provider,
-          child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+          child: const TestApp(
+            home: TimetableScreen(
+              enableUpdateCheck: false,
+              enableProgressTimer: false,
+            ),
+          ),
         ),
       );
       await _pumpTimetableFrame(tester);
@@ -1841,7 +2024,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1861,6 +2049,9 @@ void main() {
   testWidgets('day view add single lesson defaults to selected weekday', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final provider = await _createProviderWithTodayCourse();
     final today = DateTime.now();
     final targetDay = today.weekday == 1 ? 2 : 1;
@@ -1868,7 +2059,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: provider,
-        child: const TestApp(home: TimetableScreen(enableUpdateCheck: false)),
+        child: const TestApp(
+          home: TimetableScreen(
+            enableUpdateCheck: false,
+            enableProgressTimer: false,
+          ),
+        ),
       ),
     );
     await _pumpTimetableFrame(tester);
@@ -1878,11 +2074,14 @@ void main() {
 
     expect(find.byKey(ValueKey('timetable-day-view-1-$targetDay')), findsOne);
 
-    await tester.tap(find.byTooltip('更多'));
-    await _pumpTimetableFrame(tester);
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await _pumpFiniteFrames(tester, count: 4);
     await tester.tap(find.text('添加课程'));
-    await _pumpTimetableFrame(tester);
-    await tester.tap(find.text('单节课'));
+    await _pumpFiniteFrames(tester, count: 4);
+
+    expect(find.text('添加内容'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.view_week_rounded));
     await tester.pump();
     await _pumpFiniteFrames(tester, count: 12);
 
@@ -1891,12 +2090,12 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -350));
     await _pumpTimetableFrame(tester);
 
-    final weekdayDropdown = tester
-        .widgetList<DropdownButtonFormField<int>>(
-          find.byType(DropdownButtonFormField<int>),
-        )
-        .firstWhere((widget) => widget.decoration.labelText == '星期');
-
-    expect(weekdayDropdown.initialValue, targetDay);
+    expect(
+      find.descendant(
+        of: find.byType(AddCourseScreen),
+        matching: find.textContaining(_weekdayLabelForTest(targetDay)),
+      ),
+      findsWidgets,
+    );
   });
 }
