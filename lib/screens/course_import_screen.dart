@@ -1,0 +1,5401 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:azlistview/azlistview.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:university_timetable/l10n/app_localizations.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+
+import '../models/course.dart';
+import '../models/time_scheme.dart';
+import '../models/timetable_settings.dart';
+import '../models/warehouse_repository_models.dart';
+import '../providers/timetable_provider.dart';
+import '../services/ai_course_import_service.dart';
+import '../services/html_import_service.dart';
+import '../services/ics_import_service.dart';
+import '../services/import_week_alignment_service.dart';
+import '../services/warehouse_import_preferences_service.dart';
+import '../services/warehouse_repository_service.dart';
+import '../utils/responsive.dart';
+import 'feedback_screen.dart';
+
+enum _WarehouseImportMenuAction {
+  feedback,
+  customDebug,
+}
+
+class CourseImportScreen extends StatelessWidget {
+  const CourseImportScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.courseImportTitle),
+      ),
+      body: ListView(
+        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colorScheme.primaryContainer,
+                  colorScheme.surfaceContainerHighest,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.chooseImportMethodTitle,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.chooseImportMethodSubtitle,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ImportEntryCard(
+            icon: Icons.event_note_rounded,
+            title: l10n.importMethodIcsTitle,
+            subtitle: l10n.importMethodIcsSubtitle,
+            footer: l10n.importMethodIcsFooter,
+            onTap: () => _openImportPage<bool>(
+              context,
+              builder: (_) => const IcsCourseImportScreen(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ImportEntryCard(
+            icon: Icons.auto_awesome_rounded,
+            title: l10n.importMethodAiTitle,
+            subtitle: l10n.importMethodAiSubtitle,
+            footer: l10n.importMethodAiFooter,
+            onTap: () => _openImportPage<bool>(
+              context,
+              builder: (_) => const AiImageCourseImportScreen(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ImportEntryCard(
+            icon: Icons.school_outlined,
+            title: l10n.importMethodWarehouseTitle,
+            subtitle: l10n.importMethodWarehouseSubtitle,
+            footer: l10n.importMethodWarehouseFooter,
+            onTap: () => _openImportPage<bool>(
+              context,
+              builder: (_) => const WarehouseCourseImportScreen(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ImportEntryCard(
+            icon: Icons.language_rounded,
+            title: '从网址导入',
+            subtitle: '输入课表页面网址，读取 HTML 中的课程信息',
+            footer: '适用于学校教务系统提供课表页面的场景',
+            onTap: () => _openImportPage<bool>(
+              context,
+              builder: (_) => const HtmlCourseImportScreen(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openImportPage<T>(
+    BuildContext context, {
+    required WidgetBuilder builder,
+  }) async {
+    final imported = await Navigator.of(context).push<T>(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/courses/import/detail'),
+        builder: builder,
+      ),
+    );
+    if (context.mounted && imported == true) {
+      Navigator.of(context).pop(true);
+    }
+  }
+}
+
+class IcsCourseImportScreen extends StatefulWidget {
+  const IcsCourseImportScreen({super.key});
+
+  @override
+  State<IcsCourseImportScreen> createState() => _IcsCourseImportScreenState();
+}
+
+class _IcsCourseImportScreenState extends State<IcsCourseImportScreen> {
+  final IcsImportService _icsImportService = IcsImportService();
+  final ImportWeekAlignmentService _weekAlignmentService =
+      const ImportWeekAlignmentService();
+
+  bool _isImporting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.icsImportTitle),
+      ),
+      body: ListView(
+        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.applicableScenarioTitle,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(l10n.icsScenarioIntro),
+                  const SizedBox(height: 14),
+                  _GuideLine(
+                    title: l10n.stepLabel('1'),
+                    subtitle: l10n.icsStep1Subtitle,
+                  ),
+                  const SizedBox(height: 10),
+                  _GuideLine(
+                    title: l10n.stepLabel('2'),
+                    subtitle: l10n.icsStep2Subtitle,
+                  ),
+                  const SizedBox(height: 10),
+                  _GuideLine(
+                    title: l10n.stepLabel('3'),
+                    subtitle: l10n.icsStep3Subtitle,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.supportedFilesTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(l10n.supportedFilesSuffix),
+                const SizedBox(height: 4),
+                Text(l10n.supportedFilesImageHint),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: FilledButton.icon(
+          onPressed: _isImporting ? null : _importIcsFile,
+          icon: _isImporting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.folder_open_rounded),
+          label: Text(_isImporting
+              ? '${l10n.icsImportTitle}...'
+              : l10n.chooseIcsFileAction),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _importIcsFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _isImporting = true;
+    });
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['ics'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty || !mounted) {
+        return;
+      }
+
+      final file = result.files.single;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFileReadFailed)),
+        );
+        return;
+      }
+
+      final provider = context.read<TimetableProvider>();
+      final replaceExisting = provider.courses.isEmpty
+          ? true
+          : await _askReplaceExisting(
+              context,
+              title: l10n.importReplaceExistingTitle,
+              content: l10n.importReplaceExistingMessage(file.name),
+            );
+      if (replaceExisting == null || !mounted) {
+        return;
+      }
+
+      final content = utf8.decode(bytes, allowMalformed: true);
+      final parsedResult = _icsImportService.parseWakeUpSchedule(content);
+      if (parsedResult.courses.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importNoCoursesRecognized)),
+        );
+        return;
+      }
+
+      final semesterConfig = await _pickImportSemesterConfig(
+        context,
+        initialSemesterStartDate:
+            provider.settings.semesterStartDate ?? parsedResult.semesterStart,
+        initialFirstCourseWeek: _weekAlignmentService.inferFirstCourseWeek(
+          semesterStartDate:
+              provider.settings.semesterStartDate ?? parsedResult.semesterStart,
+          firstCourseDate: parsedResult.semesterStart,
+        ),
+        inferredFirstCourseDate: parsedResult.semesterStart,
+        title: l10n.importConfirmSemesterMappingTitle,
+        subtitle: l10n.importConfirmSemesterMappingSubtitleIcs,
+      );
+      if (semesterConfig == null || !mounted) {
+        return;
+      }
+
+      final alignedCourses = _weekAlignmentService.shiftCoursesToSemesterWeeks(
+        parsedResult.courses,
+        firstCourseWeek: semesterConfig.firstCourseWeek,
+      );
+      final requiredSectionCount =
+          provider.previewImportedCourseRequiredSectionCount(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+      );
+      if (!mounted) {
+        return;
+      }
+      final capacityReady = await _ensureSectionCapacity(
+        context,
+        requiredSectionCount: requiredSectionCount,
+        provider: provider,
+      );
+      if (!capacityReady || !mounted) {
+        return;
+      }
+
+      final importedCount = await provider.importParsedCourses(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+        semesterStart: semesterConfig.semesterStartDate,
+        source: 'ics',
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            importedCount > 0
+                ? (replaceExisting
+                    ? l10n.importOverwriteCount(importedCount)
+                    : l10n.importUpdatedCount(importedCount))
+                : l10n.importNoCourseChanges,
+          ),
+        ),
+      );
+      if (importedCount > 0) {
+        Navigator.of(context).pop(true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
+  }
+}
+
+class HtmlCourseImportScreen extends StatefulWidget {
+  const HtmlCourseImportScreen({super.key});
+
+  @override
+  State<HtmlCourseImportScreen> createState() => _HtmlCourseImportScreenState();
+}
+
+class _HtmlCourseImportScreenState extends State<HtmlCourseImportScreen> {
+  final HtmlImportService _htmlImportService = HtmlImportService();
+  final ImportWeekAlignmentService _weekAlignmentService =
+      const ImportWeekAlignmentService();
+  final TextEditingController _urlController = TextEditingController();
+
+  bool _isImporting = false;
+  List<Course>? _weekCourses;
+  String? _parseError;
+  HtmlWeekFetchProgress? _fetchProgress;
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('从网址导入'),
+      ),
+      body: ListView(
+        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '适用场景',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('适用于学校教务系统提供课表页面的场景，直接输入课表页面网址即可读取课程信息。'),
+                  const SizedBox(height: 14),
+                  _GuideLine(
+                    title: l10n.stepLabel('1'),
+                    subtitle: '在浏览器中打开学校教务系统的课表页面',
+                  ),
+                  const SizedBox(height: 10),
+                  _GuideLine(
+                    title: l10n.stepLabel('2'),
+                    subtitle: '复制课表页面的完整网址',
+                  ),
+                  const SizedBox(height: 10),
+                  _GuideLine(
+                    title: l10n.stepLabel('3'),
+                    subtitle: '将网址粘贴到下方输入框，点击获取并导入，将自动获取一周课程',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '输入课表网址',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _urlController,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    hintText: 'https://...',
+                    prefixIcon: const Icon(Icons.link_rounded),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    isDense: true,
+                    filled: true,
+                    fillColor: colorScheme.surface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isImporting && _fetchProgress != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2,
+                          color: colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _fetchProgress!.currentDayLabel.isNotEmpty
+                              ? '正在获取${_fetchProgress!.currentDayLabel}课程...'
+                              : '获取中...',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _fetchProgress!.completedDays /
+                          _fetchProgress!.totalDays,
+                      backgroundColor: colorScheme.onSecondaryContainer
+                          .withValues(alpha: 0.12),
+                      valueColor: AlwaysStoppedAnimation(
+                        colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_parseError != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.error_outline_rounded,
+                    size: 20,
+                    color: colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _parseError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_weekCourses != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 20,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '已识别 ${_weekCourses!.length} 门课程（一周）',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: FilledButton.icon(
+          onPressed: _isImporting ? null : _fetchAndImport,
+          icon: _isImporting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_rounded),
+          label: Text(_isImporting ? '获取中...' : '获取并导入'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _fetchAndImport() async {
+    final l10n = AppLocalizations.of(context)!;
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      setState(() {
+        _parseError = '请输入课表页面网址';
+      });
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+      _parseError = null;
+      _weekCourses = null;
+      _fetchProgress = null;
+    });
+
+    try {
+      final weekStartDate = HtmlImportService.startOfWeek(DateTime.now());
+      final courses = await _htmlImportService.fetchWeekCourses(
+        url,
+        weekStartDate,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _fetchProgress = progress;
+            });
+          }
+        },
+      );
+
+      if (!mounted) return;
+
+      if (courses.isEmpty) {
+        setState(() {
+          _parseError = '未能从页面中识别到课程信息';
+        });
+        return;
+      }
+
+      setState(() {
+        _weekCourses = courses;
+      });
+
+      final provider = context.read<TimetableProvider>();
+      final replaceExisting = provider.courses.isEmpty
+          ? true
+          : await _askReplaceExisting(
+              context,
+              title: '导入课程',
+              content: '已从网址识别到 ${courses.length} 门课程（一周），是否导入？',
+            );
+      if (replaceExisting == null || !mounted) {
+        return;
+      }
+
+      final semesterConfig = await _pickImportSemesterConfig(
+        context,
+        initialSemesterStartDate: provider.settings.semesterStartDate ??
+            _weekAlignmentService.startOfWeek(DateTime.now()),
+        initialFirstCourseWeek: 1,
+        title: l10n.importConfirmSemesterMappingTitle,
+        subtitle: '确认学期起始日期与周次对应关系',
+      );
+      if (semesterConfig == null || !mounted) {
+        return;
+      }
+
+      final alignedCourses = _weekAlignmentService.shiftCoursesToSemesterWeeks(
+        courses,
+        firstCourseWeek: semesterConfig.firstCourseWeek,
+      );
+      final requiredSectionCount =
+          provider.previewImportedCourseRequiredSectionCount(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+      );
+      if (!mounted) return;
+      final capacityReady = await _ensureSectionCapacity(
+        context,
+        requiredSectionCount: requiredSectionCount,
+        provider: provider,
+      );
+      if (!capacityReady || !mounted) return;
+
+      final importedCount = await provider.importParsedCourses(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+        semesterStart: semesterConfig.semesterStartDate,
+        source: 'html',
+      );
+      if (!mounted) return;
+
+      await provider.setHtmlImportSource(url);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            importedCount > 0
+                ? (replaceExisting
+                    ? l10n.importOverwriteCount(importedCount)
+                    : l10n.importUpdatedCount(importedCount))
+                : l10n.importNoCourseChanges,
+          ),
+        ),
+      );
+      if (importedCount > 0) {
+        Navigator.of(context).pop(true);
+      }
+    } on FormatException catch (e) {
+      if (mounted) {
+        setState(() {
+          _parseError = e.message;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _parseError = '获取页面内容失败，请检查网址和网络连接';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('获取失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+          _fetchProgress = null;
+        });
+      }
+    }
+  }
+}
+
+class AiImageCourseImportScreen extends StatefulWidget {
+  const AiImageCourseImportScreen({super.key});
+
+  @override
+  State<AiImageCourseImportScreen> createState() =>
+      _AiImageCourseImportScreenState();
+}
+
+class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
+  final TextEditingController _aiController = TextEditingController();
+  final FocusNode _aiFocusNode = FocusNode();
+  final AiCourseImportService _aiImportService = AiCourseImportService();
+  final ImportWeekAlignmentService _weekAlignmentService =
+      const ImportWeekAlignmentService();
+
+  AiCourseImportParseResult? _aiParsedResult;
+  String? _aiParseError;
+  bool _isImporting = false;
+
+  @override
+  void dispose() {
+    _aiFocusNode.dispose();
+    _aiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
+        title: Text(l10n.aiImportTitle),
+      ),
+      body: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final dense = constraints.maxHeight < 760;
+            final ultraDense = constraints.maxHeight < 520;
+            final sectionGap = ultraDense
+                ? 4.0
+                : dense
+                    ? 8.0
+                    : 12.0;
+            final outerPadding = ultraDense
+                ? 10.0
+                : dense
+                    ? 12.0
+                    : 16.0;
+            final cardRadius = ultraDense
+                ? 16.0
+                : dense
+                    ? 18.0
+                    : 20.0;
+            final compactButtonStyle = ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: WidgetStatePropertyAll<EdgeInsetsGeometry>(
+                EdgeInsets.symmetric(
+                  horizontal: ultraDense
+                      ? 8
+                      : dense
+                          ? 10
+                          : 12,
+                  vertical: ultraDense
+                      ? 6
+                      : dense
+                          ? 8
+                          : 10,
+                ),
+              ),
+            );
+            final compactBottomButtonStyle = ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: WidgetStatePropertyAll<EdgeInsetsGeometry>(
+                EdgeInsets.symmetric(
+                  horizontal: ultraDense ? 8 : 12,
+                  vertical: ultraDense ? 8 : 10,
+                ),
+              ),
+            );
+            final previewSummary = _aiParsedResult == null
+                ? null
+                : l10n.aiPreviewSummary(
+                    _aiParsedResult!.courses.length,
+                    _aiParsedResult!.requiredSectionCount,
+                    _aiParsedResult!.warnings.isEmpty
+                        ? ''
+                        : l10n.aiWarningCountSuffix(
+                            _aiParsedResult!.warnings.length,
+                          ),
+                  );
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                outerPadding,
+                12,
+                outerPadding,
+                12,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(
+                      ultraDense
+                          ? 10
+                          : dense
+                              ? 14
+                              : 16,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          colorScheme.primaryContainer,
+                          colorScheme.surfaceContainerHighest,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(cardRadius + 2),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ultraDense
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      l10n.aiWorkflowCompactTitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      l10n.aiWorkflowCompactSubtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      l10n.aiWorkflowTitle,
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    SizedBox(height: dense ? 4 : 6),
+                                    Text(
+                                      l10n.aiWorkflowSubtitle,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                        SizedBox(width: ultraDense ? 8 : 12),
+                        if (ultraDense)
+                          TextButton(
+                            onPressed: _showPromptSheet,
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                            ),
+                            child: Text(l10n.aiPromptShortAction),
+                          )
+                        else
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            size: dense ? 30 : 34,
+                            color: colorScheme.primary,
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: sectionGap),
+                  if (ultraDense)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Text(
+                        l10n.aiExpertModeSuggestion,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _CompactHintChip(
+                          icon: Icons.smart_toy_outlined,
+                          label: l10n.aiHintExpertMode,
+                        ),
+                        _CompactHintChip(
+                          icon: Icons.photo_library_outlined,
+                          label: l10n.aiHintSendScreenshot,
+                        ),
+                        _CompactHintChip(
+                          icon: Icons.content_copy_rounded,
+                          label: l10n.aiHintCopyJsonBack,
+                        ),
+                        _CompactHintChip(
+                          icon: Icons.event_available_rounded,
+                          label: l10n.aiHintPickSemesterAfterImport,
+                        ),
+                      ],
+                    ),
+                  SizedBox(height: sectionGap),
+                  if (ultraDense)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _CompactActionButton(
+                            icon: Icons.copy_all_rounded,
+                            label: l10n.copyAddress,
+                            onPressed: _copyAiPrompt,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _CompactActionButton(
+                            icon: Icons.article_outlined,
+                            label: l10n.aiPromptShortAction,
+                            onPressed: _showPromptSheet,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _CompactActionButton(
+                            icon: Icons.content_paste_rounded,
+                            label: l10n.pasteAction,
+                            onPressed: _pasteFromClipboard,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _CompactActionButton(
+                            icon: Icons.clear_rounded,
+                            label: l10n.clearAction,
+                            onPressed: _clearInput,
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: _copyAiPrompt,
+                          style: compactButtonStyle,
+                          icon: const Icon(Icons.copy_all_rounded, size: 18),
+                          label: Text(l10n.copyAddress),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _showPromptSheet,
+                          style: compactButtonStyle,
+                          icon: const Icon(Icons.article_outlined, size: 18),
+                          label: Text(l10n.aiPromptShortAction),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: _pasteFromClipboard,
+                          style: compactButtonStyle,
+                          icon:
+                              const Icon(Icons.content_paste_rounded, size: 18),
+                          label: Text(l10n.pasteAction),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _clearInput,
+                          style: compactButtonStyle,
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          label: Text(l10n.clearAction),
+                        ),
+                      ],
+                    ),
+                  SizedBox(height: sectionGap),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          ultraDense
+                              ? l10n.jsonLabelShort
+                              : l10n.aiPasteJsonTitle,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (_aiParsedResult != null)
+                        _CompactStatusChip(
+                          label: l10n.aiCourseCountChip(
+                              _aiParsedResult!.courses.length),
+                        ),
+                      if (_aiParseError != null)
+                        _CompactStatusChip(
+                          label: l10n.aiParseFailedChip,
+                          isError: true,
+                        ),
+                    ],
+                  ),
+                  SizedBox(
+                    height: ultraDense
+                        ? 4
+                        : dense
+                            ? 6
+                            : 8,
+                  ),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(cardRadius),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: TextField(
+                        key: const ValueKey('ai_import_json_input'),
+                        controller: _aiController,
+                        focusNode: _aiFocusNode,
+                        expands: true,
+                        minLines: null,
+                        maxLines: null,
+                        textAlignVertical: TextAlignVertical.top,
+                        onChanged: (_) {
+                          if (_aiParsedResult != null ||
+                              _aiParseError != null) {
+                            setState(() {
+                              _aiParsedResult = null;
+                              _aiParseError = null;
+                            });
+                          }
+                        },
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.all(ultraDense ? 10 : 14),
+                          hintText: ultraDense
+                              ? l10n.aiPasteJsonHintShort
+                              : l10n.aiPasteJsonHintLong,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: sectionGap),
+                  if (_aiParseError != null)
+                    _CompactNoticeCard(
+                      icon: Icons.error_outline_rounded,
+                      message: _aiParseError!,
+                      isError: true,
+                      actionLabel: l10n.detailAction,
+                      onAction: () => _showMessageSheet(
+                        title: l10n.aiParseErrorTitle,
+                        content: _aiParseError!,
+                      ),
+                    )
+                  else if (_aiParsedResult != null)
+                    _CompactNoticeCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      message: previewSummary!,
+                      actionLabel: l10n.viewDetailsAction,
+                      onAction: () => _showPreviewSheet(_aiParsedResult!),
+                    )
+                  else if (!ultraDense)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        l10n.aiWorkflowFooter,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  SizedBox(height: sectionGap),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _previewAiResult,
+                          style: compactBottomButtonStyle,
+                          icon: const Icon(Icons.preview_rounded),
+                          label: Text(l10n.previewAction),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _isImporting ? null : _importAiResult,
+                          style: compactBottomButtonStyle,
+                          icon: _isImporting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.cloud_upload_rounded),
+                          label: Text(
+                            _isImporting
+                                ? '${l10n.importReplaceExistingTitle}...'
+                                : l10n.confirmImportAction,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copyAiPrompt() async {
+    final l10n = AppLocalizations.of(context)!;
+    await Clipboard.setData(
+      const ClipboardData(text: AiCourseImportService.prompt),
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.promptCopiedHint)),
+    );
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final l10n = AppLocalizations.of(context)!;
+    final data = await Clipboard.getData('text/plain');
+    final text = data?.text?.trim();
+    if (text == null || text.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.clipboardNoText)),
+      );
+      return;
+    }
+    _aiController.text = text;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _aiParsedResult = null;
+      _aiParseError = null;
+    });
+  }
+
+  void _clearInput() {
+    _aiController.clear();
+    setState(() {
+      _aiParsedResult = null;
+      _aiParseError = null;
+    });
+  }
+
+  void _showPromptSheet() {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+        return SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.88,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.aiPromptSheetTitle,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.aiPromptSheetSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          AiCourseImportService.prompt.trim(),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            height: 1.55,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPreviewSheet(AiCourseImportParseResult result) {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.88,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              children: [
+                Text(
+                  l10n.aiPreviewTitle,
+                  style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                _AiPreviewCard(result: result),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMessageSheet({
+    required String title,
+    required String content,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.5,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: SelectableText(content),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _previewAiResult() {
+    final result = _parseAiResult(showError: true);
+    if (result != null) {
+      _showPreviewSheet(result);
+    }
+  }
+
+  AiCourseImportParseResult? _parseAiResult({
+    required bool showError,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    final content = _aiController.text.trim();
+    if (content.isEmpty) {
+      final message = l10n.aiPasteJsonFirst;
+      if (mounted) {
+        setState(() {
+          _aiParsedResult = null;
+          _aiParseError = message;
+        });
+        if (showError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      }
+      return null;
+    }
+
+    try {
+      final result = _aiImportService.parse(
+        content,
+        settings: context.read<TimetableProvider>().settings,
+      );
+      if (mounted) {
+        setState(() {
+          _aiParsedResult = result;
+          _aiParseError = null;
+        });
+      }
+      return result;
+    } on FormatException catch (error) {
+      if (mounted) {
+        setState(() {
+          _aiParsedResult = null;
+          _aiParseError = error.message;
+        });
+        if (showError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error.message)),
+          );
+        }
+      }
+      return null;
+    } catch (_) {
+      final message = l10n.aiParseFailedIncompleteJson;
+      if (mounted) {
+        setState(() {
+          _aiParsedResult = null;
+          _aiParseError = message;
+        });
+        if (showError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      }
+      return null;
+    }
+  }
+
+  Future<void> _importAiResult() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _isImporting = true;
+    });
+    try {
+      final result = _parseAiResult(showError: true);
+      if (result == null || !mounted) {
+        return;
+      }
+
+      final provider = context.read<TimetableProvider>();
+      final replaceExisting = provider.courses.isEmpty
+          ? true
+          : await _askReplaceExisting(
+              context,
+              title: l10n.importAiResultTitle,
+              content: l10n.importAiReplaceMessage,
+            );
+      if (replaceExisting == null || !mounted) {
+        return;
+      }
+
+      final semesterConfig = await _pickImportSemesterConfig(
+        context,
+        initialSemesterStartDate: provider.settings.semesterStartDate ??
+            _weekAlignmentService.startOfWeek(DateTime.now()),
+        initialFirstCourseWeek: 1,
+        title: l10n.importConfirmSemesterMappingTitle,
+        subtitle: l10n.importConfirmSemesterMappingSubtitleAi,
+      );
+      if (semesterConfig == null || !mounted) {
+        return;
+      }
+
+      final alignedCourses = _weekAlignmentService.shiftCoursesToSemesterWeeks(
+        result.courses,
+        firstCourseWeek: semesterConfig.firstCourseWeek,
+      );
+      final requiredSectionCount =
+          provider.previewImportedCourseRequiredSectionCount(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+      );
+      if (!mounted) {
+        return;
+      }
+      final capacityReady = await _ensureSectionCapacity(
+        context,
+        requiredSectionCount: requiredSectionCount,
+        provider: provider,
+      );
+      if (!capacityReady || !mounted) {
+        return;
+      }
+
+      final importedCount = await provider.importParsedCourses(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+        semesterStart: semesterConfig.semesterStartDate,
+        source: 'ai',
+      );
+      if (!mounted) {
+        return;
+      }
+
+      final warningSuffix = result.warnings.isEmpty
+          ? ''
+          : l10n.aiWarningExtraSuffix(result.warnings.length);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            importedCount > 0
+                ? (replaceExisting
+                    ? l10n.importOverwriteCount(importedCount) + warningSuffix
+                    : l10n.importUpdatedCount(importedCount) + warningSuffix)
+                : l10n.importNoCourseChanges,
+          ),
+        ),
+      );
+      if (importedCount > 0) {
+        Navigator.of(context).pop(true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
+  }
+}
+
+class WarehouseCourseImportScreen extends StatefulWidget {
+  const WarehouseCourseImportScreen({super.key});
+
+  @override
+  State<WarehouseCourseImportScreen> createState() =>
+      _WarehouseCourseImportScreenState();
+}
+
+class _WarehouseCourseImportScreenState
+    extends State<WarehouseCourseImportScreen> {
+  static final WarehouseRepositorySource _defaultSource =
+      WarehouseRepositorySource.fromGitHubUrl(
+    'https://github.com/stareyeXT/qingyu_warehouse',
+  );
+
+  final WarehouseRepositoryService _repositoryService =
+      WarehouseRepositoryService();
+  final WarehouseImportPreferencesService _preferencesService =
+      WarehouseImportPreferencesService();
+  final TextEditingController _searchController = TextEditingController();
+  late Future<WarehouseRootIndex> _rootIndexFuture;
+  List<String> _recentSchoolIds = const [];
+  String _searchQuery = '';
+  WarehouseFetchOptions _currentFetchOptions() {
+    final settings = context.read<TimetableProvider>().settings;
+    return WarehouseFetchOptions.fromSettings(settings);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _rootIndexFuture = _repositoryService.fetchRootIndex(
+      _defaultSource,
+      options: _currentFetchOptions(),
+    );
+    _loadRecentSchoolIds();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadRecentSchoolIds() async {
+    final ids = await _preferencesService.getRecentSchoolIds();
+    if (!mounted) return;
+    setState(() {
+      _recentSchoolIds = ids;
+    });
+  }
+
+  Future<void> _handleMoreAction(_WarehouseImportMenuAction action) async {
+    switch (action) {
+      case _WarehouseImportMenuAction.feedback:
+        await _openMissingSchoolFeedbackGuide();
+        break;
+      case _WarehouseImportMenuAction.customDebug:
+        await _openCustomDebugRecords();
+        break;
+    }
+  }
+
+  Future<void> _openMissingSchoolFeedbackGuide() async {
+    final l10n = AppLocalizations.of(context)!;
+    final shouldOpen = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.warehouseMissingSchoolTitle,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  l10n.warehouseMissingSchoolSubtitle,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(sheetContext, false),
+                      child: Text(l10n.laterAction),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                      label: Text(l10n.goFeedbackAction),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (shouldOpen == true && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/feedback'),
+          builder: (_) => const FeedbackScreen(),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openCustomDebugRecords() async {
+    final imported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        settings:
+            const RouteSettings(name: '/courses/import/warehouse/custom-debug'),
+        builder: (_) => const WarehouseCustomDebugRecordsScreen(),
+      ),
+    );
+    if (imported == true && mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.importMethodWarehouseTitle),
+        actions: [
+          PopupMenuButton<_WarehouseImportMenuAction>(
+            tooltip: l10n.moreActionsTooltip,
+            onSelected: _handleMoreAction,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: _WarehouseImportMenuAction.feedback,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.campaign_outlined),
+                  title: Text(l10n.warehouseFeedbackMissingSchoolTitle),
+                ),
+              ),
+              PopupMenuItem(
+                value: _WarehouseImportMenuAction.customDebug,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.terminal_rounded),
+                  title: Text(l10n.warehouseCustomDebugTitle),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: FutureBuilder<WarehouseRootIndex>(
+        future: _rootIndexFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.warehouseRootLoadFailedTitle,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${snapshot.error}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _rootIndexFuture =
+                                  _repositoryService.fetchRootIndex(
+                                _defaultSource,
+                                options: _currentFetchOptions(),
+                              );
+                            });
+                          },
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: Text(l10n.reloadAction),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          final allSchools = [...?snapshot.data?.schools]..sort((left, right) {
+              final initialCompare = left.initial.compareTo(right.initial);
+              if (initialCompare != 0) return initialCompare;
+              return left.name.compareTo(right.name);
+            });
+          final filteredSchools = _filterSchools(allSchools, _searchQuery);
+          final beans = _schoolsToBeans(filteredSchools, _recentSchoolIds);
+          final indexTags = beans
+              .map((bean) => bean.getSuspensionTag())
+              .toSet()
+              .toList(growable: false);
+          final isSearching = _searchQuery.trim().isNotEmpty;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: l10n.searchSchoolHint,
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searchQuery.trim().isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: l10n.clearSearchTooltip,
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    isDense: true,
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerLowest,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: beans.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.search_off_rounded,
+                                size: 36,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                isSearching
+                                    ? l10n.noMatchingSchools
+                                    : l10n.noAvailableSchools,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (isSearching) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  l10n.searchSchoolSuggestion,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      )
+                    : AzListView(
+                        data: beans,
+                        itemCount: beans.length,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        indexBarData: isSearching ? const [] : indexTags,
+                        indexBarOptions: IndexBarOptions(
+                          needRebuild: true,
+                          hapticFeedback: true,
+                          textStyle: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ) ??
+                              const TextStyle(fontSize: 11),
+                          selectTextStyle: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w800,
+                              ) ??
+                              const TextStyle(fontSize: 11),
+                          selectItemDecoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          indexHintDecoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          indexHintTextStyle:
+                              theme.textTheme.headlineMedium?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w800,
+                                  ) ??
+                                  const TextStyle(fontSize: 28),
+                        ),
+                        indexHintBuilder: (context, tag) => Container(
+                          width: 72,
+                          height: 72,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Text(
+                            tag,
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        itemBuilder: (context, index) {
+                          final bean = beans[index];
+                          return _WarehouseSchoolCard(
+                            school: bean.school,
+                            isRecent: bean.isRecent,
+                            onTap: () async {
+                              final imported =
+                                  await Navigator.of(context).push<bool>(
+                                MaterialPageRoute(
+                                  settings: RouteSettings(
+                                    name:
+                                        '/courses/import/warehouse/${bean.school.id}',
+                                  ),
+                                  builder: (_) => WarehouseSchoolAdaptersScreen(
+                                    source: _defaultSource,
+                                    school: bean.school,
+                                    fetchOptions: _currentFetchOptions(),
+                                  ),
+                                ),
+                              );
+                              if (imported == true && context.mounted) {
+                                Navigator.of(context).pop(true);
+                              }
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  List<WarehouseSchoolEntry> _filterSchools(
+    List<WarehouseSchoolEntry> schools,
+    String query,
+  ) {
+    final keyword = query.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return schools;
+    }
+    return schools.where((school) {
+      return school.name.toLowerCase().contains(keyword) ||
+          school.id.toLowerCase().contains(keyword) ||
+          school.initial.toLowerCase().contains(keyword) ||
+          school.resourceFolder.toLowerCase().contains(keyword);
+    }).toList(growable: false);
+  }
+}
+
+class WarehouseCustomDebugRecordsScreen extends StatefulWidget {
+  const WarehouseCustomDebugRecordsScreen({super.key});
+
+  @override
+  State<WarehouseCustomDebugRecordsScreen> createState() =>
+      _WarehouseCustomDebugRecordsScreenState();
+}
+
+class _WarehouseCustomDebugRecordsScreenState
+    extends State<WarehouseCustomDebugRecordsScreen> {
+  static const WarehouseRepositorySource _customSource =
+      WarehouseRepositorySource(
+    owner: 'stareyeXT',
+    repo: 'qingyu_warehouse',
+  );
+
+  final WarehouseImportPreferencesService _preferencesService =
+      WarehouseImportPreferencesService();
+  List<WarehouseCustomDebugRecord> _records = const [];
+  bool _isLoading = true;
+
+  WarehouseFetchOptions _currentFetchOptions() {
+    final settings = context.read<TimetableProvider>().settings;
+    return WarehouseFetchOptions.fromSettings(settings);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecords();
+  }
+
+  Future<void> _loadRecords() async {
+    final records = await _preferencesService.getCustomDebugRecords();
+    if (!mounted) return;
+    setState(() {
+      _records = records;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _openEditor([WarehouseCustomDebugRecord? record]) async {
+    final saved = await Navigator.of(context).push<WarehouseCustomDebugRecord>(
+      MaterialPageRoute(
+        settings: const RouteSettings(
+          name: '/courses/import/warehouse/custom-debug/edit',
+        ),
+        builder: (_) => WarehouseCustomDebugEditScreen(initialRecord: record),
+      ),
+    );
+    if (saved == null || !mounted) {
+      return;
+    }
+    await _loadRecords();
+  }
+
+  Future<void> _deleteRecord(WarehouseCustomDebugRecord record) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.deleteDebugRecordTitle),
+        content: Text(l10n.deleteDebugRecordMessage(record.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancelAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.deleteAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _preferencesService.deleteCustomDebugRecord(record.id);
+    if (!mounted) {
+      return;
+    }
+    await _loadRecords();
+    if (!mounted) {
+      return;
+    }
+    _showLightTip(context, l10n.deletedDebugRecord(record.name));
+  }
+
+  Future<void> _openDebug(WarehouseCustomDebugRecord record) async {
+    final imported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        settings: const RouteSettings(
+          name: '/courses/import/warehouse/custom-debug/run',
+        ),
+        builder: (_) => WarehouseAdapterWebLoginScreen(
+          title: record.name,
+          initialUrl: record.importUrl,
+          source: _customSource,
+          school: const WarehouseSchoolEntry(
+            id: 'custom-debug',
+            name: 'custom-debug',
+            initial: '#',
+            resourceFolder: 'custom-debug',
+          ),
+          adapter: WarehouseAdapterEntry(
+            adapterId: 'custom-debug-${record.id}',
+            adapterName: record.name,
+            category: 'custom_debug',
+            assetJsPath: 'custom/${record.id}.js',
+            importUrl: record.importUrl,
+            maintainer: 'custom-debug',
+            description: '',
+          ),
+          fetchOptions: _currentFetchOptions(),
+          debugScriptOverride: record.script,
+          debugScriptName: '${record.name}.js',
+        ),
+      ),
+    );
+    if (imported == true && mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.warehouseCustomDebugTitle),
+        actions: [
+          IconButton(
+            tooltip: l10n.addDebugRecordTooltip,
+            onPressed: () => _openEditor(),
+            icon: const Icon(Icons.add_rounded),
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.customDebugIntroTitle,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.customDebugIntroSubtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: () => _openEditor(),
+                          icon: const Icon(Icons.terminal_rounded),
+                          label: Text(l10n.addDebugRecordAction),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_records.isEmpty)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 36,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            l10n.noSavedDebugRecords,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.noSavedDebugRecordsHint,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  ..._records.map(
+                    (record) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      record.name,
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDebugRecordDateTime(
+                                      record.updatedAt,
+                                    ),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                record.importUrl,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                l10n.debugScriptLength(record.script.length),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: () => _openDebug(record),
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: Text(l10n.startDebugAction),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _openEditor(record),
+                                    icon: const Icon(Icons.edit_rounded),
+                                    label: Text(l10n.editAction),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _deleteRecord(record),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded),
+                                    label: Text(l10n.deleteAction),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class WarehouseCustomDebugEditScreen extends StatefulWidget {
+  final WarehouseCustomDebugRecord? initialRecord;
+
+  const WarehouseCustomDebugEditScreen({
+    super.key,
+    this.initialRecord,
+  });
+
+  @override
+  State<WarehouseCustomDebugEditScreen> createState() =>
+      _WarehouseCustomDebugEditScreenState();
+}
+
+class _WarehouseCustomDebugEditScreenState
+    extends State<WarehouseCustomDebugEditScreen> {
+  final WarehouseImportPreferencesService _preferencesService =
+      WarehouseImportPreferencesService();
+  late final TextEditingController _nameController;
+  late final TextEditingController _urlController;
+  late final TextEditingController _scriptController;
+  bool _isSaving = false;
+
+  bool get _isEditing => widget.initialRecord != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: widget.initialRecord?.name ?? '',
+    );
+    _urlController = TextEditingController(
+      text: widget.initialRecord?.importUrl ?? '',
+    );
+    _scriptController = TextEditingController(
+      text: widget.initialRecord?.script ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _urlController.dispose();
+    _scriptController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickScriptFromFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['js', 'txt'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty || !mounted) {
+        return;
+      }
+      final file = result.files.single;
+      List<int>? bytes = file.bytes;
+      if (bytes == null && (file.path ?? '').isNotEmpty) {
+        bytes = await File(file.path!).readAsBytes();
+      }
+      if (bytes == null || bytes.isEmpty) {
+        if (mounted) {
+          _showLightTip(context, l10n.scriptFileReadFailed);
+        }
+        return;
+      }
+      _scriptController.text = utf8.decode(bytes, allowMalformed: true).trim();
+      if (!mounted) {
+        return;
+      }
+      _showLightTip(context, l10n.scriptFileImported(file.name));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showLightTip(context, l10n.scriptFileImportFailed('$error'));
+    }
+  }
+
+  Future<void> _saveRecord() async {
+    final l10n = AppLocalizations.of(context)!;
+    final name = _nameController.text.trim();
+    final importUrl = _urlController.text.trim();
+    final script = _scriptController.text.trim();
+
+    if (name.isEmpty) {
+      _showLightTip(context, l10n.debugRecordNameRequired);
+      return;
+    }
+    final uri = Uri.tryParse(importUrl);
+    if (importUrl.isEmpty || uri == null || uri.host.isEmpty) {
+      _showLightTip(context, l10n.invalidImportUrl);
+      return;
+    }
+    if (script.isEmpty) {
+      _showLightTip(context, l10n.debugScriptRequired);
+      return;
+    }
+
+    final now = DateTime.now();
+    final record = (widget.initialRecord ??
+            WarehouseCustomDebugRecord(
+              id: const Uuid().v4(),
+              name: name,
+              importUrl: importUrl,
+              script: script,
+              createdAt: now,
+              updatedAt: now,
+            ))
+        .copyWith(
+      name: name,
+      importUrl: importUrl,
+      script: script,
+      updatedAt: now,
+    );
+
+    setState(() {
+      _isSaving = true;
+    });
+    await _preferencesService.saveCustomDebugRecord(record);
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop(record);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _isEditing ? l10n.editDebugRecordTitle : l10n.addDebugRecordTitle,
+        ),
+        actions: [
+          TextButton(
+            onPressed: _isSaving ? null : _saveRecord,
+            child: Text(_isSaving ? l10n.savingAction : l10n.saveAction),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.debugRecordFormula,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.debugRecordFormulaSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _nameController,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: l10n.debugRecordNameLabel,
+              hintText: l10n.debugRecordNameHint,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _urlController,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: l10n.importUrlLabel,
+              hintText: 'https://...',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.debugScriptLabel,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _pickScriptFromFile,
+                icon: const Icon(Icons.upload_file_rounded),
+                label: Text(l10n.importFromFileAction),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _scriptController,
+            minLines: 14,
+            maxLines: 24,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 13,
+              height: 1.45,
+            ),
+            decoration: InputDecoration(
+              hintText: l10n.debugScriptHint,
+              border: const OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _saveRecord,
+            icon: const Icon(Icons.save_rounded),
+            label: Text(
+              _isSaving ? l10n.savingAction : l10n.saveDebugRecordAction,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatDebugRecordDateTime(DateTime value) {
+  final local = value.toLocal();
+  final year = local.year.toString().padLeft(4, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$year-$month-$day $hour:$minute';
+}
+
+class WarehouseSchoolAdaptersScreen extends StatefulWidget {
+  final WarehouseRepositorySource source;
+  final WarehouseSchoolEntry school;
+  final WarehouseFetchOptions fetchOptions;
+
+  const WarehouseSchoolAdaptersScreen({
+    super.key,
+    required this.source,
+    required this.school,
+    required this.fetchOptions,
+  });
+
+  @override
+  State<WarehouseSchoolAdaptersScreen> createState() =>
+      _WarehouseSchoolAdaptersScreenState();
+}
+
+class _WarehouseSchoolAdaptersScreenState
+    extends State<WarehouseSchoolAdaptersScreen> {
+  final WarehouseRepositoryService _repositoryService =
+      WarehouseRepositoryService();
+  final WarehouseImportPreferencesService _preferencesService =
+      WarehouseImportPreferencesService();
+  late Future<WarehouseAdaptersIndex> _adaptersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _adaptersFuture = _repositoryService.fetchAdaptersIndex(
+      widget.source,
+      widget.school,
+      options: widget.fetchOptions,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.school.name),
+      ),
+      body: FutureBuilder<WarehouseAdaptersIndex>(
+        future: _adaptersFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  '${snapshot.error}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
+          final adapters =
+              snapshot.data?.adapters ?? const <WarehouseAdapterEntry>[];
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: adapters.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final adapter = adapters[index];
+              return _WarehouseAdapterCard(
+                adapter: adapter,
+                importButtonLabel:
+                    adapter.importUrl.isEmpty ? '填写网址后导入' : '网页登录导入',
+                onImport: () => _openAdapterImport(adapter),
+                onInfo: () async {
+                  final imported = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      settings: RouteSettings(
+                        name:
+                            '/courses/import/warehouse/${widget.school.id}/${adapter.adapterId}',
+                      ),
+                      builder: (_) => WarehouseAdapterDetailScreen(
+                        source: widget.source,
+                        school: widget.school,
+                        adapter: adapter,
+                        fetchOptions: widget.fetchOptions,
+                      ),
+                    ),
+                  );
+                  if (imported == true && context.mounted) {
+                    Navigator.of(context).pop(true);
+                  }
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openAdapterImport(WarehouseAdapterEntry adapter) async {
+    final initialUrl = await _resolveAdapterImportUrl(adapter);
+    if (initialUrl == null || !mounted) {
+      return;
+    }
+    final imported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/courses/import/warehouse/login'),
+        builder: (_) => WarehouseAdapterWebLoginScreen(
+          title: adapter.adapterName,
+          initialUrl: initialUrl,
+          source: widget.source,
+          school: widget.school,
+          adapter: adapter,
+          fetchOptions: widget.fetchOptions,
+        ),
+      ),
+    );
+    if (imported == true && mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  Future<String?> _resolveAdapterImportUrl(
+      WarehouseAdapterEntry adapter) async {
+    final custom = await _preferencesService.getCustomImportUrl(
+      adapter.adapterId,
+    );
+    final effectiveUrl = (custom ?? '').trim().isNotEmpty
+        ? custom!.trim()
+        : adapter.importUrl.trim();
+    if (effectiveUrl.isNotEmpty) {
+      return effectiveUrl;
+    }
+    if (!mounted) {
+      return null;
+    }
+    final manualUrl = await _promptWarehouseImportUrl(
+      context,
+      schoolName: widget.school.name,
+      adapterName: adapter.adapterName,
+    );
+    if (manualUrl == null) {
+      return null;
+    }
+    await _preferencesService.setCustomImportUrl(adapter.adapterId, manualUrl);
+    if (mounted) {
+      _showLightTip(context, AppLocalizations.of(context)!.savedImportUrlHint);
+    }
+    return manualUrl;
+  }
+}
+
+class WarehouseAdapterDetailScreen extends StatefulWidget {
+  final WarehouseRepositorySource source;
+  final WarehouseSchoolEntry school;
+  final WarehouseAdapterEntry adapter;
+  final WarehouseFetchOptions fetchOptions;
+
+  const WarehouseAdapterDetailScreen({
+    super.key,
+    required this.source,
+    required this.school,
+    required this.adapter,
+    required this.fetchOptions,
+  });
+
+  @override
+  State<WarehouseAdapterDetailScreen> createState() =>
+      _WarehouseAdapterDetailScreenState();
+}
+
+class _WarehouseAdapterDetailScreenState
+    extends State<WarehouseAdapterDetailScreen> {
+  final WarehouseRepositoryService _repositoryService =
+      WarehouseRepositoryService();
+  final WarehouseImportPreferencesService _preferencesService =
+      WarehouseImportPreferencesService();
+  late Future<String> _scriptFuture;
+  String? _customImportUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _scriptFuture = _repositoryService.fetchAdapterScript(
+      widget.source,
+      school: widget.school,
+      adapter: widget.adapter,
+      options: widget.fetchOptions,
+    );
+    _loadCustomImportUrl();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final adapter = widget.adapter;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(adapter.adapterName),
+      ),
+      body: ListView(
+        padding: EdgeInsets.symmetric(horizontal: context.isTablet ? 32 : 16, vertical: 16),
+        children: [
+          _WarehouseIntroCard(
+            title: adapter.adapterName,
+            subtitle:
+                adapter.description.isEmpty ? l10n.adapterIntroSubtitle : '',
+            chips: [
+              '${l10n.schoolLabel}：${widget.school.name}',
+              '${l10n.categoryLabel}：${adapter.category}',
+              '${l10n.maintainerLabel}：${adapter.maintainer}',
+            ],
+            markdown: adapter.description.isEmpty ? null : adapter.description,
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.adapterInfoTitle,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _DetailLine(label: 'adapter_id', value: adapter.adapterId),
+                  _DetailLine(
+                      label: l10n.scriptPathLabel, value: adapter.assetJsPath),
+                  _DetailLine(
+                    label: l10n.loginEntryLabel,
+                    value: _effectiveImportUrl.isEmpty
+                        ? l10n.unsetConfigLabel
+                        : _effectiveImportUrl,
+                  ),
+                  if ((_customImportUrl ?? '').isNotEmpty)
+                    _DetailLine(
+                      label: l10n.homeWidgetDescriptionTitle,
+                      value: l10n.adapterOverrideImportUrlHint,
+                    ),
+                  _DetailLine(
+                    label: l10n.repositoryLabel,
+                    value: widget.source.repositoryUrl,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FutureBuilder<String>(
+            future: _scriptFuture,
+            builder: (context, snapshot) {
+              final readable =
+                  snapshot.connectionState == ConnectionState.done &&
+                      !snapshot.hasError &&
+                      (snapshot.data?.trim().isNotEmpty ?? false);
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.scriptStatusTitle,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (snapshot.connectionState == ConnectionState.waiting)
+                        const LinearProgressIndicator(minHeight: 3)
+                      else if (readable)
+                        Text(
+                          l10n.scriptLoadedLength(snapshot.data!.length),
+                          style: theme.textTheme.bodyMedium,
+                        )
+                      else
+                        Text(
+                          snapshot.hasError
+                              ? '${snapshot.error}'
+                              : l10n.scriptEmpty,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.error,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => _openInAppLogin(),
+            icon: const Icon(Icons.web_rounded),
+            label: Text(
+              _effectiveImportUrl.isEmpty
+                  ? l10n.fillUrlThenImport
+                  : l10n.openLoginInAppAction,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _effectiveImportUrl.isEmpty
+                    ? null
+                    : () => _openImportUrl(_effectiveImportUrl),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: Text(l10n.openInSystemBrowserAction),
+              ),
+              OutlinedButton.icon(
+                onPressed: _effectiveImportUrl.isEmpty
+                    ? null
+                    : () => _copyText(
+                          _effectiveImportUrl,
+                          successMessage: l10n.copiedImportLoginUrl,
+                        ),
+                icon: const Icon(Icons.link_rounded),
+                label: Text(l10n.copyLoginAddressAction),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _copyText(
+                  widget.source
+                      .buildRawFileUri(
+                        'resources/${widget.school.resourceFolder}/${adapter.assetJsPath}',
+                      )
+                      .toString(),
+                  successMessage: l10n.copiedScriptRawUrl,
+                ),
+                icon: const Icon(Icons.code_rounded),
+                label: Text(l10n.copyScriptAddressAction),
+              ),
+              OutlinedButton.icon(
+                onPressed: _editCustomImportUrl,
+                icon: const Icon(Icons.edit_road_rounded),
+                label: Text(
+                  (_customImportUrl ?? '').isEmpty
+                      ? l10n.customLoginAddressAction
+                      : l10n.editCustomLoginAddressAction,
+                ),
+              ),
+              if ((_customImportUrl ?? '').isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: _clearCustomImportUrl,
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: Text(
+                    adapter.importUrl.isEmpty
+                        ? l10n.clearCustomLoginAddressAction
+                        : l10n.restoreRepositoryAddressAction,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _effectiveImportUrl => (_customImportUrl ?? '').trim().isNotEmpty
+      ? _customImportUrl!.trim()
+      : widget.adapter.importUrl;
+
+  Future<void> _loadCustomImportUrl() async {
+    final custom = await _preferencesService.getCustomImportUrl(
+      widget.adapter.adapterId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _customImportUrl = custom;
+    });
+  }
+
+  Future<void> _openImportUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      if (!mounted) {
+        return;
+      }
+      _showLightTip(
+          context, AppLocalizations.of(context)!.invalidLoginEntryUrl);
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openInAppLogin() async {
+    var targetUrl = _effectiveImportUrl.trim();
+    if (targetUrl.isEmpty) {
+      final manualUrl = await _promptWarehouseImportUrl(
+        context,
+        schoolName: widget.school.name,
+        adapterName: widget.adapter.adapterName,
+      );
+      if (manualUrl == null) {
+        return;
+      }
+      await _preferencesService.setCustomImportUrl(
+        widget.adapter.adapterId,
+        manualUrl,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _customImportUrl = manualUrl;
+      });
+      _showLightTip(context, AppLocalizations.of(context)!.savedImportUrlHint);
+      targetUrl = manualUrl;
+    }
+    final uri = Uri.tryParse(targetUrl);
+    if (uri == null) {
+      if (!mounted) {
+        return;
+      }
+      _showLightTip(
+          context, AppLocalizations.of(context)!.invalidLoginEntryUrl);
+      return;
+    }
+    await Navigator.of(context)
+        .push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/courses/import/warehouse/login'),
+        builder: (_) => WarehouseAdapterWebLoginScreen(
+          title: widget.adapter.adapterName,
+          initialUrl: targetUrl,
+          source: widget.source,
+          school: widget.school,
+          adapter: widget.adapter,
+          fetchOptions: widget.fetchOptions,
+        ),
+      ),
+    )
+        .then((imported) {
+      if (imported == true && mounted) {
+        Navigator.of(context).pop(true);
+      }
+    });
+  }
+
+  Future<void> _editCustomImportUrl() async {
+    final result = await _promptWarehouseImportUrl(
+      context,
+      schoolName: widget.school.name,
+      adapterName: widget.adapter.adapterName,
+      initialValue: _effectiveImportUrl,
+    );
+    if (result == null) return;
+    await _preferencesService.setCustomImportUrl(
+      widget.adapter.adapterId,
+      result,
+    );
+    if (!mounted) return;
+    setState(() {
+      _customImportUrl = result;
+    });
+    _showLightTip(
+        context, AppLocalizations.of(context)!.savedCustomLoginAddress);
+  }
+
+  Future<void> _clearCustomImportUrl() async {
+    await _preferencesService.clearCustomImportUrl(widget.adapter.adapterId);
+    if (!mounted) return;
+    setState(() {
+      _customImportUrl = null;
+    });
+    _showLightTip(
+      context,
+      widget.adapter.importUrl.isEmpty
+          ? AppLocalizations.of(context)!.clearedCustomLoginAddress
+          : AppLocalizations.of(context)!.restoredRepositoryImportUrl,
+    );
+  }
+
+  Future<void> _copyText(
+    String value, {
+    required String successMessage,
+  }) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) {
+      return;
+    }
+    _showLightTip(context, successMessage);
+  }
+}
+
+class WarehouseAdapterWebLoginScreen extends StatefulWidget {
+  final String title;
+  final String initialUrl;
+  final WarehouseRepositorySource source;
+  final WarehouseSchoolEntry school;
+  final WarehouseAdapterEntry adapter;
+  final WarehouseFetchOptions fetchOptions;
+  final String? debugScriptOverride;
+  final String? debugScriptName;
+
+  const WarehouseAdapterWebLoginScreen({
+    super.key,
+    required this.title,
+    required this.initialUrl,
+    required this.source,
+    required this.school,
+    required this.adapter,
+    required this.fetchOptions,
+    this.debugScriptOverride,
+    this.debugScriptName,
+  });
+
+  @override
+  State<WarehouseAdapterWebLoginScreen> createState() =>
+      _WarehouseAdapterWebLoginScreenState();
+}
+
+class _WarehouseAdapterWebLoginScreenState
+    extends State<WarehouseAdapterWebLoginScreen> {
+  static const String _desktopUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  static const String _mobileUserAgent =
+      'Mozilla/5.0 (Linux; Android 14; 25060RK16C) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+
+  final WarehouseRepositoryService _repositoryService =
+      WarehouseRepositoryService();
+  final WarehouseImportPreferencesService _preferencesService =
+      WarehouseImportPreferencesService();
+  final ImportWeekAlignmentService _weekAlignmentService =
+      const ImportWeekAlignmentService();
+  late final WebViewController _controller;
+  late final TextEditingController _addressController;
+  final FocusNode _addressFocusNode = FocusNode();
+  int _loadingProgress = 0;
+  String? _currentUrl;
+  bool _isExecutingImport = false;
+  String? _lastScriptStatus;
+  List<SectionTime>? _pendingImportedSections;
+  String? _pendingImportedSectionsSignature;
+  String? _appliedImportedSectionsSignature;
+  Future<void>? _pendingImportedSectionsApplyFuture;
+  WarehouseRememberedLogin? _rememberedLogin;
+  WarehouseRememberedLogin? _latestLoginCandidate;
+  bool _hasPromptedAutofill = false;
+  bool _hasPromptedSave = false;
+  bool _isPromptShowing = false;
+  bool _useDesktopMode = true;
+
+  bool get _isUsingLocalDebugScript =>
+      (widget.debugScriptOverride ?? '').trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUrl = widget.initialUrl;
+    _lastScriptStatus = _isUsingLocalDebugScript ? null : null;
+    _addressController = TextEditingController(text: widget.initialUrl);
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..enableZoom(true)
+      ..setUserAgent(_desktopUserAgent)
+      ..addJavaScriptChannel(
+        'QingyuBridge',
+        onMessageReceived: (message) {
+          _handleBridgeMessage(message.message);
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (progress) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _loadingProgress = progress;
+            });
+          },
+          onPageStarted: (url) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _currentUrl = url;
+              if (!_addressFocusNode.hasFocus) {
+                _addressController.text = url;
+              }
+            });
+          },
+          onPageFinished: (url) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _currentUrl = url;
+              _loadingProgress = 100;
+              if (!_addressFocusNode.hasFocus) {
+                _addressController.text = url;
+              }
+            });
+            _installLoginWatcher();
+            _autofillRememberedLoginIfNeeded();
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.initialUrl));
+    _loadRememberedLogin();
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _addressFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _resetPendingImportedArtifacts() {
+    _pendingImportedSections = null;
+    _pendingImportedSectionsSignature = null;
+    _appliedImportedSectionsSignature = null;
+    _pendingImportedSectionsApplyFuture = null;
+  }
+
+  String _buildSectionSignature(List<SectionTime> sections) => sections
+      .map((section) => '${section.startTime}-${section.endTime}')
+      .join('|');
+
+  List<SectionTime> _decodeImportedSections(String payload) {
+    final decoded = jsonDecode(payload);
+    if (decoded is! List) {
+      throw FormatException(
+          AppLocalizations.of(context)!.invalidSectionTimeFormat);
+    }
+    final sections = decoded
+        .whereType<Map>()
+        .map(
+          (item) => SectionTime(
+            startTime: item['startTime']?.toString() ?? '',
+            endTime: item['endTime']?.toString() ?? '',
+          ),
+        )
+        .where((item) => item.startTime.isNotEmpty && item.endTime.isNotEmpty)
+        .toList(growable: false);
+    if (sections.isEmpty) {
+      throw FormatException(AppLocalizations.of(context)!.noSectionTimesToSave);
+    }
+    return sections;
+  }
+
+  Future<void> _waitForCompanionImportSections() async {
+    if (_pendingImportedSections != null) {
+      return;
+    }
+    for (var attempt = 0; attempt < 8; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (_pendingImportedSections != null) {
+        return;
+      }
+    }
+  }
+
+  Future<void> _applyImportedSections(List<SectionTime> sections) async {
+    final provider = context.read<TimetableProvider>();
+    final schemeName = AppLocalizations.of(context)!
+        .warehouseImportedTimeSchemeName(widget.school.name);
+    TimeScheme? existingScheme;
+    for (final scheme in provider.timeSchemes) {
+      if (scheme.name == schemeName) {
+        existingScheme = scheme;
+        break;
+      }
+    }
+    if (existingScheme == null) {
+      final created = await provider.createTimeScheme(
+        name: schemeName,
+        sections: sections,
+        applyToActiveProfile: true,
+      );
+      await provider.applyTimeScheme(created.id);
+      return;
+    }
+    final result = await provider.updateTimeScheme(
+      schemeId: existingScheme.id,
+      name: existingScheme.name,
+      sections: sections,
+    );
+    if (result != null) {
+      throw FormatException(result);
+    }
+    await provider.applyTimeScheme(existingScheme.id);
+  }
+
+  Future<void> _applyPendingImportedSectionsIfNeeded() async {
+    final sections = _pendingImportedSections;
+    final signature = _pendingImportedSectionsSignature;
+    if (sections == null || sections.isEmpty) {
+      return;
+    }
+    if (signature != null && signature == _appliedImportedSectionsSignature) {
+      return;
+    }
+    final inFlight = _pendingImportedSectionsApplyFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _applyImportedSections(sections);
+    _pendingImportedSectionsApplyFuture = future;
+    try {
+      await future;
+      _appliedImportedSectionsSignature = signature;
+    } finally {
+      if (identical(_pendingImportedSectionsApplyFuture, future)) {
+        _pendingImportedSectionsApplyFuture = null;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final effectiveDebugScriptName =
+        (widget.debugScriptName?.trim().isNotEmpty ?? false)
+            ? widget.debugScriptName!.trim()
+            : l10n.unnamedScript;
+    final currentStatus = _lastScriptStatus ??
+        (_isUsingLocalDebugScript
+            ? l10n.localDebugModeScriptStatus(effectiveDebugScriptName)
+            : null);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          IconButton(
+            tooltip: l10n.executeImportScriptTooltip,
+            onPressed: _isExecutingImport ? null : _executeImportScript,
+            icon: _isExecutingImport
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow_rounded),
+          ),
+          IconButton(
+            tooltip: _useDesktopMode
+                ? l10n.switchToMobileWebTooltip
+                : l10n.switchToDesktopWebTooltip,
+            onPressed: _toggleWebPageMode,
+            icon: Icon(
+              _useDesktopMode
+                  ? Icons.smartphone_rounded
+                  : Icons.desktop_windows_rounded,
+            ),
+          ),
+          IconButton(
+            tooltip: l10n.rememberCurrentInputTooltip,
+            onPressed: _rememberCurrentLogin,
+            icon: const Icon(Icons.save_outlined),
+          ),
+          IconButton(
+            tooltip: l10n.fillRememberedTooltip,
+            onPressed:
+                _rememberedLogin == null ? null : _autofillRememberedLogin,
+            icon: const Icon(Icons.password_rounded),
+          ),
+          IconButton(
+            tooltip: l10n.clearRememberedTooltip,
+            onPressed: _rememberedLogin == null ? null : _clearRememberedLogin,
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
+          IconButton(
+            tooltip: l10n.reloadAction,
+            onPressed: _controller.reload,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            tooltip: l10n.copyCurrentAddressTooltip,
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final value = _currentUrl ?? widget.initialUrl;
+              await Clipboard.setData(ClipboardData(text: value));
+              if (!mounted) {
+                return;
+              }
+              messenger.showSnackBar(
+                SnackBar(content: Text(l10n.copiedCurrentAddress)),
+              );
+            },
+            icon: const Icon(Icons.link_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            color: colorScheme.surfaceContainerLowest,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isUsingLocalDebugScript
+                      ? l10n.warehouseLoginHintLocalDebug
+                      : l10n.warehouseLoginHintImport,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _useDesktopMode
+                      ? l10n.currentPageModeDesktop
+                      : l10n.currentPageModeMobile,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (_isUsingLocalDebugScript) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.localScriptLabel(effectiveDebugScriptName),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.tertiary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _addressController,
+                        focusNode: _addressFocusNode,
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.go,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: l10n.webAddressHint,
+                          prefixIcon:
+                              const Icon(Icons.language_rounded, size: 18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                        onSubmitted: (_) => _loadAddressBarUrl(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _loadAddressBarUrl,
+                      child: Text(l10n.goAction),
+                    ),
+                  ],
+                ),
+                if ((currentStatus ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    currentStatus!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ] else if (_rememberedLogin != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.rememberedAccountLabel(_rememberedLogin!.username),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (_loadingProgress < 100)
+            LinearProgressIndicator(value: _loadingProgress / 100),
+          Expanded(
+            child: WebViewWidget(controller: _controller),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: FilledButton.icon(
+                onPressed: _isExecutingImport ? null : _executeImportScript,
+                icon: _isExecutingImport
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_rounded),
+                label: Text(
+                  _isExecutingImport
+                      ? l10n.importingAction
+                      : (_isUsingLocalDebugScript
+                          ? l10n.executeLocalDebugScriptAction
+                          : l10n.executeImportScriptAction),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadAddressBarUrl() async {
+    final text = _addressController.text.trim();
+    final uri = Uri.tryParse(text);
+    if (uri == null || uri.host.isEmpty) {
+      if (!mounted) return;
+      _showLightTip(context, AppLocalizations.of(context)!.invalidWebAddress);
+      return;
+    }
+    _addressFocusNode.unfocus();
+    setState(() {
+      _currentUrl = uri.toString();
+      _loadingProgress = 0;
+    });
+    await _controller.loadRequest(uri);
+  }
+
+  Future<void> _toggleWebPageMode() async {
+    final nextDesktopMode = !_useDesktopMode;
+    setState(() {
+      _useDesktopMode = nextDesktopMode;
+      _loadingProgress = 0;
+    });
+    await _controller.setUserAgent(
+      nextDesktopMode ? _desktopUserAgent : _mobileUserAgent,
+    );
+    final target = Uri.tryParse(_currentUrl ?? widget.initialUrl);
+    if (target != null) {
+      await _controller.loadRequest(target);
+    }
+  }
+
+  Future<void> _installLoginWatcher() async {
+    try {
+      await _controller.runJavaScript('''
+(() => {
+  const collect = () => {
+    const textInputs = Array.from(document.querySelectorAll('input')).filter((input) => {
+      const type = (input.type || 'text').toLowerCase();
+      return ['text','email','tel','number'].includes(type) && !input.disabled;
+    });
+    const passwordInput = Array.from(document.querySelectorAll('input[type="password"]')).find((input) => !input.disabled);
+    QingyuBridge.postMessage(JSON.stringify({
+      type: 'loginState',
+      username: textInputs[0] ? String(textInputs[0].value || '') : '',
+      password: passwordInput ? String(passwordInput.value || '') : '',
+      hasPasswordField: !!passwordInput
+    }));
+  };
+  if (!window.__qingyuLoginWatcherInstalled) {
+    window.__qingyuLoginWatcherInstalled = true;
+    document.addEventListener('input', (event) => {
+      if (event.target && event.target.tagName === 'INPUT') collect();
+    }, true);
+    document.addEventListener('change', (event) => {
+      if (event.target && event.target.tagName === 'INPUT') collect();
+    }, true);
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const text = (target.innerText || target.textContent || target.value || '').trim().toLowerCase();
+      if (/登录|login|sign in|signin|进入教务|提交/.test(text)) {
+        collect();
+        QingyuBridge.postMessage(JSON.stringify({ type: 'loginAttempt' }));
+      }
+    }, true);
+    document.addEventListener('submit', () => {
+      collect();
+      QingyuBridge.postMessage(JSON.stringify({ type: 'loginAttempt' }));
+    }, true);
+  }
+  collect();
+})();
+''');
+    } catch (_) {}
+  }
+
+  Future<void> _executeImportScript() async {
+    final l10n = AppLocalizations.of(context)!;
+    _resetPendingImportedArtifacts();
+    setState(() {
+      _isExecutingImport = true;
+      _lastScriptStatus = _isUsingLocalDebugScript
+          ? l10n.injectingLocalDebugScript
+          : l10n.injectingAdapterScript;
+    });
+    try {
+      final script = _isUsingLocalDebugScript
+          ? widget.debugScriptOverride!.trim()
+          : await _repositoryService.fetchAdapterScript(
+              widget.source,
+              school: widget.school,
+              adapter: widget.adapter,
+              options: widget.fetchOptions,
+            );
+      final wrappedScript = '''
+(() => {
+  window.__qingyuResolvers = window.__qingyuResolvers || {};
+  window.AndroidBridge = {
+    showToast: (msg) => QingyuBridge.postMessage(JSON.stringify({type: 'toast', message: String(msg ?? '')})),
+    notifyTaskCompletion: () => QingyuBridge.postMessage(JSON.stringify({type: 'complete'}))
+  };
+  window.AndroidBridgePromise = {
+    showAlert: async (title, message, confirmText) => {
+      const requestId = 'confirm_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      return await new Promise((resolve) => {
+        window.__qingyuResolvers[requestId] = resolve;
+        QingyuBridge.postMessage(JSON.stringify({
+          type: 'confirm',
+          requestId,
+          title: String(title ?? ''),
+          message: String(message ?? ''),
+          confirmText: String(confirmText ?? '${l10n.confirmImportAction}')
+        }));
+      });
+    },
+    showPrompt: async (title, message, defaultValue, validatorName) => {
+      const requestId = 'prompt_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      return await new Promise((resolve) => {
+        window.__qingyuResolvers[requestId] = resolve;
+        QingyuBridge.postMessage(JSON.stringify({
+          type: 'prompt',
+          requestId,
+          title: String(title ?? ''),
+          message: String(message ?? ''),
+          defaultValue: String(defaultValue ?? ''),
+          validatorName: String(validatorName ?? '')
+        }));
+      });
+    },
+    showSingleSelection: async (title, optionsJson, selectedIndex) => {
+      const requestId = 'single_selection_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      return await new Promise((resolve) => {
+        window.__qingyuResolvers[requestId] = resolve;
+        QingyuBridge.postMessage(JSON.stringify({
+          type: 'singleSelection',
+          requestId,
+          title: String(title ?? ''),
+          optionsJson: String(optionsJson ?? '[]'),
+          selectedIndex: Number(selectedIndex ?? 0)
+        }));
+      });
+    },
+    saveCourseConfig: async (json) => {
+      const requestId = 'course_config_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      return await new Promise((resolve) => {
+        window.__qingyuResolvers[requestId] = resolve;
+        QingyuBridge.postMessage(JSON.stringify({
+          type: 'saveCourseConfig',
+          requestId,
+          payload: String(json ?? '{}')
+        }));
+      });
+    },
+    savePresetTimeSlots: async (json) => {
+      const requestId = 'preset_time_slots_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      return await new Promise((resolve) => {
+        window.__qingyuResolvers[requestId] = resolve;
+        QingyuBridge.postMessage(JSON.stringify({
+          type: 'savePresetTimeSlots',
+          requestId,
+          payload: String(json ?? '[]')
+        }));
+      });
+    },
+    saveImportedCourses: async (json) => {
+      QingyuBridge.postMessage(JSON.stringify({type: 'courses', payload: String(json ?? '[]')}));
+      return true;
+    }
+  };
+  try {
+    $script
+  } catch (error) {
+    QingyuBridge.postMessage(JSON.stringify({type: 'error', message: String(error)}));
+  }
+})();
+''';
+      await _controller.runJavaScript(wrappedScript);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lastScriptStatus = _isUsingLocalDebugScript
+            ? AppLocalizations.of(context)!.localDebugScriptInjected
+            : AppLocalizations.of(context)!.scriptInjected;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isExecutingImport = false;
+        _lastScriptStatus = AppLocalizations.of(context)!.scriptInjectionFailed;
+      });
+      _showLightTip(
+        context,
+        AppLocalizations.of(context)!.executeFailedWithError('$error'),
+      );
+    }
+  }
+
+  Future<void> _handleBridgeMessage(String rawMessage) async {
+    Map<String, dynamic>? message;
+    try {
+      message = jsonDecode(rawMessage) as Map<String, dynamic>;
+    } catch (_) {
+      return;
+    }
+
+    final type = message['type'] as String? ?? '';
+    switch (type) {
+      case 'loginState':
+        await _handleLoginStateMessage(message);
+        break;
+      case 'loginAttempt':
+        await _handleLoginAttempt();
+        break;
+      case 'toast':
+        if (!mounted) return;
+        _showLightTip(context, (message['message'] as String?) ?? '');
+        break;
+      case 'confirm':
+        await _showScriptConfirmDialog(message);
+        break;
+      case 'prompt':
+        await _showScriptPromptDialog(message);
+        break;
+      case 'singleSelection':
+        await _showScriptSingleSelectionDialog(message);
+        break;
+      case 'saveCourseConfig':
+        await _handleSaveCourseConfig(message);
+        break;
+      case 'savePresetTimeSlots':
+        await _handleSavePresetTimeSlots(message);
+        break;
+      case 'error':
+        if (!mounted) return;
+        setState(() {
+          _isExecutingImport = false;
+          _lastScriptStatus = '脚本执行失败';
+        });
+        _showLightTip(context, (message['message'] as String?) ?? '脚本执行失败');
+        break;
+      case 'courses':
+        await _handleImportedCoursesJson(
+            (message['payload'] as String?) ?? '[]');
+        break;
+      case 'complete':
+        if (!mounted) return;
+        setState(() {
+          _isExecutingImport = false;
+          _lastScriptStatus = AppLocalizations.of(context)!.importFlowFinished;
+        });
+        break;
+    }
+  }
+
+  Future<void> _showScriptConfirmDialog(Map<String, dynamic> message) async {
+    final requestId = (message['requestId'] as String?) ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text((message['title'] as String?)?.trim().isNotEmpty == true
+            ? (message['title'] as String)
+            : AppLocalizations.of(context)!.confirmImportAction),
+        content: Text(
+          (message['message'] as String?) ??
+              AppLocalizations.of(context)!.defaultContinuePrompt,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppLocalizations.of(context)!.cancelAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              (message['confirmText'] as String?) ??
+                  AppLocalizations.of(context)!.confirmImportAction,
+            ),
+          ),
+        ],
+      ),
+    );
+    await _resolveJavaScriptRequest(requestId, confirmed == true);
+  }
+
+  Future<void> _showScriptPromptDialog(Map<String, dynamic> message) async {
+    final requestId = (message['requestId'] as String?) ?? '';
+    final validatorName = (message['validatorName'] as String?) ?? '';
+    final controller = TextEditingController(
+      text: (message['defaultValue'] as String?) ?? '',
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          (message['title'] as String?) ??
+              AppLocalizations.of(context)!.inputRequiredTitle,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text((message['message'] as String?) ?? ''),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppLocalizations.of(context)!.cancelAction),
+          ),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (validatorName == 'validateYearInput' &&
+                  !RegExp(r'^[0-9]{4}$').hasMatch(text)) {
+                _showLightTip(
+                  context,
+                  AppLocalizations.of(context)!.pleaseEnterFourDigitYear,
+                );
+                return;
+              }
+              Navigator.pop(context, text);
+            },
+            child: Text(AppLocalizations.of(context)!.saveAction),
+          ),
+        ],
+      ),
+    );
+    await _resolveJavaScriptRequest(requestId, result);
+  }
+
+  Future<void> _showScriptSingleSelectionDialog(
+    Map<String, dynamic> message,
+  ) async {
+    final requestId = (message['requestId'] as String?) ?? '';
+    final optionsRaw = (message['optionsJson'] as String?) ?? '[]';
+    final selectedIndex = (message['selectedIndex'] as num?)?.toInt() ?? 0;
+    List<String> options = const [];
+    try {
+      final decoded = jsonDecode(optionsRaw);
+      if (decoded is List) {
+        options =
+            decoded.map((item) => item.toString()).toList(growable: false);
+      }
+    } catch (_) {}
+    var currentSelection =
+        selectedIndex.clamp(0, options.isEmpty ? 0 : options.length - 1);
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          (message['title'] as String?) ??
+              AppLocalizations.of(context)!.pleaseChooseTitle,
+        ),
+        content: StatefulBuilder(
+          builder: (context, setState) => RadioGroup<int>(
+            groupValue: currentSelection,
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() {
+                currentSelection = value;
+              });
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(options.length, (index) {
+                return RadioListTile<int>(
+                  value: index,
+                  title: Text(options[index]),
+                );
+              }),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppLocalizations.of(context)!.cancelAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, currentSelection),
+            child: Text(AppLocalizations.of(context)!.saveAction),
+          ),
+        ],
+      ),
+    );
+    await _resolveJavaScriptRequest(requestId, result);
+  }
+
+  Future<void> _handleSaveCourseConfig(Map<String, dynamic> message) async {
+    final requestId = (message['requestId'] as String?) ?? '';
+    try {
+      final decoded = jsonDecode((message['payload'] as String?) ?? '{}');
+      if (decoded is! Map) {
+        throw FormatException(
+          AppLocalizations.of(context)!.invalidCourseConfigFormat,
+        );
+      }
+      final provider = context.read<TimetableProvider>();
+      final semesterTotalWeeks =
+          (decoded['semesterTotalWeeks'] as num?)?.toInt();
+      if (semesterTotalWeeks != null && semesterTotalWeeks > 0) {
+        final result = await provider.updateTimetableSettings(
+          provider.settings.copyWith(
+            semesterWeekCount: semesterTotalWeeks,
+          ),
+        );
+        if (result != null) {
+          throw FormatException(result);
+        }
+      }
+      await _resolveJavaScriptRequest(requestId, true);
+    } catch (error) {
+      if (!mounted) return;
+      _showLightTip(
+        context,
+        AppLocalizations.of(context)!.saveCourseConfigFailedWithError('$error'),
+      );
+      await _resolveJavaScriptRequest(requestId, false);
+    }
+  }
+
+  Future<void> _handleSavePresetTimeSlots(Map<String, dynamic> message) async {
+    final requestId = (message['requestId'] as String?) ?? '';
+    try {
+      final sections =
+          _decodeImportedSections((message['payload'] as String?) ?? '[]');
+      _pendingImportedSections = sections;
+      _pendingImportedSectionsSignature = _buildSectionSignature(sections);
+      await _applyPendingImportedSectionsIfNeeded();
+      await _resolveJavaScriptRequest(requestId, true);
+    } catch (error) {
+      if (!mounted) return;
+      _showLightTip(
+        context,
+        AppLocalizations.of(context)!.saveSectionTimesFailedWithError('$error'),
+      );
+      await _resolveJavaScriptRequest(requestId, false);
+    }
+  }
+
+  Future<void> _resolveJavaScriptRequest(
+      String requestId, Object? value) async {
+    final encoded = jsonEncode(value);
+    await _controller.runJavaScript(
+      "window.__qingyuResolvers = window.__qingyuResolvers || {}; "
+      "window.__qingyuResolvers['$requestId']?.($encoded); "
+      "delete window.__qingyuResolvers['$requestId'];",
+    );
+  }
+
+  Future<void> _handleImportedCoursesJson(String payload) async {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! List) {
+        throw FormatException(
+            AppLocalizations.of(context)!.invalidCourseDataFormat);
+      }
+      final parsedCourses = _parseWarehouseCourses(decoded);
+      if (parsedCourses.isEmpty) {
+        throw FormatException(
+          AppLocalizations.of(context)!.noImportableCoursesFromScript,
+        );
+      }
+
+      final provider = context.read<TimetableProvider>();
+      final replaceExisting = provider.courses.isEmpty
+          ? true
+          : await _askReplaceExisting(
+              context,
+              title: AppLocalizations.of(context)!.courseImportTitle,
+              content: AppLocalizations.of(context)!
+                  .importCourseCountPrompt(parsedCourses.length),
+            );
+      if (replaceExisting == null || !mounted) {
+        setState(() {
+          _isExecutingImport = false;
+          _lastScriptStatus =
+              AppLocalizations.of(context)!.importCancelledStatus;
+        });
+        return;
+      }
+
+      final semesterConfig = await _pickImportSemesterConfig(
+        context,
+        initialSemesterStartDate:
+            provider.settings.semesterStartDate ?? DateTime.now(),
+        initialFirstCourseWeek: 1,
+        title: AppLocalizations.of(context)!.importConfirmSemesterMappingTitle,
+        subtitle: AppLocalizations.of(context)!
+            .importConfirmSemesterMappingSubtitleWarehouse,
+      );
+      if (semesterConfig == null || !mounted) {
+        setState(() {
+          _isExecutingImport = false;
+          _lastScriptStatus =
+              AppLocalizations.of(context)!.importCancelledStatus;
+        });
+        return;
+      }
+
+      final alignedCourses = _weekAlignmentService.shiftCoursesToSemesterWeeks(
+        parsedCourses,
+        firstCourseWeek: semesterConfig.firstCourseWeek,
+      );
+      await _waitForCompanionImportSections();
+      if (!mounted) {
+        return;
+      }
+      try {
+        await _applyPendingImportedSectionsIfNeeded();
+      } catch (error) {
+        if (mounted) {
+          _showLightTip(
+            context,
+            AppLocalizations.of(context)!
+                .applyReturnedTimeSchemeFailed('$error'),
+          );
+        }
+      }
+      final requiredSectionCount =
+          provider.previewImportedCourseRequiredSectionCount(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+      );
+      if (!mounted) {
+        return;
+      }
+      final capacityReady = await _ensureSectionCapacity(
+        context,
+        requiredSectionCount: requiredSectionCount,
+        provider: provider,
+      );
+      if (!capacityReady || !mounted) {
+        setState(() {
+          _isExecutingImport = false;
+          _lastScriptStatus =
+              AppLocalizations.of(context)!.importInterruptedStatus;
+        });
+        return;
+      }
+
+      final importedCount = await provider.importParsedCourses(
+        alignedCourses,
+        replaceExisting: replaceExisting,
+        semesterStart: semesterConfig.semesterStartDate,
+        source: 'warehouse',
+      );
+      if (!mounted) {
+        return;
+      }
+      await _preferencesService.addRecentSchool(widget.school.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lastScriptStatus = importedCount > 0
+            ? AppLocalizations.of(context)!.importUpdatedCount(importedCount)
+            : AppLocalizations.of(context)!.importNoCourseChanges;
+      });
+      final navigator = Navigator.of(context);
+      _showLightTip(
+        context,
+        importedCount > 0
+            ? AppLocalizations.of(context)!.importUpdatedCount(importedCount)
+            : AppLocalizations.of(context)!.importNoCourseChanges,
+      );
+      if (importedCount > 0) {
+        navigator.pop(true);
+      } else {
+        setState(() {
+          _isExecutingImport = false;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isExecutingImport = false;
+        _lastScriptStatus = AppLocalizations.of(context)!.importFailedStatus;
+      });
+      _showLightTip(
+        context,
+        AppLocalizations.of(context)!.importFailedWithError('$error'),
+      );
+    }
+  }
+
+  List<Course> _parseWarehouseCourses(List<dynamic> rawCourses) {
+    final courses = <Course>[];
+    for (final item in rawCourses) {
+      if (item is! Map) {
+        continue;
+      }
+      final map = Map<String, dynamic>.from(item.cast<String, dynamic>());
+      final name = (map['name'] as String? ?? '').trim();
+      final teacher = (map['teacher'] as String? ?? '').trim();
+      final location =
+          (map['position'] as String? ?? map['location'] as String? ?? '')
+              .trim();
+      final day = (map['day'] as num?)?.toInt();
+      final startSection = (map['startSection'] as num?)?.toInt();
+      final endSection = (map['endSection'] as num?)?.toInt();
+      final weeks = (map['weeks'] as List<dynamic>?)
+          ?.map((item) => (item as num).toInt())
+          .where((item) => item > 0)
+          .toSet()
+          .toList()
+        ?..sort();
+      if (name.isEmpty ||
+          day == null ||
+          startSection == null ||
+          endSection == null ||
+          weeks == null ||
+          weeks.isEmpty) {
+        continue;
+      }
+      courses.add(
+        Course(
+          id: const Uuid().v4(),
+          name: name,
+          teacher: teacher.isEmpty
+              ? AppLocalizations.of(context)!.unknownTeacher
+              : teacher,
+          location: location.isEmpty
+              ? AppLocalizations.of(context)!.unknownLocation
+              : location,
+          dayOfWeek: day,
+          startSection: startSection,
+          endSection: endSection,
+          startTime: '',
+          endTime: '',
+          customWeeks: weeks,
+        ),
+      );
+    }
+    return courses;
+  }
+
+  Future<void> _handleLoginStateMessage(Map<String, dynamic> message) async {
+    final hasPasswordField = message['hasPasswordField'] == true;
+    if (!hasPasswordField || _isPromptShowing) {
+      return;
+    }
+    final candidate = WarehouseRememberedLogin(
+      username: (message['username'] as String? ?? '').trim(),
+      password: (message['password'] as String? ?? '').trim(),
+    );
+    _latestLoginCandidate = candidate;
+
+    if (_rememberedLogin != null &&
+        !_hasPromptedAutofill &&
+        candidate.username.isEmpty &&
+        candidate.password.isEmpty) {
+      _hasPromptedAutofill = true;
+      _isPromptShowing = true;
+      final shouldAutofill = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(AppLocalizations.of(context)!.autofillLoginTitle),
+          content: Text(
+            AppLocalizations.of(context)!
+                .autofillLoginMessage(_rememberedLogin!.username),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(AppLocalizations.of(context)!.notNowAction),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(AppLocalizations.of(context)!.autofillAction),
+            ),
+          ],
+        ),
+      );
+      _isPromptShowing = false;
+      if (shouldAutofill == true) {
+        await _autofillRememberedLogin();
+      }
+      return;
+    }
+  }
+
+  Future<void> _handleLoginAttempt() async {
+    final candidate = _latestLoginCandidate;
+    if (candidate == null ||
+        _rememberedLogin != null ||
+        _hasPromptedSave ||
+        _isPromptShowing ||
+        candidate.username.isEmpty ||
+        candidate.password.isEmpty) {
+      return;
+    }
+    _hasPromptedSave = true;
+    _isPromptShowing = true;
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.rememberPasswordTitle),
+        content: Text(
+          AppLocalizations.of(context)!
+              .rememberPasswordMessage(candidate.username),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppLocalizations.of(context)!.dontRememberAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              AppLocalizations.of(context)!.rememberAndAutofillAction,
+            ),
+          ),
+        ],
+      ),
+    );
+    _isPromptShowing = false;
+    if (shouldSave == true) {
+      await _preferencesService.setRememberedLogin(
+        widget.adapter.adapterId,
+        candidate,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rememberedLogin = candidate;
+        _lastScriptStatus =
+            AppLocalizations.of(context)!.savedRememberedLoginStatus;
+      });
+    }
+  }
+
+  Future<void> _loadRememberedLogin() async {
+    final login = await _preferencesService.getRememberedLogin(
+      widget.adapter.adapterId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _rememberedLogin = login;
+    });
+  }
+
+  Future<void> _autofillRememberedLoginIfNeeded() async {
+    if (_rememberedLogin == null || _hasPromptedAutofill || _isPromptShowing) {
+      return;
+    }
+  }
+
+  Future<void> _autofillRememberedLogin() async {
+    final login = _rememberedLogin;
+    if (login == null) return;
+    final js = '''
+(() => {
+  const textInputs = Array.from(document.querySelectorAll('input')).filter((input) => {
+    const type = (input.type || 'text').toLowerCase();
+    return ['text','email','tel','number'].includes(type) && !input.disabled;
+  });
+  const passwordInput = Array.from(document.querySelectorAll('input[type="password"]')).find((input) => !input.disabled);
+  if (textInputs[0]) {
+    textInputs[0].focus();
+    textInputs[0].value = ${jsonEncode(login.username)};
+    textInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+    textInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (passwordInput) {
+    passwordInput.focus();
+    passwordInput.value = ${jsonEncode(login.password)};
+    passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+    passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+})();
+''';
+    await _controller.runJavaScript(js);
+    if (!mounted) return;
+    setState(() {
+      _lastScriptStatus =
+          AppLocalizations.of(context)!.autofilledRememberedLoginStatus;
+    });
+  }
+
+  Future<void> _rememberCurrentLogin() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final raw = await _controller.runJavaScriptReturningResult('''
+(() => {
+  const textInputs = Array.from(document.querySelectorAll('input')).filter((input) => {
+    const type = (input.type || 'text').toLowerCase();
+    return ['text','email','tel','number'].includes(type) && !input.disabled;
+  });
+  const passwordInput = Array.from(document.querySelectorAll('input[type="password"]')).find((input) => !input.disabled);
+  return JSON.stringify({
+    username: textInputs[0] ? String(textInputs[0].value || '') : '',
+    password: passwordInput ? String(passwordInput.value || '') : ''
+  });
+})();
+''');
+      if (!mounted) return;
+      final normalized = _normalizeJavaScriptResult(raw);
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map<String, dynamic>) {
+        throw FormatException(l10n.noRecognizedLoginInputs);
+      }
+      final login = WarehouseRememberedLogin.fromJson(decoded);
+      if (login.username.isEmpty && login.password.isEmpty) {
+        _showLightTip(
+          context,
+          l10n.noUsernameOrPasswordRecognized,
+        );
+        return;
+      }
+      await _preferencesService.setRememberedLogin(
+        widget.adapter.adapterId,
+        login,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rememberedLogin = login;
+        _lastScriptStatus = l10n.rememberedCurrentLoginStatus;
+      });
+      _showLightTip(context, l10n.rememberedCurrentLoginSuccess);
+    } catch (error) {
+      if (!mounted) return;
+      _showLightTip(
+        context,
+        l10n.rememberLoginFailedWithError('$error'),
+      );
+    }
+  }
+
+  Future<void> _clearRememberedLogin() async {
+    await _preferencesService.clearRememberedLogin(widget.adapter.adapterId);
+    if (!mounted) return;
+    setState(() {
+      _rememberedLogin = null;
+      _lastScriptStatus =
+          AppLocalizations.of(context)!.clearedRememberedLoginStatus;
+    });
+    _showLightTip(
+      context,
+      AppLocalizations.of(context)!.clearedRememberedLoginSuccess,
+    );
+  }
+}
+
+class _WarehouseIntroCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<String> chips;
+  final String? markdown;
+
+  const _WarehouseIntroCard({
+    required this.title,
+    required this.subtitle,
+    this.chips = const [],
+    this.markdown,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primaryContainer,
+            colorScheme.surfaceContainerHighest,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (subtitle.isNotEmpty)
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          if ((markdown ?? '').trim().isNotEmpty) ...[
+            if (subtitle.isNotEmpty) const SizedBox(height: 8),
+            MarkdownBody(
+              data: markdown!,
+              styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                p: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
+          if (chips.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: chips
+                  .map(
+                    (item) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        item,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WarehouseAdapterCard extends StatelessWidget {
+  final WarehouseAdapterEntry adapter;
+  final Future<void> Function()? onImport;
+  final Future<void> Function() onInfo;
+  final String importButtonLabel;
+
+  const _WarehouseAdapterCard({
+    required this.adapter,
+    required this.onImport,
+    required this.onInfo,
+    required this.importButtonLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.extension_outlined,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        adapter.adapterName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '类别：${adapter.category} · 维护者：${adapter.maintainer}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (adapter.description.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              MarkdownBody(
+                data: adapter.description,
+                styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                  p: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onImport,
+                    icon: const Icon(Icons.web_rounded),
+                    label: Text(importButtonLabel),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: onInfo,
+                  icon: const Icon(Icons.info_outline_rounded),
+                  label: const Text('查看信息'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WarehouseSchoolCard extends StatelessWidget {
+  final WarehouseSchoolEntry school;
+  final bool isRecent;
+  final VoidCallback onTap;
+
+  const _WarehouseSchoolCard({
+    required this.school,
+    this.isRecent = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  school.initial,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      school.name,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (isRecent) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '最近',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(
+                            '资源目录：${school.resourceFolder}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WarehouseSchoolBean extends ISuspensionBean {
+  final WarehouseSchoolEntry school;
+  final String tag;
+  final bool isRecent;
+
+  _WarehouseSchoolBean({
+    required this.school,
+    required this.tag,
+    required this.isRecent,
+  });
+
+  @override
+  String getSuspensionTag() => tag;
+}
+
+List<_WarehouseSchoolBean> _schoolsToBeans(
+  List<WarehouseSchoolEntry> schools,
+  List<String> recentSchoolIds,
+) {
+  final recentOrdered = recentSchoolIds
+      .map((id) => schools.where((school) => school.id == id).firstOrNull)
+      .whereType<WarehouseSchoolEntry>()
+      .toList(growable: false);
+  final remaining = schools
+      .where((school) => !recentSchoolIds.contains(school.id))
+      .toList(growable: false);
+  final beans = <_WarehouseSchoolBean>[
+    ...recentOrdered.map(
+      (school) => _WarehouseSchoolBean(
+        school: school,
+        tag: '★',
+        isRecent: true,
+      ),
+    ),
+    ...remaining.map(
+      (school) => _WarehouseSchoolBean(
+        school: school,
+        tag: school.initial.trim().isEmpty
+            ? '#'
+            : school.initial.trim().toUpperCase(),
+        isRecent: false,
+      ),
+    ),
+  ];
+  SuspensionUtil.setShowSuspensionStatus(beans);
+  return beans;
+}
+
+class _DetailLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailLine({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          SelectableText(
+            value,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportSemesterConfig {
+  final DateTime semesterStartDate;
+  final int firstCourseWeek;
+
+  const _ImportSemesterConfig({
+    required this.semesterStartDate,
+    required this.firstCourseWeek,
+  });
+}
+
+class _ImportEntryCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String footer;
+  final VoidCallback onTap;
+
+  const _ImportEntryCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.footer,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(subtitle),
+                    const SizedBox(height: 8),
+                    Text(
+                      footer,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideLine extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _GuideLine({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            title.replaceAll('步骤 ', ''),
+            style: TextStyle(
+              color: colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(subtitle),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactHintChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _CompactHintChip({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _CompactActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactStatusChip extends StatelessWidget {
+  final String label;
+  final bool isError;
+
+  const _CompactStatusChip({
+    required this.label,
+    this.isError = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final backgroundColor =
+        isError ? colorScheme.errorContainer : colorScheme.primaryContainer;
+    final foregroundColor =
+        isError ? colorScheme.onErrorContainer : colorScheme.onPrimaryContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: foregroundColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactNoticeCard extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final bool isError;
+
+  const _CompactNoticeCard({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.isError = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final backgroundColor = isError
+        ? colorScheme.errorContainer.withValues(alpha: 0.92)
+        : colorScheme.surfaceContainerHigh;
+    final foregroundColor =
+        isError ? colorScheme.onErrorContainer : colorScheme.onSurface;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 18, color: foregroundColor),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: foregroundColor,
+                height: 1.35,
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+              ),
+              child: Text(actionLabel!),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AiPreviewCard extends StatelessWidget {
+  final AiCourseImportParseResult result;
+
+  const _AiPreviewCard({
+    required this.result,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.aiPreviewTitle,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(l10n.aiPreviewCourseCount(result.courses.length)),
+          Text(l10n.aiPreviewMaxSection(result.requiredSectionCount)),
+          if (result.warnings.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              l10n.aiPreviewWarningsTitle,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...result.warnings.map(
+              (warning) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('• $warning'),
+              ),
+            ),
+          ],
+          if (result.courses.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              l10n.aiPreviewCoursesTitle,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...result.courses.take(6).map(_buildCoursePreviewLine),
+            if (result.courses.length > 6)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  l10n.aiPreviewRemainingCourses(result.courses.length - 6),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoursePreviewLine(Course course) {
+    final weeks = course.customWeeks ?? const [];
+    final weekText = weeks.isEmpty
+        ? '未提供周次'
+        : weeks.length <= 6
+            ? weeks.join('、')
+            : '${weeks.first}-${weeks.last}（共 ${weeks.length} 周）';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        '周${_weekdayLabel(course.dayOfWeek)} 第${course.startSection}-${course.endSection}节  ${course.name}  ${course.location.isEmpty ? "未填写地点" : course.location}  周次：$weekText',
+      ),
+    );
+  }
+}
+
+Future<_ImportSemesterConfig?> _pickImportSemesterConfig(
+  BuildContext context, {
+  required DateTime initialSemesterStartDate,
+  required int initialFirstCourseWeek,
+  required String title,
+  required String subtitle,
+  DateTime? inferredFirstCourseDate,
+}) {
+  final alignmentService = const ImportWeekAlignmentService();
+  return showModalBottomSheet<_ImportSemesterConfig>(
+    context: context,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      final theme = Theme.of(sheetContext);
+      final colorScheme = theme.colorScheme;
+      var selectedSemesterStartDate = initialSemesterStartDate;
+      var selectedFirstCourseWeek = initialFirstCourseWeek < 1
+          ? 1
+          : initialFirstCourseWeek > 20
+              ? 20
+              : initialFirstCourseWeek;
+      var autoTrackWeekMapping = inferredFirstCourseDate != null;
+
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          Future<void> pickStartDate() async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: selectedSemesterStartDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2035),
+            );
+            if (picked == null || !context.mounted) {
+              return;
+            }
+            setModalState(() {
+              selectedSemesterStartDate = picked;
+              if (autoTrackWeekMapping && inferredFirstCourseDate != null) {
+                selectedFirstCourseWeek = alignmentService.inferFirstCourseWeek(
+                  semesterStartDate: selectedSemesterStartDate,
+                  firstCourseDate: inferredFirstCourseDate,
+                );
+              }
+            });
+          }
+
+          final shiftedWeeks = selectedFirstCourseWeek - 1;
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                12,
+                16,
+                16 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_outlined),
+                    title: const Text('开学日期'),
+                    subtitle: Text(
+                      '${_formatDate(selectedSemesterStartDate)} · 按这一天所在周作为校历第 1 周',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: pickStartDate,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    initialValue: selectedFirstCourseWeek,
+                    decoration: const InputDecoration(
+                      labelText: '课表第 1 周对应校历第几周',
+                      border: OutlineInputBorder(),
+                      helperText: '如果学校第一周没课，就选第 2 周；前两周都没课就选第 3 周。',
+                    ),
+                    items: List.generate(20, (index) => index + 1)
+                        .map(
+                          (week) => DropdownMenuItem<int>(
+                            value: week,
+                            child: Text('校历第 $week 周'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setModalState(() {
+                        selectedFirstCourseWeek = value;
+                        autoTrackWeekMapping = false;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      shiftedWeeks <= 0
+                          ? '导入后会直接把课表第 1 周当作校历第 1 周。'
+                          : '导入后会把所有课程周次整体顺延 $shiftedWeeks 周，让课表第 1 周落在校历第 $selectedFirstCourseWeek 周。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('取消'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(
+                            context,
+                            _ImportSemesterConfig(
+                              semesterStartDate: selectedSemesterStartDate,
+                              firstCourseWeek: selectedFirstCourseWeek,
+                            ),
+                          ),
+                          child: const Text('继续导入'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<bool?> _askReplaceExisting(
+  BuildContext context, {
+  required String title,
+  required String content,
+}) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text('$content\n\n建议日常更新课表时优先使用“更新课表（保留本地信息）”。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('更新课表（推荐）'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('覆盖导入'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<bool> _ensureSectionCapacity(
+  BuildContext context, {
+  required int requiredSectionCount,
+  required TimetableProvider provider,
+}) async {
+  if (requiredSectionCount <= provider.settings.sectionCount) {
+    return true;
+  }
+
+  final shouldContinue = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('时间模板节次不足'),
+        content: Text(
+          '当前课表时间模板只有 ${provider.settings.sectionCount} 节，但导入数据需要到第 $requiredSectionCount 节。是否自动补齐后继续导入？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('自动补齐并导入'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (shouldContinue != true || !context.mounted) {
+    return false;
+  }
+
+  final ensureMessage =
+      await provider.ensureSectionCapacityForImport(requiredSectionCount);
+  if (ensureMessage != null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ensureMessage)),
+      );
+    }
+    return false;
+  }
+  return true;
+}
+
+String _weekdayLabel(int dayOfWeek) {
+  const labels = ['一', '二', '三', '四', '五', '六', '日'];
+  if (dayOfWeek < 1 || dayOfWeek > 7) {
+    return dayOfWeek.toString();
+  }
+  return labels[dayOfWeek - 1];
+}
+
+String _formatDate(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+String _normalizeJavaScriptResult(Object? raw) {
+  if (raw == null) {
+    return '';
+  }
+  final text = raw.toString();
+  try {
+    final decoded = jsonDecode(text);
+    if (decoded is String) {
+      return decoded;
+    }
+  } catch (_) {}
+  return text;
+}
+
+Future<String?> _promptWarehouseImportUrl(
+  BuildContext context, {
+  required String schoolName,
+  required String adapterName,
+  String initialValue = '',
+}) async {
+  final controller = TextEditingController(text: initialValue);
+  final result = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('输入教务网址'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('“$schoolName / $adapterName” 没有默认登录地址，请先输入学校教务系统网址。'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: '教务网址',
+              hintText: 'http(s)://...',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '保存后下次会直接使用，也可以在适配器信息页里修改。',
+            style: Theme.of(dialogContext).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+          child: const Text('保存并继续'),
+        ),
+      ],
+    ),
+  );
+  if (result == null || result.trim().isEmpty) {
+    return null;
+  }
+  final uri = Uri.tryParse(result.trim());
+  if (uri == null || uri.host.isEmpty) {
+    if (!context.mounted) {
+      return null;
+    }
+    _showLightTip(context, '登录地址格式不正确');
+    return null;
+  }
+  return result.trim();
+}
+
+void _showLightTip(BuildContext context, String message) {
+  if (message.trim().isEmpty) {
+    return;
+  }
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final theme = Theme.of(context);
+  final colorScheme = theme.colorScheme;
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => Positioned(
+      top: MediaQuery.of(context).padding.top + 16,
+      left: 16,
+      right: 16,
+      child: IgnorePointer(
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colorScheme.inverseSurface.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onInverseSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  overlay.insert(entry);
+  Future<void>.delayed(const Duration(milliseconds: 1500)).then((_) {
+    entry.remove();
+  });
+}
+

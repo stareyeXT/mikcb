@@ -1,0 +1,97 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def releaseStoreFile =
+        keystoreProperties.getProperty("storeFile") ?: System.getenv("ANDROID_KEYSTORE_PATH")
+def releaseStorePassword =
+        keystoreProperties.getProperty("storePassword") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+def releaseKeyAlias =
+        keystoreProperties.getProperty("keyAlias") ?: System.getenv("ANDROID_KEY_ALIAS")
+def releaseKeyPassword =
+        keystoreProperties.getProperty("keyPassword") ?: System.getenv("ANDROID_KEY_PASSWORD")
+def overrideVersionName = project.findProperty("OVERRIDE_VERSION_NAME") ?: System.getenv("OVERRIDE_VERSION_NAME")
+
+android {
+    namespace = "com.mutx163.qingyu"
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId = "com.mutx163.qingyu"
+        minSdk = 26
+        targetSdk = 36
+        versionCode = flutter.versionCode
+        versionName = overrideVersionName ?: flutter.versionName
+        buildConfigField "String", "UMENG_APP_KEY", "\"69c1fd8f9a7f3764889fba4f\""
+        buildConfigField "String", "UMENG_CHANNEL", "\"official\""
+        manifestPlaceholders = [
+                appLabel   : "轻屿课表",
+                umengScheme: "um.69c1fd8f9a7f3764889fba4f"
+        ]
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file(releaseStoreFile)
+            storePassword releaseStorePassword
+            keyAlias releaseKeyAlias
+            keyPassword releaseKeyPassword
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            buildConfigField "String", "UMENG_CHANNEL", "\"official-debug\""
+            manifestPlaceholders = [
+                    appLabel   : "轻屿课表调试版",
+                    umengScheme: "um.69c1fd8f9a7f3764889fba4f"
+            ]
+        }
+        release {
+            manifestPlaceholders = [
+                    appLabel   : "轻屿课表",
+                    umengScheme: "um.69c1fd8f9a7f3764889fba4f"
+            ]
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig = signingConfigs.release
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+    implementation 'com.umeng.umsdk:common:9.6.3'
+    implementation 'com.umeng.umsdk:asms:1.8.0'
+    implementation 'com.umeng.umsdk:apm:1.5.2'
+    implementation 'com.umeng.umsdk:uyumao:1.1.2'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'junit:junit:4.13.2'
+}

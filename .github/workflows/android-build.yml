@@ -1,0 +1,141 @@
+name: Android Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.7
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Read app version
+        id: meta
+        shell: bash
+        run: |
+          APP_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          VERSION_NAME="${RELEASE_TAG#v}"
+          RELEASE_NOTES_FILE="docs/releases/v${VERSION_NAME}.md"
+          if [[ "${APP_VERSION}" == *-* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+          echo "app_version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "release_notes_file=${RELEASE_NOTES_FILE}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Prepare signing files
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -z "${ANDROID_KEYSTORE_BASE64}" || -z "${ANDROID_KEYSTORE_PASSWORD}" || -z "${ANDROID_KEY_ALIAS}" || -z "${ANDROID_KEY_PASSWORD}" ]]; then
+            echo "Missing Android signing secrets."
+            exit 1
+          fi
+          mkdir -p android/app
+          echo "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/upload-keystore.jks
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Build release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          ANDROID_KEYSTORE_PATH: app/upload-keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          OVERRIDE_VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+        run: flutter build apk --release --split-per-abi
+
+      - name: Prepare artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          mkdir -p dist
+          VERSION_NAME="${{ steps.meta.outputs.version_name }}"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/mikcb-${VERSION_NAME}-arm64-v8a.apk"
+
+      - name: Upload APK artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-apk
+          path: dist/mikcb-*.apk
+
+      - name: Create or update GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+          RELEASE_NOTES_FILE: ${{ steps.meta.outputs.release_notes_file }}
+          IS_PRERELEASE: ${{ steps.meta.outputs.is_prerelease }}
+        run: |
+          RELEASE_APK="dist/mikcb-${VERSION_NAME}-arm64-v8a.apk"
+          if [[ -f "${RELEASE_NOTES_FILE}" ]]; then
+            RELEASE_NOTES_OPTION=(--notes-file "${RELEASE_NOTES_FILE}")
+          else
+            RELEASE_NOTES_OPTION=(--notes "Automated release for ${RELEASE_TAG}")
+          fi
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            PRERELEASE_OPTION=(--prerelease)
+          else
+            PRERELEASE_OPTION=()
+          fi
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${RELEASE_APK}" --clobber
+            gh release edit "${RELEASE_TAG}" --title "${RELEASE_TAG}" "${PRERELEASE_OPTION[@]}" "${RELEASE_NOTES_OPTION[@]}"
+          else
+            gh release create "${RELEASE_TAG}" "${RELEASE_APK}" \
+              --title "${RELEASE_TAG}" \
+              "${PRERELEASE_OPTION[@]}" \
+              "${RELEASE_NOTES_OPTION[@]}" \
+              --target "${GITHUB_SHA}"
+          fi

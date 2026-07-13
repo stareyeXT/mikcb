@@ -1,0 +1,1933 @@
+import 'dart:convert';
+
+enum AppUpdateDownloadSource { original, mirror }
+
+enum AppUpdateMirrorPreset { ghfast, ghproxyCn, ghLlkk, custom }
+
+enum WidgetBackgroundStyle { glass, solid, gradient }
+
+enum AppThemeMode { system, light, dark }
+
+enum AppFontMode { system, miSans }
+
+enum HomeTitleStyle { classic, brand }
+
+enum TimetableHomeViewMode { week, day }
+
+enum BackToCurrentWeekButtonStyle { inline, floating }
+
+enum SectionTimeDisplayMode { hidden, startOnly, startAndEnd }
+
+enum LiveDuringClassTimeDisplayMode { nearest, total }
+
+enum LiveCountdownTextStyle {
+  smart,
+  smartMinS,
+  minuteSecondCn,
+  minuteSecondColon,
+  minuteSecondMinS,
+  minuteSecondMinSlashS,
+  minuteOnlyCn,
+  minuteOnlyMin,
+  minuteOnlySlash,
+  secondOnlyCn,
+  secondOnlyShort,
+  secondOnlySlash,
+}
+
+enum MiuiIslandLabelStyle { textOnly, iconAndText }
+
+enum MiuiIslandLabelContent { courseName, location, courseNameAndLocation }
+
+enum MiuiIslandLabelFontWeight { regular, medium, bold }
+
+enum MiuiIslandLabelRenderQuality { standard, high, ultra }
+
+enum MiuiIslandExpandedIconMode { appIcon, customImage, hidden }
+
+enum LiveBeforeClassQuickAction { none, silent, doNotDisturb }
+
+const String defaultAppUpdateMirrorUrlPrefix = 'https://ghfast.top/';
+const String ghproxyCnMirrorUrlPrefix = 'https://ghproxy.cn/';
+const String ghLlkkMirrorUrlPrefix = 'https://gh.llkk.cc/';
+
+String _normalizeAppLocaleTag(String? value) {
+  final normalized = (value ?? '').trim();
+  if (normalized.isEmpty || normalized == 'system') {
+    return '';
+  }
+  final canonical = normalized.replaceAll('-', '_');
+  final lower = canonical.toLowerCase();
+  if (lower == 'en_us') return 'en';
+  if (lower == 'zh_cn') return 'zh';
+  return canonical;
+}
+
+String _normalizeMirrorUrlPrefixValue(String? value) {
+  final normalized = (value ?? '').trim();
+  if (normalized.isEmpty) {
+    return '';
+  }
+  return normalized.endsWith('/')
+      ? normalized.substring(0, normalized.length - 1)
+      : normalized;
+}
+
+extension SectionTimeDisplayModeX on SectionTimeDisplayMode {
+  String get value => switch (this) {
+    SectionTimeDisplayMode.hidden => 'hidden',
+    SectionTimeDisplayMode.startOnly => 'start_only',
+    SectionTimeDisplayMode.startAndEnd => 'start_and_end',
+  };
+
+  String get label => switch (this) {
+    SectionTimeDisplayMode.hidden => '不显示',
+    SectionTimeDisplayMode.startOnly => '仅显示上课时间',
+    SectionTimeDisplayMode.startAndEnd => '显示上下课时间',
+  };
+
+  static SectionTimeDisplayMode fromValue(String? value) {
+    return SectionTimeDisplayMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => SectionTimeDisplayMode.startAndEnd,
+    );
+  }
+}
+
+extension WidgetBackgroundStyleX on WidgetBackgroundStyle {
+  String get value => switch (this) {
+    WidgetBackgroundStyle.glass => 'glass',
+    WidgetBackgroundStyle.solid => 'solid',
+    WidgetBackgroundStyle.gradient => 'gradient',
+  };
+
+  String get label => switch (this) {
+    WidgetBackgroundStyle.glass => '半透明玻璃感',
+    WidgetBackgroundStyle.solid => '纯色卡片',
+    WidgetBackgroundStyle.gradient => '渐变卡片',
+  };
+
+  static WidgetBackgroundStyle fromValue(String? value) {
+    return WidgetBackgroundStyle.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => WidgetBackgroundStyle.solid,
+    );
+  }
+}
+
+extension AppThemeModeX on AppThemeMode {
+  String get value => switch (this) {
+    AppThemeMode.system => 'system',
+    AppThemeMode.light => 'light',
+    AppThemeMode.dark => 'dark',
+  };
+
+  String get label => switch (this) {
+    AppThemeMode.system => '跟随系统',
+    AppThemeMode.light => '浅色模式',
+    AppThemeMode.dark => '深色模式',
+  };
+
+  static AppThemeMode fromValue(String? value) {
+    return AppThemeMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => AppThemeMode.system,
+    );
+  }
+}
+
+extension AppFontModeX on AppFontMode {
+  String get value => switch (this) {
+    AppFontMode.system => 'system',
+    AppFontMode.miSans => 'mi_sans',
+  };
+
+  static AppFontMode fromValue(String? value) {
+    return AppFontMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => AppFontMode.system,
+    );
+  }
+}
+
+extension HomeTitleStyleX on HomeTitleStyle {
+  String get value => switch (this) {
+    HomeTitleStyle.classic => 'classic',
+    HomeTitleStyle.brand => 'brand',
+  };
+
+  String get label => switch (this) {
+    HomeTitleStyle.classic => '经典文字',
+    HomeTitleStyle.brand => '大 Logo',
+  };
+
+  String get description => switch (this) {
+    HomeTitleStyle.classic => '保持原本标题样式，只显示文字，点击即可切换课表',
+    HomeTitleStyle.brand => '显示大 Logo 和小课表名称，更强调品牌感',
+  };
+
+  static HomeTitleStyle fromValue(String? value) {
+    return HomeTitleStyle.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => HomeTitleStyle.classic,
+    );
+  }
+}
+
+extension TimetableHomeViewModeX on TimetableHomeViewMode {
+  String get value => switch (this) {
+    TimetableHomeViewMode.week => 'week',
+    TimetableHomeViewMode.day => 'day',
+  };
+
+  static TimetableHomeViewMode fromValue(String? value) {
+    return TimetableHomeViewMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => TimetableHomeViewMode.week,
+    );
+  }
+}
+
+extension BackToCurrentWeekButtonStyleX on BackToCurrentWeekButtonStyle {
+  String get value => switch (this) {
+    BackToCurrentWeekButtonStyle.inline => 'inline',
+    BackToCurrentWeekButtonStyle.floating => 'floating',
+  };
+
+  static BackToCurrentWeekButtonStyle fromValue(String? value) {
+    return BackToCurrentWeekButtonStyle.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => BackToCurrentWeekButtonStyle.inline,
+    );
+  }
+}
+
+extension LiveDuringClassTimeDisplayModeX on LiveDuringClassTimeDisplayMode {
+  String get value => switch (this) {
+    LiveDuringClassTimeDisplayMode.nearest => 'nearest',
+    LiveDuringClassTimeDisplayMode.total => 'total',
+  };
+
+  String get label => switch (this) {
+    LiveDuringClassTimeDisplayMode.nearest => '最近时间',
+    LiveDuringClassTimeDisplayMode.total => '总时间',
+  };
+
+  static LiveDuringClassTimeDisplayMode fromValue(String? value) {
+    return LiveDuringClassTimeDisplayMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => LiveDuringClassTimeDisplayMode.nearest,
+    );
+  }
+}
+
+extension LiveCountdownTextStyleX on LiveCountdownTextStyle {
+  String get value => switch (this) {
+    LiveCountdownTextStyle.smart => 'smart',
+    LiveCountdownTextStyle.smartMinS => 'smart_min_s',
+    LiveCountdownTextStyle.minuteSecondCn => 'minute_second_cn',
+    LiveCountdownTextStyle.minuteSecondColon => 'minute_second_colon',
+    LiveCountdownTextStyle.minuteSecondMinS => 'minute_second_min_s',
+    LiveCountdownTextStyle.minuteSecondMinSlashS => 'minute_second_min_slash_s',
+    LiveCountdownTextStyle.minuteOnlyCn => 'minute_only_cn',
+    LiveCountdownTextStyle.minuteOnlyMin => 'minute_only_min',
+    LiveCountdownTextStyle.minuteOnlySlash => 'minute_only_slash',
+    LiveCountdownTextStyle.secondOnlyCn => 'second_only_cn',
+    LiveCountdownTextStyle.secondOnlyShort => 'second_only_short',
+    LiveCountdownTextStyle.secondOnlySlash => 'second_only_slash',
+  };
+
+  String get label => switch (this) {
+    LiveCountdownTextStyle.smart => '智能（中文）',
+    LiveCountdownTextStyle.smartMinS => '智能（英文）',
+    LiveCountdownTextStyle.minuteSecondCn => '分秒（5分钟19秒）',
+    LiveCountdownTextStyle.minuteSecondColon => 'mm:ss（05:19）',
+    LiveCountdownTextStyle.minuteSecondMinS => 'min+s（5min19s）',
+    LiveCountdownTextStyle.minuteSecondMinSlashS => 'min/s（5min/19s）',
+    LiveCountdownTextStyle.minuteOnlyCn => '纯分钟（5分钟）',
+    LiveCountdownTextStyle.minuteOnlyMin => 'min（5min）',
+    LiveCountdownTextStyle.minuteOnlySlash => '/min（5/min）',
+    LiveCountdownTextStyle.secondOnlyCn => '纯秒（5秒）',
+    LiveCountdownTextStyle.secondOnlyShort => 's（5s）',
+    LiveCountdownTextStyle.secondOnlySlash => '/s（5/s）',
+  };
+
+  bool get alwaysShowsSeconds => switch (this) {
+    LiveCountdownTextStyle.minuteSecondCn ||
+    LiveCountdownTextStyle.minuteSecondColon ||
+    LiveCountdownTextStyle.minuteSecondMinS ||
+    LiveCountdownTextStyle.minuteSecondMinSlashS ||
+    LiveCountdownTextStyle.secondOnlyCn ||
+    LiveCountdownTextStyle.secondOnlyShort ||
+    LiveCountdownTextStyle.secondOnlySlash => true,
+    _ => false,
+  };
+
+  static LiveCountdownTextStyle fromValue(String? value) {
+    return LiveCountdownTextStyle.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => LiveCountdownTextStyle.smart,
+    );
+  }
+}
+
+extension MiuiIslandLabelStyleX on MiuiIslandLabelStyle {
+  String get value => switch (this) {
+    MiuiIslandLabelStyle.textOnly => 'text_only',
+    MiuiIslandLabelStyle.iconAndText => 'icon_and_text',
+  };
+
+  String get label => switch (this) {
+    MiuiIslandLabelStyle.textOnly => '仅文字',
+    MiuiIslandLabelStyle.iconAndText => '图标+文字',
+  };
+
+  static MiuiIslandLabelStyle fromValue(String? value) {
+    return MiuiIslandLabelStyle.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => MiuiIslandLabelStyle.textOnly,
+    );
+  }
+}
+
+extension MiuiIslandLabelContentX on MiuiIslandLabelContent {
+  String get value => switch (this) {
+    MiuiIslandLabelContent.courseName => 'course_name',
+    MiuiIslandLabelContent.location => 'location',
+    MiuiIslandLabelContent.courseNameAndLocation => 'course_name_and_location',
+  };
+
+  String get label => switch (this) {
+    MiuiIslandLabelContent.courseName => '课程名',
+    MiuiIslandLabelContent.location => '教室',
+    MiuiIslandLabelContent.courseNameAndLocation => '课程名+教室',
+  };
+
+  static MiuiIslandLabelContent fromValue(String? value) {
+    return MiuiIslandLabelContent.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => MiuiIslandLabelContent.courseName,
+    );
+  }
+}
+
+extension MiuiIslandLabelFontWeightX on MiuiIslandLabelFontWeight {
+  String get value => switch (this) {
+    MiuiIslandLabelFontWeight.regular => 'regular',
+    MiuiIslandLabelFontWeight.medium => 'medium',
+    MiuiIslandLabelFontWeight.bold => 'bold',
+  };
+
+  String get label => switch (this) {
+    MiuiIslandLabelFontWeight.regular => '常规',
+    MiuiIslandLabelFontWeight.medium => '中等',
+    MiuiIslandLabelFontWeight.bold => '加粗',
+  };
+
+  static MiuiIslandLabelFontWeight fromValue(String? value) {
+    return MiuiIslandLabelFontWeight.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => MiuiIslandLabelFontWeight.bold,
+    );
+  }
+}
+
+extension MiuiIslandLabelRenderQualityX on MiuiIslandLabelRenderQuality {
+  String get value => switch (this) {
+    MiuiIslandLabelRenderQuality.standard => 'standard',
+    MiuiIslandLabelRenderQuality.high => 'high',
+    MiuiIslandLabelRenderQuality.ultra => 'ultra',
+  };
+
+  String get label => switch (this) {
+    MiuiIslandLabelRenderQuality.standard => '标准',
+    MiuiIslandLabelRenderQuality.high => '高清',
+    MiuiIslandLabelRenderQuality.ultra => '超高清',
+  };
+
+  static MiuiIslandLabelRenderQuality fromValue(String? value) {
+    return MiuiIslandLabelRenderQuality.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => MiuiIslandLabelRenderQuality.standard,
+    );
+  }
+}
+
+extension MiuiIslandExpandedIconModeX on MiuiIslandExpandedIconMode {
+  String get value => switch (this) {
+    MiuiIslandExpandedIconMode.appIcon => 'app_icon',
+    MiuiIslandExpandedIconMode.customImage => 'custom_image',
+    MiuiIslandExpandedIconMode.hidden => 'hidden',
+  };
+
+  String get label => switch (this) {
+    MiuiIslandExpandedIconMode.appIcon => '应用图标',
+    MiuiIslandExpandedIconMode.customImage => '自定义图片',
+    MiuiIslandExpandedIconMode.hidden => '不显示',
+  };
+
+  static MiuiIslandExpandedIconMode fromValue(String? value) {
+    return MiuiIslandExpandedIconMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => MiuiIslandExpandedIconMode.appIcon,
+    );
+  }
+}
+
+extension LiveBeforeClassQuickActionX on LiveBeforeClassQuickAction {
+  String get value => switch (this) {
+    LiveBeforeClassQuickAction.none => 'none',
+    LiveBeforeClassQuickAction.silent => 'silent',
+    LiveBeforeClassQuickAction.doNotDisturb => 'do_not_disturb',
+  };
+
+  String get label => switch (this) {
+    LiveBeforeClassQuickAction.none => '不显示',
+    LiveBeforeClassQuickAction.silent => '打开静音',
+    LiveBeforeClassQuickAction.doNotDisturb => '打开免打扰',
+  };
+
+  static LiveBeforeClassQuickAction fromValue(String? value) {
+    return LiveBeforeClassQuickAction.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => LiveBeforeClassQuickAction.none,
+    );
+  }
+}
+
+enum CourseCardVerticalAlign { top, center, bottom, spaceEvenly }
+
+extension CourseCardVerticalAlignX on CourseCardVerticalAlign {
+  String get value => switch (this) {
+    CourseCardVerticalAlign.top => 'top',
+    CourseCardVerticalAlign.center => 'center',
+    CourseCardVerticalAlign.bottom => 'bottom',
+    CourseCardVerticalAlign.spaceEvenly => 'space_evenly',
+  };
+
+  String get label => switch (this) {
+    CourseCardVerticalAlign.top => '顶部对齐',
+    CourseCardVerticalAlign.center => '垂直居中',
+    CourseCardVerticalAlign.bottom => '底部对齐',
+    CourseCardVerticalAlign.spaceEvenly => '上下均布',
+  };
+
+  static CourseCardVerticalAlign fromValue(String? value) {
+    return CourseCardVerticalAlign.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => CourseCardVerticalAlign.center,
+    );
+  }
+}
+
+enum CourseCardHorizontalAlign { left, center, right }
+
+extension CourseCardHorizontalAlignX on CourseCardHorizontalAlign {
+  String get value => switch (this) {
+    CourseCardHorizontalAlign.left => 'left',
+    CourseCardHorizontalAlign.center => 'center',
+    CourseCardHorizontalAlign.right => 'right',
+  };
+
+  String get label => switch (this) {
+    CourseCardHorizontalAlign.left => '居左',
+    CourseCardHorizontalAlign.center => '居中',
+    CourseCardHorizontalAlign.right => '居右',
+  };
+
+  static CourseCardHorizontalAlign fromValue(String? value) {
+    return CourseCardHorizontalAlign.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => CourseCardHorizontalAlign.center,
+    );
+  }
+}
+
+enum TimetableTimeColumnWidthMode { narrow, wide }
+
+extension TimetableTimeColumnWidthModeX on TimetableTimeColumnWidthMode {
+  String get value => switch (this) {
+    TimetableTimeColumnWidthMode.narrow => 'narrow',
+    TimetableTimeColumnWidthMode.wide => 'wide',
+  };
+
+  String get label => switch (this) {
+    TimetableTimeColumnWidthMode.narrow => '窄',
+    TimetableTimeColumnWidthMode.wide => '宽',
+  };
+
+  static TimetableTimeColumnWidthMode fromValue(String? value) {
+    return TimetableTimeColumnWidthMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => TimetableTimeColumnWidthMode.narrow,
+    );
+  }
+}
+
+enum TimetableCourseSpacingMode { narrow, wide }
+
+extension TimetableCourseSpacingModeX on TimetableCourseSpacingMode {
+  String get value => switch (this) {
+    TimetableCourseSpacingMode.narrow => 'narrow',
+    TimetableCourseSpacingMode.wide => 'wide',
+  };
+
+  String get label => switch (this) {
+    TimetableCourseSpacingMode.narrow => '窄',
+    TimetableCourseSpacingMode.wide => '宽',
+  };
+
+  static TimetableCourseSpacingMode fromValue(String? value) {
+    return TimetableCourseSpacingMode.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => TimetableCourseSpacingMode.narrow,
+    );
+  }
+}
+
+extension AppUpdateDownloadSourceX on AppUpdateDownloadSource {
+  String get value => switch (this) {
+    AppUpdateDownloadSource.original => 'original',
+    AppUpdateDownloadSource.mirror => 'mirror',
+  };
+
+  String get label => switch (this) {
+    AppUpdateDownloadSource.original => 'GitHub 原版',
+    AppUpdateDownloadSource.mirror => '国内镜像',
+  };
+
+  static AppUpdateDownloadSource fromValue(String? value) {
+    return AppUpdateDownloadSource.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => AppUpdateDownloadSource.mirror,
+    );
+  }
+}
+
+extension AppUpdateMirrorPresetX on AppUpdateMirrorPreset {
+  String get value => switch (this) {
+    AppUpdateMirrorPreset.ghfast => 'ghfast',
+    AppUpdateMirrorPreset.ghproxyCn => 'ghproxy_cn',
+    AppUpdateMirrorPreset.ghLlkk => 'gh_llkk',
+    AppUpdateMirrorPreset.custom => 'custom',
+  };
+
+  String get label => switch (this) {
+    AppUpdateMirrorPreset.ghfast => '默认镜像',
+    AppUpdateMirrorPreset.ghproxyCn => '备用镜像 1',
+    AppUpdateMirrorPreset.ghLlkk => '备用镜像 2',
+    AppUpdateMirrorPreset.custom => '自定义',
+  };
+
+  String get description => switch (this) {
+    AppUpdateMirrorPreset.ghfast => defaultAppUpdateMirrorUrlPrefix,
+    AppUpdateMirrorPreset.ghproxyCn => ghproxyCnMirrorUrlPrefix,
+    AppUpdateMirrorPreset.ghLlkk => ghLlkkMirrorUrlPrefix,
+    AppUpdateMirrorPreset.custom => '使用你自己填写的镜像前缀',
+  };
+
+  bool get usesCustomUrl => this == AppUpdateMirrorPreset.custom;
+
+  static AppUpdateMirrorPreset fromValue(String? value) {
+    return AppUpdateMirrorPreset.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => AppUpdateMirrorPreset.ghfast,
+    );
+  }
+
+  static AppUpdateMirrorPreset fromUrlPrefix(String? urlPrefix) {
+    final normalized = _normalizeMirrorUrlPrefixValue(urlPrefix);
+    if (normalized.isEmpty ||
+        normalized ==
+            _normalizeMirrorUrlPrefixValue(defaultAppUpdateMirrorUrlPrefix)) {
+      return AppUpdateMirrorPreset.ghfast;
+    }
+    if (normalized ==
+        _normalizeMirrorUrlPrefixValue(ghproxyCnMirrorUrlPrefix)) {
+      return AppUpdateMirrorPreset.ghproxyCn;
+    }
+    if (normalized == _normalizeMirrorUrlPrefixValue(ghLlkkMirrorUrlPrefix)) {
+      return AppUpdateMirrorPreset.ghLlkk;
+    }
+    return AppUpdateMirrorPreset.custom;
+  }
+}
+
+String resolveAppUpdateMirrorUrlPrefix({
+  required AppUpdateMirrorPreset preset,
+  required String customUrlPrefix,
+}) {
+  final normalizedCustomUrlPrefix = customUrlPrefix.trim();
+  return switch (preset) {
+    AppUpdateMirrorPreset.ghfast => defaultAppUpdateMirrorUrlPrefix,
+    AppUpdateMirrorPreset.ghproxyCn => ghproxyCnMirrorUrlPrefix,
+    AppUpdateMirrorPreset.ghLlkk => ghLlkkMirrorUrlPrefix,
+    AppUpdateMirrorPreset.custom =>
+      normalizedCustomUrlPrefix.isEmpty
+          ? defaultAppUpdateMirrorUrlPrefix
+          : normalizedCustomUrlPrefix,
+  };
+}
+
+class LiveDisplaySettings {
+  final bool showCourseName;
+  final bool showLocation;
+  final bool showCountdown;
+  final LiveCountdownTextStyle countdownTextStyle;
+  final bool showStageText;
+  final bool useShortName;
+  final bool hidePrefixText;
+  final LiveDuringClassTimeDisplayMode duringClassTimeDisplayMode;
+  final bool enableMiuiIslandLabelImage;
+  final MiuiIslandLabelStyle miuiIslandLabelStyle;
+  final MiuiIslandLabelContent miuiIslandLabelContent;
+  final String miuiIslandLabelFontColor;
+  final MiuiIslandLabelFontWeight miuiIslandLabelFontWeight;
+  final MiuiIslandLabelRenderQuality miuiIslandLabelRenderQuality;
+  final double miuiIslandLabelFontSize;
+  final double miuiIslandLabelOffsetX;
+  final double miuiIslandLabelOffsetY;
+  final String? miuiIslandLabelLogoPath;
+  final double miuiIslandLabelLogoCornerRadius;
+  final MiuiIslandExpandedIconMode miuiIslandExpandedIconMode;
+  final String? miuiIslandExpandedIconPath;
+
+  const LiveDisplaySettings({
+    required this.showCourseName,
+    required this.showLocation,
+    required this.showCountdown,
+    required this.countdownTextStyle,
+    required this.showStageText,
+    required this.useShortName,
+    required this.hidePrefixText,
+    required this.duringClassTimeDisplayMode,
+    required this.enableMiuiIslandLabelImage,
+    required this.miuiIslandLabelStyle,
+    required this.miuiIslandLabelContent,
+    required this.miuiIslandLabelFontColor,
+    required this.miuiIslandLabelFontWeight,
+    required this.miuiIslandLabelRenderQuality,
+    required this.miuiIslandLabelFontSize,
+    required this.miuiIslandLabelOffsetX,
+    required this.miuiIslandLabelOffsetY,
+    required this.miuiIslandLabelLogoPath,
+    required this.miuiIslandLabelLogoCornerRadius,
+    required this.miuiIslandExpandedIconMode,
+    required this.miuiIslandExpandedIconPath,
+  });
+
+  LiveDisplaySettings copyWith({
+    bool? showCourseName,
+    bool? showLocation,
+    bool? showCountdown,
+    LiveCountdownTextStyle? countdownTextStyle,
+    bool? showStageText,
+    bool? useShortName,
+    bool? hidePrefixText,
+    LiveDuringClassTimeDisplayMode? duringClassTimeDisplayMode,
+    bool? enableMiuiIslandLabelImage,
+    MiuiIslandLabelStyle? miuiIslandLabelStyle,
+    MiuiIslandLabelContent? miuiIslandLabelContent,
+    String? miuiIslandLabelFontColor,
+    MiuiIslandLabelFontWeight? miuiIslandLabelFontWeight,
+    MiuiIslandLabelRenderQuality? miuiIslandLabelRenderQuality,
+    double? miuiIslandLabelFontSize,
+    double? miuiIslandLabelOffsetX,
+    double? miuiIslandLabelOffsetY,
+    String? miuiIslandLabelLogoPath,
+    bool clearMiuiIslandLabelLogoPath = false,
+    double? miuiIslandLabelLogoCornerRadius,
+    MiuiIslandExpandedIconMode? miuiIslandExpandedIconMode,
+    String? miuiIslandExpandedIconPath,
+    bool clearMiuiIslandExpandedIconPath = false,
+  }) {
+    return LiveDisplaySettings(
+      showCourseName: showCourseName ?? this.showCourseName,
+      showLocation: showLocation ?? this.showLocation,
+      showCountdown: showCountdown ?? this.showCountdown,
+      countdownTextStyle: countdownTextStyle ?? this.countdownTextStyle,
+      showStageText: showStageText ?? this.showStageText,
+      useShortName: useShortName ?? this.useShortName,
+      hidePrefixText: hidePrefixText ?? this.hidePrefixText,
+      duringClassTimeDisplayMode:
+          duringClassTimeDisplayMode ?? this.duringClassTimeDisplayMode,
+      enableMiuiIslandLabelImage:
+          enableMiuiIslandLabelImage ?? this.enableMiuiIslandLabelImage,
+      miuiIslandLabelStyle: miuiIslandLabelStyle ?? this.miuiIslandLabelStyle,
+      miuiIslandLabelContent:
+          miuiIslandLabelContent ?? this.miuiIslandLabelContent,
+      miuiIslandLabelFontColor:
+          miuiIslandLabelFontColor ?? this.miuiIslandLabelFontColor,
+      miuiIslandLabelFontWeight:
+          miuiIslandLabelFontWeight ?? this.miuiIslandLabelFontWeight,
+      miuiIslandLabelRenderQuality:
+          miuiIslandLabelRenderQuality ?? this.miuiIslandLabelRenderQuality,
+      miuiIslandLabelFontSize:
+          miuiIslandLabelFontSize ?? this.miuiIslandLabelFontSize,
+      miuiIslandLabelOffsetX:
+          miuiIslandLabelOffsetX ?? this.miuiIslandLabelOffsetX,
+      miuiIslandLabelOffsetY:
+          miuiIslandLabelOffsetY ?? this.miuiIslandLabelOffsetY,
+      miuiIslandLabelLogoPath: clearMiuiIslandLabelLogoPath
+          ? null
+          : miuiIslandLabelLogoPath ?? this.miuiIslandLabelLogoPath,
+      miuiIslandLabelLogoCornerRadius:
+          miuiIslandLabelLogoCornerRadius ??
+          this.miuiIslandLabelLogoCornerRadius,
+      miuiIslandExpandedIconMode:
+          miuiIslandExpandedIconMode ?? this.miuiIslandExpandedIconMode,
+      miuiIslandExpandedIconPath: clearMiuiIslandExpandedIconPath
+          ? null
+          : miuiIslandExpandedIconPath ?? this.miuiIslandExpandedIconPath,
+    );
+  }
+}
+
+class SectionTime {
+  final String startTime;
+  final String endTime;
+
+  const SectionTime({required this.startTime, required this.endTime});
+
+  Map<String, dynamic> toJson() {
+    return {'startTime': startTime, 'endTime': endTime};
+  }
+
+  factory SectionTime.fromJson(Map<String, dynamic> json) {
+    return SectionTime(
+      startTime: json['startTime'] as String,
+      endTime: json['endTime'] as String,
+    );
+  }
+
+  SectionTime copyWith({String? startTime, String? endTime}) {
+    return SectionTime(
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+    );
+  }
+
+  String get displayText => '$startTime-$endTime';
+}
+
+class TimetableSettings {
+  final List<SectionTime> sections;
+  final String? activeTimeSchemeId;
+  final double sectionHeight;
+  final double compactFontSize;
+  final bool timetableAutoFitSectionHeight;
+  final int semesterWeekCount;
+  final DateTime? semesterStartDate;
+  final bool enableHolidayMarking;
+  final bool timetableShowCurrentWeekCourses;
+  final bool timetableShowNonCurrentWeekCourses;
+  final bool showConflictBadgeOnTimetable;
+  final double timetableConflictCourseOpacity;
+  final bool courseCardShowName;
+  final bool courseCardShowTeacher;
+  final bool courseCardShowLocation;
+  final bool courseCardShowTime;
+  final bool courseCardShowTimeLabels;
+  final bool courseCardShowWeeks;
+  final bool courseCardShowDescription;
+  final CourseCardVerticalAlign courseCardVerticalAlign;
+  final CourseCardHorizontalAlign courseCardHorizontalAlign;
+  final double courseCardFontSize;
+  final TimetableTimeColumnWidthMode timetableTimeColumnWidthMode;
+  final double timetableCourseCardGap;
+  final TimetableCourseSpacingMode timetableCourseSpacingMode;
+  final WidgetBackgroundStyle widgetBackgroundStyle;
+  final bool widgetShowLocation;
+  final bool widgetShowCountdown;
+  final bool widgetHideCompletedCourses;
+  final double widgetHeightAdjustment;
+  final double widgetCornerRadius;
+  final int widgetCountdownLeadMinutes;
+  final LiveCountdownTextStyle widgetCountdownTextStyle;
+  final AppThemeMode appThemeMode;
+  final AppFontMode appFontMode;
+  final String appLocaleTag;
+  final HomeTitleStyle homeTitleStyle;
+  final TimetableHomeViewMode timetableHomeViewMode;
+  final BackToCurrentWeekButtonStyle timetableBackToCurrentWeekButtonStyle;
+  final double timetableFloatingBackToCurrentWeekButtonOpacity;
+  final int timetableLastViewedDayOfWeek;
+  final SectionTimeDisplayMode timetableSectionTimeDisplayMode;
+  final bool timetableHideWeekends;
+  final bool enableHaptics;
+  final bool liveShowCourseName;
+  final bool liveShowLocation;
+  final bool liveShowCountdown;
+  final LiveCountdownTextStyle liveCountdownTextStyle;
+  final bool liveShowStageText;
+  final bool liveEnableBeforeClass;
+  final bool liveEnableDuringClass;
+  final bool liveEnableBeforeEnd;
+  final bool livePromoteDuringClass;
+  final bool liveShowDuringClassNotification;
+  final bool liveUseShortName;
+  final bool liveHidePrefixText;
+  final LiveDuringClassTimeDisplayMode liveDuringClassTimeDisplayMode;
+  final bool liveEnableMiuiIslandLabelImage;
+  final bool liveDuringEndShowCourseName;
+  final bool liveDuringEndShowLocation;
+  final bool liveDuringEndShowCountdown;
+  final LiveCountdownTextStyle liveDuringEndCountdownTextStyle;
+  final bool liveDuringEndShowStageText;
+  final bool liveDuringEndUseShortName;
+  final bool liveDuringEndHidePrefixText;
+  final bool liveDuringEndFollowBeforeClass;
+  final LiveDuringClassTimeDisplayMode liveDuringEndTimeDisplayMode;
+  final bool liveDuringEndEnableMiuiIslandLabelImage;
+  final bool liveHideFromRecents;
+  final bool liveEnableLocalDiagnostics;
+  final MiuiIslandLabelStyle liveMiuiIslandLabelStyle;
+  final MiuiIslandLabelContent liveMiuiIslandLabelContent;
+  final String liveMiuiIslandLabelFontColor;
+  final MiuiIslandLabelFontWeight liveMiuiIslandLabelFontWeight;
+  final MiuiIslandLabelRenderQuality liveMiuiIslandLabelRenderQuality;
+  final double liveMiuiIslandLabelFontSize;
+  final double liveMiuiIslandLabelOffsetX;
+  final double liveMiuiIslandLabelOffsetY;
+  final String? liveMiuiIslandLabelLogoPath;
+  final double liveMiuiIslandLabelLogoCornerRadius;
+  final MiuiIslandExpandedIconMode liveMiuiIslandExpandedIconMode;
+  final String? liveMiuiIslandExpandedIconPath;
+  final MiuiIslandLabelStyle liveDuringEndMiuiIslandLabelStyle;
+  final MiuiIslandLabelContent liveDuringEndMiuiIslandLabelContent;
+  final String liveDuringEndMiuiIslandLabelFontColor;
+  final MiuiIslandLabelFontWeight liveDuringEndMiuiIslandLabelFontWeight;
+  final MiuiIslandLabelRenderQuality liveDuringEndMiuiIslandLabelRenderQuality;
+  final double liveDuringEndMiuiIslandLabelFontSize;
+  final double liveDuringEndMiuiIslandLabelOffsetX;
+  final double liveDuringEndMiuiIslandLabelOffsetY;
+  final String? liveDuringEndMiuiIslandLabelLogoPath;
+  final double liveDuringEndMiuiIslandLabelLogoCornerRadius;
+  final MiuiIslandExpandedIconMode liveDuringEndMiuiIslandExpandedIconMode;
+  final String? liveDuringEndMiuiIslandExpandedIconPath;
+  final int liveShowBeforeClassMinutes;
+  final int liveClassReminderStartMinutes;
+  final int liveEndSecondsCountdownThreshold;
+  final int liveTimeCorrectionSeconds;
+  final LiveBeforeClassQuickAction liveBeforeClassQuickAction;
+  final String themeSeedColor;
+  final String timetablePageBackgroundColor;
+  final bool timetableUseUnifiedCardColor;
+  final String timetableUnifiedCardColor;
+  final String appUpdateDownloadSource;
+  final String appUpdateMirrorPreset;
+  final bool appUpdateIncludePrerelease;
+  final String appUpdateMirrorUrlPrefix;
+
+  const TimetableSettings({
+    required this.sections,
+    this.activeTimeSchemeId,
+    this.sectionHeight = 68,
+    this.compactFontSize = 9,
+    this.timetableAutoFitSectionHeight = false,
+    this.semesterWeekCount = 20,
+    this.semesterStartDate,
+    this.enableHolidayMarking = true,
+    this.timetableShowCurrentWeekCourses = true,
+    this.timetableShowNonCurrentWeekCourses = false,
+    this.showConflictBadgeOnTimetable = true,
+    this.timetableConflictCourseOpacity = 0.72,
+    this.courseCardShowName = true,
+    this.courseCardShowTeacher = true,
+    this.courseCardShowLocation = true,
+    this.courseCardShowTime = false,
+    this.courseCardShowTimeLabels = true,
+    this.courseCardShowWeeks = false,
+    this.courseCardShowDescription = false,
+    this.courseCardVerticalAlign = CourseCardVerticalAlign.center,
+    this.courseCardHorizontalAlign = CourseCardHorizontalAlign.center,
+    this.courseCardFontSize = 9,
+    this.timetableTimeColumnWidthMode = TimetableTimeColumnWidthMode.narrow,
+    this.timetableCourseCardGap = 1.25,
+    this.timetableCourseSpacingMode = TimetableCourseSpacingMode.narrow,
+    this.widgetBackgroundStyle = WidgetBackgroundStyle.solid,
+    this.widgetShowLocation = true,
+    this.widgetShowCountdown = true,
+    this.widgetHideCompletedCourses = false,
+    this.widgetHeightAdjustment = -11,
+    this.widgetCornerRadius = 22,
+    this.widgetCountdownLeadMinutes = 20,
+    this.widgetCountdownTextStyle = LiveCountdownTextStyle.smart,
+    this.appThemeMode = AppThemeMode.system,
+    this.appFontMode = AppFontMode.system,
+    this.appLocaleTag = '',
+    this.homeTitleStyle = HomeTitleStyle.classic,
+    this.timetableHomeViewMode = TimetableHomeViewMode.week,
+    this.timetableBackToCurrentWeekButtonStyle =
+        BackToCurrentWeekButtonStyle.floating,
+    this.timetableFloatingBackToCurrentWeekButtonOpacity = 0.96,
+    this.timetableLastViewedDayOfWeek = 1,
+    this.timetableSectionTimeDisplayMode = SectionTimeDisplayMode.startAndEnd,
+    this.timetableHideWeekends = false,
+    this.enableHaptics = true,
+    this.liveShowCourseName = true,
+    this.liveShowLocation = true,
+    this.liveShowCountdown = true,
+    this.liveCountdownTextStyle = LiveCountdownTextStyle.smart,
+    this.liveShowStageText = true,
+    this.liveEnableBeforeClass = true,
+    this.liveEnableDuringClass = true,
+    this.liveEnableBeforeEnd = true,
+    this.livePromoteDuringClass = true,
+    this.liveShowDuringClassNotification = true,
+    this.liveUseShortName = true,
+    this.liveHidePrefixText = true,
+    this.liveDuringClassTimeDisplayMode =
+        LiveDuringClassTimeDisplayMode.nearest,
+    this.liveEnableMiuiIslandLabelImage = false,
+    this.liveDuringEndShowCourseName = true,
+    this.liveDuringEndShowLocation = true,
+    this.liveDuringEndShowCountdown = true,
+    this.liveDuringEndCountdownTextStyle = LiveCountdownTextStyle.smart,
+    this.liveDuringEndShowStageText = true,
+    this.liveDuringEndUseShortName = true,
+    this.liveDuringEndHidePrefixText = true,
+    this.liveDuringEndFollowBeforeClass = true,
+    this.liveDuringEndTimeDisplayMode = LiveDuringClassTimeDisplayMode.nearest,
+    this.liveDuringEndEnableMiuiIslandLabelImage = false,
+    this.liveHideFromRecents = false,
+    this.liveEnableLocalDiagnostics = false,
+    this.liveMiuiIslandLabelStyle = MiuiIslandLabelStyle.textOnly,
+    this.liveMiuiIslandLabelContent = MiuiIslandLabelContent.courseName,
+    this.liveMiuiIslandLabelFontColor = '#FFFFFF',
+    this.liveMiuiIslandLabelFontWeight = MiuiIslandLabelFontWeight.bold,
+    this.liveMiuiIslandLabelRenderQuality =
+        MiuiIslandLabelRenderQuality.standard,
+    this.liveMiuiIslandLabelFontSize = 14,
+    this.liveMiuiIslandLabelOffsetX = 0,
+    this.liveMiuiIslandLabelOffsetY = 0,
+    this.liveMiuiIslandLabelLogoPath,
+    this.liveMiuiIslandLabelLogoCornerRadius = 8,
+    this.liveMiuiIslandExpandedIconMode = MiuiIslandExpandedIconMode.appIcon,
+    this.liveMiuiIslandExpandedIconPath,
+    this.liveDuringEndMiuiIslandLabelStyle = MiuiIslandLabelStyle.textOnly,
+    this.liveDuringEndMiuiIslandLabelContent =
+        MiuiIslandLabelContent.courseName,
+    this.liveDuringEndMiuiIslandLabelFontColor = '#FFFFFF',
+    this.liveDuringEndMiuiIslandLabelFontWeight =
+        MiuiIslandLabelFontWeight.bold,
+    this.liveDuringEndMiuiIslandLabelRenderQuality =
+        MiuiIslandLabelRenderQuality.standard,
+    this.liveDuringEndMiuiIslandLabelFontSize = 14,
+    this.liveDuringEndMiuiIslandLabelOffsetX = 0,
+    this.liveDuringEndMiuiIslandLabelOffsetY = 0,
+    this.liveDuringEndMiuiIslandLabelLogoPath,
+    this.liveDuringEndMiuiIslandLabelLogoCornerRadius = 8,
+    this.liveDuringEndMiuiIslandExpandedIconMode =
+        MiuiIslandExpandedIconMode.appIcon,
+    this.liveDuringEndMiuiIslandExpandedIconPath,
+    this.liveShowBeforeClassMinutes = 20,
+    this.liveClassReminderStartMinutes = 0,
+    this.liveEndSecondsCountdownThreshold = 60,
+    this.liveTimeCorrectionSeconds = 0,
+    this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
+    this.themeSeedColor = '#2563EB',
+    this.timetablePageBackgroundColor = '#F8FAFC',
+    this.timetableUseUnifiedCardColor = false,
+    this.timetableUnifiedCardColor = '#2563EB',
+    this.appUpdateDownloadSource = 'mirror',
+    this.appUpdateMirrorPreset = 'ghfast',
+    this.appUpdateIncludePrerelease = false,
+    this.appUpdateMirrorUrlPrefix = defaultAppUpdateMirrorUrlPrefix,
+  });
+
+  factory TimetableSettings.defaults() {
+    return const TimetableSettings(
+      sections: [
+        SectionTime(startTime: '08:00', endTime: '08:45'),
+        SectionTime(startTime: '08:55', endTime: '09:40'),
+        SectionTime(startTime: '10:00', endTime: '10:45'),
+        SectionTime(startTime: '10:55', endTime: '11:40'),
+        SectionTime(startTime: '14:00', endTime: '14:45'),
+        SectionTime(startTime: '14:55', endTime: '15:40'),
+        SectionTime(startTime: '16:00', endTime: '16:45'),
+        SectionTime(startTime: '16:55', endTime: '17:40'),
+        SectionTime(startTime: '19:00', endTime: '19:45'),
+        SectionTime(startTime: '19:55', endTime: '20:40'),
+      ],
+      activeTimeSchemeId: null,
+      sectionHeight: 68,
+      compactFontSize: 9,
+      timetableAutoFitSectionHeight: false,
+      semesterWeekCount: 20,
+      semesterStartDate: null,
+      enableHolidayMarking: true,
+      timetableShowCurrentWeekCourses: true,
+      timetableShowNonCurrentWeekCourses: false,
+      showConflictBadgeOnTimetable: true,
+      timetableConflictCourseOpacity: 0.72,
+      courseCardShowName: true,
+      courseCardShowTeacher: true,
+      courseCardShowLocation: true,
+      courseCardShowTime: false,
+      courseCardShowTimeLabels: true,
+      courseCardShowWeeks: false,
+      courseCardShowDescription: false,
+      courseCardVerticalAlign: CourseCardVerticalAlign.center,
+      courseCardHorizontalAlign: CourseCardHorizontalAlign.center,
+      courseCardFontSize: 9,
+      timetableTimeColumnWidthMode: TimetableTimeColumnWidthMode.narrow,
+      timetableCourseCardGap: 1.25,
+      timetableCourseSpacingMode: TimetableCourseSpacingMode.narrow,
+      widgetBackgroundStyle: WidgetBackgroundStyle.solid,
+      widgetShowLocation: true,
+      widgetShowCountdown: true,
+      widgetHideCompletedCourses: false,
+      widgetHeightAdjustment: -11,
+      widgetCornerRadius: 22,
+      appThemeMode: AppThemeMode.system,
+      appFontMode: AppFontMode.system,
+      appLocaleTag: '',
+      homeTitleStyle: HomeTitleStyle.classic,
+      timetableHomeViewMode: TimetableHomeViewMode.week,
+      timetableBackToCurrentWeekButtonStyle:
+          BackToCurrentWeekButtonStyle.floating,
+      timetableFloatingBackToCurrentWeekButtonOpacity: 0.96,
+      timetableLastViewedDayOfWeek: 1,
+      timetableSectionTimeDisplayMode: SectionTimeDisplayMode.startAndEnd,
+      timetableHideWeekends: false,
+      enableHaptics: true,
+      liveShowCourseName: true,
+      liveShowLocation: true,
+      liveShowCountdown: true,
+      liveCountdownTextStyle: LiveCountdownTextStyle.smart,
+      liveShowStageText: true,
+      liveEnableBeforeClass: true,
+      liveEnableDuringClass: true,
+      liveEnableBeforeEnd: true,
+      livePromoteDuringClass: true,
+      liveShowDuringClassNotification: true,
+      liveUseShortName: true,
+      liveHidePrefixText: true,
+      liveDuringClassTimeDisplayMode: LiveDuringClassTimeDisplayMode.nearest,
+      liveEnableMiuiIslandLabelImage: false,
+      liveDuringEndShowCourseName: true,
+      liveDuringEndShowLocation: true,
+      liveDuringEndShowCountdown: true,
+      liveDuringEndCountdownTextStyle: LiveCountdownTextStyle.smart,
+      liveDuringEndShowStageText: true,
+      liveDuringEndUseShortName: true,
+      liveDuringEndHidePrefixText: true,
+      liveDuringEndFollowBeforeClass: true,
+      liveDuringEndTimeDisplayMode: LiveDuringClassTimeDisplayMode.nearest,
+      liveDuringEndEnableMiuiIslandLabelImage: false,
+      liveHideFromRecents: false,
+      liveEnableLocalDiagnostics: false,
+      liveMiuiIslandLabelStyle: MiuiIslandLabelStyle.textOnly,
+      liveMiuiIslandLabelContent: MiuiIslandLabelContent.courseName,
+      liveMiuiIslandLabelFontColor: '#FFFFFF',
+      liveMiuiIslandLabelFontWeight: MiuiIslandLabelFontWeight.bold,
+      liveMiuiIslandLabelRenderQuality: MiuiIslandLabelRenderQuality.standard,
+      liveMiuiIslandLabelFontSize: 14,
+      liveMiuiIslandLabelOffsetX: 0,
+      liveMiuiIslandLabelOffsetY: 0,
+      liveMiuiIslandLabelLogoPath: null,
+      liveMiuiIslandLabelLogoCornerRadius: 8,
+      liveMiuiIslandExpandedIconMode: MiuiIslandExpandedIconMode.appIcon,
+      liveMiuiIslandExpandedIconPath: null,
+      liveDuringEndMiuiIslandLabelStyle: MiuiIslandLabelStyle.textOnly,
+      liveDuringEndMiuiIslandLabelContent: MiuiIslandLabelContent.courseName,
+      liveDuringEndMiuiIslandLabelFontColor: '#FFFFFF',
+      liveDuringEndMiuiIslandLabelFontWeight: MiuiIslandLabelFontWeight.bold,
+      liveDuringEndMiuiIslandLabelRenderQuality:
+          MiuiIslandLabelRenderQuality.standard,
+      liveDuringEndMiuiIslandLabelFontSize: 14,
+      liveDuringEndMiuiIslandLabelOffsetX: 0,
+      liveDuringEndMiuiIslandLabelOffsetY: 0,
+      liveDuringEndMiuiIslandLabelLogoPath: null,
+      liveDuringEndMiuiIslandLabelLogoCornerRadius: 8,
+      liveDuringEndMiuiIslandExpandedIconMode:
+          MiuiIslandExpandedIconMode.appIcon,
+      liveDuringEndMiuiIslandExpandedIconPath: null,
+      liveShowBeforeClassMinutes: 20,
+      liveClassReminderStartMinutes: 0,
+      liveEndSecondsCountdownThreshold: 60,
+      liveTimeCorrectionSeconds: 0,
+      liveBeforeClassQuickAction: LiveBeforeClassQuickAction.none,
+      themeSeedColor: '#2563EB',
+      timetablePageBackgroundColor: '#F8FAFC',
+      timetableUseUnifiedCardColor: false,
+      timetableUnifiedCardColor: '#2563EB',
+      appUpdateDownloadSource: 'mirror',
+      appUpdateMirrorPreset: 'ghfast',
+      appUpdateIncludePrerelease: false,
+      appUpdateMirrorUrlPrefix: defaultAppUpdateMirrorUrlPrefix,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'sections': sections.map((section) => section.toJson()).toList(),
+      'activeTimeSchemeId': activeTimeSchemeId,
+      'sectionHeight': sectionHeight,
+      'compactFontSize': compactFontSize,
+      'timetableAutoFitSectionHeight': timetableAutoFitSectionHeight,
+      'semesterWeekCount': semesterWeekCount,
+      'semesterStartDate': semesterStartDate?.millisecondsSinceEpoch,
+      'enableHolidayMarking': enableHolidayMarking,
+      'timetableShowCurrentWeekCourses': timetableShowCurrentWeekCourses,
+      'timetableShowNonCurrentWeekCourses': timetableShowNonCurrentWeekCourses,
+      'showConflictBadgeOnTimetable': showConflictBadgeOnTimetable,
+      'timetableConflictCourseOpacity': timetableConflictCourseOpacity,
+      'courseCardShowName': courseCardShowName,
+      'courseCardShowTeacher': courseCardShowTeacher,
+      'courseCardShowLocation': courseCardShowLocation,
+      'courseCardShowTime': courseCardShowTime,
+      'courseCardShowTimeLabels': courseCardShowTimeLabels,
+      'courseCardShowWeeks': courseCardShowWeeks,
+      'courseCardShowDescription': courseCardShowDescription,
+      'courseCardVerticalAlign': courseCardVerticalAlign.value,
+      'courseCardHorizontalAlign': courseCardHorizontalAlign.value,
+      'courseCardFontSize': courseCardFontSize,
+      'timetableTimeColumnWidthMode': timetableTimeColumnWidthMode.value,
+      'timetableCourseCardGap': timetableCourseCardGap,
+      'timetableCourseSpacingMode': timetableCourseSpacingMode.value,
+      'widgetBackgroundStyle': widgetBackgroundStyle.value,
+      'widgetShowLocation': widgetShowLocation,
+      'widgetShowCountdown': widgetShowCountdown,
+      'widgetHideCompletedCourses': widgetHideCompletedCourses,
+      'widgetHeightAdjustment': widgetHeightAdjustment,
+      'widgetCornerRadius': widgetCornerRadius,
+      'widgetCountdownLeadMinutes': widgetCountdownLeadMinutes,
+      'widgetCountdownTextStyle': widgetCountdownTextStyle.value,
+      'appThemeMode': appThemeMode.value,
+      'appFontMode': appFontMode.value,
+      'appLocaleTag': appLocaleTag,
+      'homeTitleStyle': homeTitleStyle.value,
+      'timetableHomeViewMode': timetableHomeViewMode.value,
+      'timetableBackToCurrentWeekButtonStyle':
+          timetableBackToCurrentWeekButtonStyle.value,
+      'timetableFloatingBackToCurrentWeekButtonOpacity':
+          timetableFloatingBackToCurrentWeekButtonOpacity,
+      'timetableLastViewedDayOfWeek': timetableLastViewedDayOfWeek,
+      'timetableSectionTimeDisplayMode': timetableSectionTimeDisplayMode.value,
+      'timetableHideWeekends': timetableHideWeekends,
+      'enableHaptics': enableHaptics,
+      'liveShowCourseName': liveShowCourseName,
+      'liveShowLocation': liveShowLocation,
+      'liveShowCountdown': liveShowCountdown,
+      'liveCountdownTextStyle': liveCountdownTextStyle.value,
+      'liveShowStageText': liveShowStageText,
+      'liveEnableBeforeClass': liveEnableBeforeClass,
+      'liveEnableDuringClass': liveEnableDuringClass,
+      'liveEnableBeforeEnd': liveEnableBeforeEnd,
+      'livePromoteDuringClass': livePromoteDuringClass,
+      'liveShowDuringClassNotification': liveShowDuringClassNotification,
+      'liveUseShortName': liveUseShortName,
+      'liveHidePrefixText': liveHidePrefixText,
+      'liveDuringClassTimeDisplayMode': liveDuringClassTimeDisplayMode.value,
+      'liveEnableMiuiIslandLabelImage': liveEnableMiuiIslandLabelImage,
+      'liveDuringEndShowCourseName': liveDuringEndShowCourseName,
+      'liveDuringEndShowLocation': liveDuringEndShowLocation,
+      'liveDuringEndShowCountdown': liveDuringEndShowCountdown,
+      'liveDuringEndCountdownTextStyle': liveDuringEndCountdownTextStyle.value,
+      'liveDuringEndShowStageText': liveDuringEndShowStageText,
+      'liveDuringEndUseShortName': liveDuringEndUseShortName,
+      'liveDuringEndHidePrefixText': liveDuringEndHidePrefixText,
+      'liveDuringEndFollowBeforeClass': liveDuringEndFollowBeforeClass,
+      'liveDuringEndTimeDisplayMode': liveDuringEndTimeDisplayMode.value,
+      'liveDuringEndEnableMiuiIslandLabelImage':
+          liveDuringEndEnableMiuiIslandLabelImage,
+      'liveHideFromRecents': liveHideFromRecents,
+      'liveEnableLocalDiagnostics': liveEnableLocalDiagnostics,
+      'liveMiuiIslandLabelStyle': liveMiuiIslandLabelStyle.value,
+      'liveMiuiIslandLabelContent': liveMiuiIslandLabelContent.value,
+      'liveMiuiIslandLabelFontColor': liveMiuiIslandLabelFontColor,
+      'liveMiuiIslandLabelFontWeight': liveMiuiIslandLabelFontWeight.value,
+      'liveMiuiIslandLabelRenderQuality':
+          liveMiuiIslandLabelRenderQuality.value,
+      'liveMiuiIslandLabelFontSize': liveMiuiIslandLabelFontSize,
+      'liveMiuiIslandLabelOffsetX': liveMiuiIslandLabelOffsetX,
+      'liveMiuiIslandLabelOffsetY': liveMiuiIslandLabelOffsetY,
+      'liveMiuiIslandLabelLogoPath': liveMiuiIslandLabelLogoPath,
+      'liveMiuiIslandLabelLogoCornerRadius':
+          liveMiuiIslandLabelLogoCornerRadius,
+      'liveMiuiIslandExpandedIconMode': liveMiuiIslandExpandedIconMode.value,
+      'liveMiuiIslandExpandedIconPath': liveMiuiIslandExpandedIconPath,
+      'liveDuringEndMiuiIslandLabelStyle':
+          liveDuringEndMiuiIslandLabelStyle.value,
+      'liveDuringEndMiuiIslandLabelContent':
+          liveDuringEndMiuiIslandLabelContent.value,
+      'liveDuringEndMiuiIslandLabelFontColor':
+          liveDuringEndMiuiIslandLabelFontColor,
+      'liveDuringEndMiuiIslandLabelFontWeight':
+          liveDuringEndMiuiIslandLabelFontWeight.value,
+      'liveDuringEndMiuiIslandLabelRenderQuality':
+          liveDuringEndMiuiIslandLabelRenderQuality.value,
+      'liveDuringEndMiuiIslandLabelFontSize':
+          liveDuringEndMiuiIslandLabelFontSize,
+      'liveDuringEndMiuiIslandLabelOffsetX':
+          liveDuringEndMiuiIslandLabelOffsetX,
+      'liveDuringEndMiuiIslandLabelOffsetY':
+          liveDuringEndMiuiIslandLabelOffsetY,
+      'liveDuringEndMiuiIslandLabelLogoPath':
+          liveDuringEndMiuiIslandLabelLogoPath,
+      'liveDuringEndMiuiIslandLabelLogoCornerRadius':
+          liveDuringEndMiuiIslandLabelLogoCornerRadius,
+      'liveDuringEndMiuiIslandExpandedIconMode':
+          liveDuringEndMiuiIslandExpandedIconMode.value,
+      'liveDuringEndMiuiIslandExpandedIconPath':
+          liveDuringEndMiuiIslandExpandedIconPath,
+      'liveShowBeforeClassMinutes': liveShowBeforeClassMinutes,
+      'liveClassReminderStartMinutes': liveClassReminderStartMinutes,
+      'liveEndSecondsCountdownThreshold': liveEndSecondsCountdownThreshold,
+      'liveTimeCorrectionSeconds': liveTimeCorrectionSeconds,
+      'liveBeforeClassQuickAction': liveBeforeClassQuickAction.value,
+      'themeSeedColor': themeSeedColor,
+      'timetablePageBackgroundColor': timetablePageBackgroundColor,
+      'timetableUseUnifiedCardColor': timetableUseUnifiedCardColor,
+      'timetableUnifiedCardColor': timetableUnifiedCardColor,
+      'appUpdateDownloadSource': appUpdateDownloadSource,
+      'appUpdateMirrorPreset': appUpdateMirrorPreset,
+      'appUpdateIncludePrerelease': appUpdateIncludePrerelease,
+      'appUpdateMirrorUrlPrefix': appUpdateMirrorUrlPrefix,
+    };
+  }
+
+  factory TimetableSettings.fromJson(Map<String, dynamic> json) {
+    final rawSections = json['sections'] as List<dynamic>? ?? const [];
+    if (rawSections.isEmpty) {
+      return TimetableSettings.defaults();
+    }
+    final rawAppUpdateMirrorUrlPrefix =
+        json['appUpdateMirrorUrlPrefix'] as String? ??
+        defaultAppUpdateMirrorUrlPrefix;
+    final rawAppUpdateMirrorPreset = json['appUpdateMirrorPreset'] as String?;
+
+    return TimetableSettings(
+      sections: rawSections
+          .map(
+            (item) =>
+                SectionTime.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
+          .toList(),
+      activeTimeSchemeId: json['activeTimeSchemeId'] as String?,
+      sectionHeight: (json['sectionHeight'] as num?)?.toDouble() ?? 68,
+      compactFontSize: (json['compactFontSize'] as num?)?.toDouble() ?? 9,
+      timetableAutoFitSectionHeight:
+          json['timetableAutoFitSectionHeight'] as bool? ?? false,
+      semesterWeekCount: (json['semesterWeekCount'] as num?)?.toInt() ?? 20,
+      semesterStartDate: (json['semesterStartDate'] as num?) != null
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (json['semesterStartDate'] as num).toInt(),
+            )
+          : null,
+      enableHolidayMarking: json['enableHolidayMarking'] as bool? ?? true,
+      timetableShowCurrentWeekCourses: true,
+      timetableShowNonCurrentWeekCourses:
+          json['timetableShowNonCurrentWeekCourses'] as bool? ?? false,
+      showConflictBadgeOnTimetable:
+          json['showConflictBadgeOnTimetable'] as bool? ?? true,
+      timetableConflictCourseOpacity:
+          ((json['timetableConflictCourseOpacity'] as num?)?.toDouble() ?? 0.72)
+              .clamp(0.2, 1.0),
+      courseCardShowName: json['courseCardShowName'] as bool? ?? true,
+      courseCardShowTeacher: json['courseCardShowTeacher'] as bool? ?? true,
+      courseCardShowLocation: json['courseCardShowLocation'] as bool? ?? true,
+      courseCardShowTime: json['courseCardShowTime'] as bool? ?? false,
+      courseCardShowTimeLabels:
+          json['courseCardShowTimeLabels'] as bool? ?? true,
+      courseCardShowWeeks: json['courseCardShowWeeks'] as bool? ?? false,
+      courseCardShowDescription:
+          json['courseCardShowDescription'] as bool? ?? false,
+      courseCardVerticalAlign: CourseCardVerticalAlignX.fromValue(
+        json['courseCardVerticalAlign'] as String?,
+      ),
+      courseCardHorizontalAlign: CourseCardHorizontalAlignX.fromValue(
+        json['courseCardHorizontalAlign'] as String?,
+      ),
+      courseCardFontSize: (json['courseCardFontSize'] as num?)?.toDouble() ?? 9,
+      timetableTimeColumnWidthMode: TimetableTimeColumnWidthModeX.fromValue(
+        json['timetableTimeColumnWidthMode'] as String?,
+      ),
+      timetableCourseCardGap:
+          (json['timetableCourseCardGap'] as num?)?.toDouble() ??
+          ((json['timetableCourseSpacingMode'] as String?) == 'wide'
+              ? 2.0
+              : 1.25),
+      timetableCourseSpacingMode: TimetableCourseSpacingModeX.fromValue(
+        json['timetableCourseSpacingMode'] as String?,
+      ),
+      widgetBackgroundStyle: WidgetBackgroundStyleX.fromValue(
+        json['widgetBackgroundStyle'] as String?,
+      ),
+      widgetShowLocation: json['widgetShowLocation'] as bool? ?? true,
+      widgetShowCountdown: json['widgetShowCountdown'] as bool? ?? true,
+      widgetHideCompletedCourses:
+          json['widgetHideCompletedCourses'] as bool? ?? false,
+      widgetHeightAdjustment:
+          (json['widgetHeightAdjustment'] as num?)?.toDouble() ?? -11,
+      widgetCornerRadius:
+          (json['widgetCornerRadius'] as num?)?.toDouble() ?? 22,
+      widgetCountdownLeadMinutes:
+          (json['widgetCountdownLeadMinutes'] as num?)?.toInt() ?? 20,
+      widgetCountdownTextStyle: LiveCountdownTextStyleX.fromValue(
+          json['widgetCountdownTextStyle'] as String?),
+      appThemeMode: AppThemeModeX.fromValue(json['appThemeMode'] as String?),
+      appFontMode: AppFontModeX.fromValue(json['appFontMode'] as String?),
+      appLocaleTag: _normalizeAppLocaleTag(
+        json['appLocaleTag'] as String? ?? json['appLocaleMode'] as String?,
+      ),
+      homeTitleStyle: HomeTitleStyleX.fromValue(
+        json['homeTitleStyle'] as String?,
+      ),
+      timetableHomeViewMode: TimetableHomeViewModeX.fromValue(
+        json['timetableHomeViewMode'] as String?,
+      ),
+      timetableBackToCurrentWeekButtonStyle:
+          BackToCurrentWeekButtonStyleX.fromValue(
+            json['timetableBackToCurrentWeekButtonStyle'] as String?,
+          ),
+      timetableFloatingBackToCurrentWeekButtonOpacity:
+          ((json['timetableFloatingBackToCurrentWeekButtonOpacity'] as num?)
+                      ?.toDouble() ??
+                  0.96)
+              .clamp(0.55, 1.0),
+      timetableLastViewedDayOfWeek:
+          ((json['timetableLastViewedDayOfWeek'] as num?)?.toInt() ?? 1).clamp(
+            1,
+            7,
+          ),
+      timetableSectionTimeDisplayMode: SectionTimeDisplayModeX.fromValue(
+        json['timetableSectionTimeDisplayMode'] as String?,
+      ),
+      timetableHideWeekends: json['timetableHideWeekends'] as bool? ?? false,
+      enableHaptics: json['enableHaptics'] as bool? ?? true,
+      liveShowCourseName: json['liveShowCourseName'] as bool? ?? true,
+      liveShowLocation: json['liveShowLocation'] as bool? ?? true,
+      liveShowCountdown: json['liveShowCountdown'] as bool? ?? true,
+      liveCountdownTextStyle: LiveCountdownTextStyleX.fromValue(
+        json['liveCountdownTextStyle'] as String?,
+      ),
+      liveShowStageText: json['liveShowStageText'] as bool? ?? true,
+      liveEnableBeforeClass: json['liveEnableBeforeClass'] as bool? ?? true,
+      liveEnableDuringClass: json['liveEnableDuringClass'] as bool? ?? true,
+      liveEnableBeforeEnd: json['liveEnableBeforeEnd'] as bool? ?? true,
+      livePromoteDuringClass: json['livePromoteDuringClass'] as bool? ?? true,
+      liveShowDuringClassNotification:
+          json['liveShowDuringClassNotification'] as bool? ?? true,
+      liveUseShortName: json['liveUseShortName'] as bool? ?? true,
+      liveHidePrefixText: json['liveHidePrefixText'] as bool? ?? true,
+      liveDuringClassTimeDisplayMode: LiveDuringClassTimeDisplayModeX.fromValue(
+        json['liveDuringClassTimeDisplayMode'] as String?,
+      ),
+      liveEnableMiuiIslandLabelImage:
+          json['liveEnableMiuiIslandLabelImage'] as bool? ?? false,
+      liveDuringEndShowCourseName:
+          json['liveDuringEndShowCourseName'] as bool? ??
+          (json['liveShowCourseName'] as bool? ?? true),
+      liveDuringEndShowLocation:
+          json['liveDuringEndShowLocation'] as bool? ??
+          (json['liveShowLocation'] as bool? ?? true),
+      liveDuringEndShowCountdown:
+          json['liveDuringEndShowCountdown'] as bool? ??
+          (json['liveShowCountdown'] as bool? ?? true),
+      liveDuringEndCountdownTextStyle: LiveCountdownTextStyleX.fromValue(
+        json['liveDuringEndCountdownTextStyle'] as String? ??
+            json['liveCountdownTextStyle'] as String?,
+      ),
+      liveDuringEndShowStageText:
+          json['liveDuringEndShowStageText'] as bool? ??
+          (json['liveShowStageText'] as bool? ?? true),
+      liveDuringEndUseShortName:
+          json['liveDuringEndUseShortName'] as bool? ??
+          (json['liveUseShortName'] as bool? ?? true),
+      liveDuringEndHidePrefixText:
+          json['liveDuringEndHidePrefixText'] as bool? ??
+          (json['liveHidePrefixText'] as bool? ?? true),
+      liveDuringEndFollowBeforeClass:
+          json['liveDuringEndFollowBeforeClass'] as bool? ?? true,
+      liveDuringEndTimeDisplayMode: LiveDuringClassTimeDisplayModeX.fromValue(
+        json['liveDuringEndTimeDisplayMode'] as String? ??
+            json['liveDuringClassTimeDisplayMode'] as String?,
+      ),
+      liveDuringEndEnableMiuiIslandLabelImage:
+          json['liveDuringEndEnableMiuiIslandLabelImage'] as bool? ??
+          (json['liveEnableMiuiIslandLabelImage'] as bool? ?? false),
+      liveHideFromRecents: json['liveHideFromRecents'] as bool? ?? false,
+      liveEnableLocalDiagnostics:
+          json['liveEnableLocalDiagnostics'] as bool? ?? false,
+      liveMiuiIslandLabelStyle: MiuiIslandLabelStyleX.fromValue(
+        json['liveMiuiIslandLabelStyle'] as String?,
+      ),
+      liveMiuiIslandLabelContent: MiuiIslandLabelContentX.fromValue(
+        json['liveMiuiIslandLabelContent'] as String?,
+      ),
+      liveMiuiIslandLabelFontColor:
+          json['liveMiuiIslandLabelFontColor'] as String? ?? '#FFFFFF',
+      liveMiuiIslandLabelFontWeight: MiuiIslandLabelFontWeightX.fromValue(
+        json['liveMiuiIslandLabelFontWeight'] as String?,
+      ),
+      liveMiuiIslandLabelRenderQuality: MiuiIslandLabelRenderQualityX.fromValue(
+        json['liveMiuiIslandLabelRenderQuality'] as String?,
+      ),
+      liveMiuiIslandLabelFontSize:
+          (json['liveMiuiIslandLabelFontSize'] as num?)?.toDouble() ?? 14,
+      liveMiuiIslandLabelOffsetX:
+          (json['liveMiuiIslandLabelOffsetX'] as num?)?.toDouble() ?? 0,
+      liveMiuiIslandLabelOffsetY:
+          (json['liveMiuiIslandLabelOffsetY'] as num?)?.toDouble() ?? 0,
+      liveMiuiIslandLabelLogoPath:
+          json['liveMiuiIslandLabelLogoPath'] as String?,
+      liveMiuiIslandLabelLogoCornerRadius:
+          (json['liveMiuiIslandLabelLogoCornerRadius'] as num?)?.toDouble() ??
+          8,
+      liveMiuiIslandExpandedIconMode: MiuiIslandExpandedIconModeX.fromValue(
+        json['liveMiuiIslandExpandedIconMode'] as String?,
+      ),
+      liveMiuiIslandExpandedIconPath:
+          json['liveMiuiIslandExpandedIconPath'] as String?,
+      liveDuringEndMiuiIslandLabelStyle: MiuiIslandLabelStyleX.fromValue(
+        json['liveDuringEndMiuiIslandLabelStyle'] as String? ??
+            json['liveMiuiIslandLabelStyle'] as String?,
+      ),
+      liveDuringEndMiuiIslandLabelContent: MiuiIslandLabelContentX.fromValue(
+        json['liveDuringEndMiuiIslandLabelContent'] as String? ??
+            json['liveMiuiIslandLabelContent'] as String?,
+      ),
+      liveDuringEndMiuiIslandLabelFontColor:
+          json['liveDuringEndMiuiIslandLabelFontColor'] as String? ??
+          (json['liveMiuiIslandLabelFontColor'] as String? ?? '#FFFFFF'),
+      liveDuringEndMiuiIslandLabelFontWeight:
+          MiuiIslandLabelFontWeightX.fromValue(
+            json['liveDuringEndMiuiIslandLabelFontWeight'] as String? ??
+                json['liveMiuiIslandLabelFontWeight'] as String?,
+          ),
+      liveDuringEndMiuiIslandLabelRenderQuality:
+          MiuiIslandLabelRenderQualityX.fromValue(
+            json['liveDuringEndMiuiIslandLabelRenderQuality'] as String? ??
+                json['liveMiuiIslandLabelRenderQuality'] as String?,
+          ),
+      liveDuringEndMiuiIslandLabelFontSize:
+          (json['liveDuringEndMiuiIslandLabelFontSize'] as num?)?.toDouble() ??
+          ((json['liveMiuiIslandLabelFontSize'] as num?)?.toDouble() ?? 14),
+      liveDuringEndMiuiIslandLabelOffsetX:
+          (json['liveDuringEndMiuiIslandLabelOffsetX'] as num?)?.toDouble() ??
+          ((json['liveMiuiIslandLabelOffsetX'] as num?)?.toDouble() ?? 0),
+      liveDuringEndMiuiIslandLabelOffsetY:
+          (json['liveDuringEndMiuiIslandLabelOffsetY'] as num?)?.toDouble() ??
+          ((json['liveMiuiIslandLabelOffsetY'] as num?)?.toDouble() ?? 0),
+      liveDuringEndMiuiIslandLabelLogoPath:
+          json['liveDuringEndMiuiIslandLabelLogoPath'] as String? ??
+          json['liveMiuiIslandLabelLogoPath'] as String?,
+      liveDuringEndMiuiIslandLabelLogoCornerRadius:
+          (json['liveDuringEndMiuiIslandLabelLogoCornerRadius'] as num?)
+              ?.toDouble() ??
+          (json['liveMiuiIslandLabelLogoCornerRadius'] as num?)?.toDouble() ??
+          8,
+      liveDuringEndMiuiIslandExpandedIconMode:
+          MiuiIslandExpandedIconModeX.fromValue(
+            json['liveDuringEndMiuiIslandExpandedIconMode'] as String? ??
+                json['liveMiuiIslandExpandedIconMode'] as String?,
+          ),
+      liveDuringEndMiuiIslandExpandedIconPath:
+          json['liveDuringEndMiuiIslandExpandedIconPath'] as String? ??
+          json['liveMiuiIslandExpandedIconPath'] as String?,
+      liveShowBeforeClassMinutes:
+          (json['liveShowBeforeClassMinutes'] as num?)?.toInt() ?? 20,
+      liveClassReminderStartMinutes:
+          (json['liveClassReminderStartMinutes'] as num?)?.toInt() ?? 0,
+      liveEndSecondsCountdownThreshold:
+          (json['liveEndSecondsCountdownThreshold'] as num?)?.toInt() ?? 60,
+      liveTimeCorrectionSeconds:
+          (json['liveTimeCorrectionSeconds'] as num?)?.toInt() ?? 0,
+      liveBeforeClassQuickAction: LiveBeforeClassQuickActionX.fromValue(
+        json['liveBeforeClassQuickAction'] as String?,
+      ),
+      themeSeedColor: json['themeSeedColor'] as String? ?? '#2563EB',
+      timetablePageBackgroundColor:
+          json['timetablePageBackgroundColor'] as String? ?? '#F8FAFC',
+      timetableUseUnifiedCardColor:
+          json['timetableUseUnifiedCardColor'] as bool? ?? false,
+      timetableUnifiedCardColor:
+          json['timetableUnifiedCardColor'] as String? ?? '#2563EB',
+      appUpdateDownloadSource:
+          json['appUpdateDownloadSource'] as String? ?? 'mirror',
+      appUpdateMirrorPreset: (rawAppUpdateMirrorPreset == null
+          ? AppUpdateMirrorPresetX.fromUrlPrefix(
+              rawAppUpdateMirrorUrlPrefix,
+            ).value
+          : AppUpdateMirrorPresetX.fromValue(rawAppUpdateMirrorPreset).value),
+      appUpdateIncludePrerelease:
+          json['appUpdateIncludePrerelease'] as bool? ?? false,
+      appUpdateMirrorUrlPrefix: rawAppUpdateMirrorUrlPrefix,
+    );
+  }
+
+  String toJsonString() => jsonEncode(toJson());
+
+  factory TimetableSettings.fromJsonString(String jsonString) {
+    return TimetableSettings.fromJson(
+      jsonDecode(jsonString) as Map<String, dynamic>,
+    );
+  }
+
+  TimetableSettings copyWith({
+    List<SectionTime>? sections,
+    String? activeTimeSchemeId,
+    double? sectionHeight,
+    double? compactFontSize,
+    bool? timetableAutoFitSectionHeight,
+    int? semesterWeekCount,
+    DateTime? semesterStartDate,
+    bool? enableHolidayMarking,
+    bool? timetableShowCurrentWeekCourses,
+    bool? timetableShowNonCurrentWeekCourses,
+    bool? showConflictBadgeOnTimetable,
+    double? timetableConflictCourseOpacity,
+    bool? courseCardShowName,
+    bool? courseCardShowTeacher,
+    bool? courseCardShowLocation,
+    bool? courseCardShowTime,
+    bool? courseCardShowTimeLabels,
+    bool? courseCardShowWeeks,
+    bool? courseCardShowDescription,
+    CourseCardVerticalAlign? courseCardVerticalAlign,
+    CourseCardHorizontalAlign? courseCardHorizontalAlign,
+    double? courseCardFontSize,
+    TimetableTimeColumnWidthMode? timetableTimeColumnWidthMode,
+    double? timetableCourseCardGap,
+    TimetableCourseSpacingMode? timetableCourseSpacingMode,
+    WidgetBackgroundStyle? widgetBackgroundStyle,
+    bool? widgetShowLocation,
+    bool? widgetShowCountdown,
+    bool? widgetHideCompletedCourses,
+    double? widgetHeightAdjustment,
+    double? widgetCornerRadius,
+    int? widgetCountdownLeadMinutes,
+    LiveCountdownTextStyle? widgetCountdownTextStyle,
+    AppThemeMode? appThemeMode,
+    AppFontMode? appFontMode,
+    String? appLocaleTag,
+    HomeTitleStyle? homeTitleStyle,
+    TimetableHomeViewMode? timetableHomeViewMode,
+    BackToCurrentWeekButtonStyle? timetableBackToCurrentWeekButtonStyle,
+    double? timetableFloatingBackToCurrentWeekButtonOpacity,
+    int? timetableLastViewedDayOfWeek,
+    SectionTimeDisplayMode? timetableSectionTimeDisplayMode,
+    bool? timetableHideWeekends,
+    bool? enableHaptics,
+    bool? liveShowCourseName,
+    bool? liveShowLocation,
+    bool? liveShowCountdown,
+    LiveCountdownTextStyle? liveCountdownTextStyle,
+    bool? liveShowStageText,
+    bool? liveEnableBeforeClass,
+    bool? liveEnableDuringClass,
+    bool? liveEnableBeforeEnd,
+    bool? livePromoteDuringClass,
+    bool? liveShowDuringClassNotification,
+    bool? liveUseShortName,
+    bool? liveHidePrefixText,
+    LiveDuringClassTimeDisplayMode? liveDuringClassTimeDisplayMode,
+    bool? liveEnableMiuiIslandLabelImage,
+    bool? liveDuringEndShowCourseName,
+    bool? liveDuringEndShowLocation,
+    bool? liveDuringEndShowCountdown,
+    LiveCountdownTextStyle? liveDuringEndCountdownTextStyle,
+    bool? liveDuringEndShowStageText,
+    bool? liveDuringEndUseShortName,
+    bool? liveDuringEndHidePrefixText,
+    bool? liveDuringEndFollowBeforeClass,
+    LiveDuringClassTimeDisplayMode? liveDuringEndTimeDisplayMode,
+    bool? liveDuringEndEnableMiuiIslandLabelImage,
+    bool? liveHideFromRecents,
+    bool? liveEnableLocalDiagnostics,
+    MiuiIslandLabelStyle? liveMiuiIslandLabelStyle,
+    MiuiIslandLabelContent? liveMiuiIslandLabelContent,
+    String? liveMiuiIslandLabelFontColor,
+    MiuiIslandLabelFontWeight? liveMiuiIslandLabelFontWeight,
+    MiuiIslandLabelRenderQuality? liveMiuiIslandLabelRenderQuality,
+    double? liveMiuiIslandLabelFontSize,
+    double? liveMiuiIslandLabelOffsetX,
+    double? liveMiuiIslandLabelOffsetY,
+    String? liveMiuiIslandLabelLogoPath,
+    bool clearLiveMiuiIslandLabelLogoPath = false,
+    double? liveMiuiIslandLabelLogoCornerRadius,
+    MiuiIslandExpandedIconMode? liveMiuiIslandExpandedIconMode,
+    String? liveMiuiIslandExpandedIconPath,
+    bool clearLiveMiuiIslandExpandedIconPath = false,
+    MiuiIslandLabelStyle? liveDuringEndMiuiIslandLabelStyle,
+    MiuiIslandLabelContent? liveDuringEndMiuiIslandLabelContent,
+    String? liveDuringEndMiuiIslandLabelFontColor,
+    MiuiIslandLabelFontWeight? liveDuringEndMiuiIslandLabelFontWeight,
+    MiuiIslandLabelRenderQuality? liveDuringEndMiuiIslandLabelRenderQuality,
+    double? liveDuringEndMiuiIslandLabelFontSize,
+    double? liveDuringEndMiuiIslandLabelOffsetX,
+    double? liveDuringEndMiuiIslandLabelOffsetY,
+    String? liveDuringEndMiuiIslandLabelLogoPath,
+    bool clearLiveDuringEndMiuiIslandLabelLogoPath = false,
+    double? liveDuringEndMiuiIslandLabelLogoCornerRadius,
+    MiuiIslandExpandedIconMode? liveDuringEndMiuiIslandExpandedIconMode,
+    String? liveDuringEndMiuiIslandExpandedIconPath,
+    bool clearLiveDuringEndMiuiIslandExpandedIconPath = false,
+    int? liveShowBeforeClassMinutes,
+    int? liveClassReminderStartMinutes,
+    int? liveEndSecondsCountdownThreshold,
+    int? liveTimeCorrectionSeconds,
+    LiveBeforeClassQuickAction? liveBeforeClassQuickAction,
+    String? themeSeedColor,
+    String? timetablePageBackgroundColor,
+    bool? timetableUseUnifiedCardColor,
+    String? timetableUnifiedCardColor,
+    String? appUpdateDownloadSource,
+    String? appUpdateMirrorPreset,
+    bool? appUpdateIncludePrerelease,
+    String? appUpdateMirrorUrlPrefix,
+  }) {
+    return TimetableSettings(
+      sections: sections ?? this.sections,
+      activeTimeSchemeId: activeTimeSchemeId ?? this.activeTimeSchemeId,
+      sectionHeight: sectionHeight ?? this.sectionHeight,
+      compactFontSize: compactFontSize ?? this.compactFontSize,
+      timetableAutoFitSectionHeight:
+          timetableAutoFitSectionHeight ?? this.timetableAutoFitSectionHeight,
+      semesterWeekCount: semesterWeekCount ?? this.semesterWeekCount,
+      semesterStartDate: semesterStartDate ?? this.semesterStartDate,
+      enableHolidayMarking: enableHolidayMarking ?? this.enableHolidayMarking,
+      timetableShowCurrentWeekCourses: true,
+      timetableShowNonCurrentWeekCourses:
+          timetableShowNonCurrentWeekCourses ??
+          this.timetableShowNonCurrentWeekCourses,
+      showConflictBadgeOnTimetable:
+          showConflictBadgeOnTimetable ?? this.showConflictBadgeOnTimetable,
+      timetableConflictCourseOpacity:
+          (timetableConflictCourseOpacity ??
+                  this.timetableConflictCourseOpacity)
+              .clamp(0.2, 1.0),
+      courseCardShowName: courseCardShowName ?? this.courseCardShowName,
+      courseCardShowTeacher:
+          courseCardShowTeacher ?? this.courseCardShowTeacher,
+      courseCardShowLocation:
+          courseCardShowLocation ?? this.courseCardShowLocation,
+      courseCardShowTime: courseCardShowTime ?? this.courseCardShowTime,
+      courseCardShowTimeLabels:
+          courseCardShowTimeLabels ?? this.courseCardShowTimeLabels,
+      courseCardShowWeeks: courseCardShowWeeks ?? this.courseCardShowWeeks,
+      courseCardShowDescription:
+          courseCardShowDescription ?? this.courseCardShowDescription,
+      courseCardVerticalAlign:
+          courseCardVerticalAlign ?? this.courseCardVerticalAlign,
+      courseCardHorizontalAlign:
+          courseCardHorizontalAlign ?? this.courseCardHorizontalAlign,
+      courseCardFontSize: courseCardFontSize ?? this.courseCardFontSize,
+      timetableTimeColumnWidthMode:
+          timetableTimeColumnWidthMode ?? this.timetableTimeColumnWidthMode,
+      timetableCourseCardGap:
+          timetableCourseCardGap ?? this.timetableCourseCardGap,
+      timetableCourseSpacingMode:
+          timetableCourseSpacingMode ?? this.timetableCourseSpacingMode,
+      widgetBackgroundStyle:
+          widgetBackgroundStyle ?? this.widgetBackgroundStyle,
+      widgetShowLocation: widgetShowLocation ?? this.widgetShowLocation,
+      widgetShowCountdown: widgetShowCountdown ?? this.widgetShowCountdown,
+      widgetHideCompletedCourses:
+          widgetHideCompletedCourses ?? this.widgetHideCompletedCourses,
+      widgetHeightAdjustment:
+          widgetHeightAdjustment ?? this.widgetHeightAdjustment,
+      widgetCornerRadius: widgetCornerRadius ?? this.widgetCornerRadius,
+      widgetCountdownLeadMinutes: widgetCountdownLeadMinutes ?? this.widgetCountdownLeadMinutes,
+      widgetCountdownTextStyle: widgetCountdownTextStyle ?? this.widgetCountdownTextStyle,
+      appThemeMode: appThemeMode ?? this.appThemeMode,
+      appFontMode: appFontMode ?? this.appFontMode,
+      appLocaleTag: _normalizeAppLocaleTag(appLocaleTag ?? this.appLocaleTag),
+      homeTitleStyle: homeTitleStyle ?? this.homeTitleStyle,
+      timetableHomeViewMode:
+          timetableHomeViewMode ?? this.timetableHomeViewMode,
+      timetableBackToCurrentWeekButtonStyle:
+          timetableBackToCurrentWeekButtonStyle ??
+          this.timetableBackToCurrentWeekButtonStyle,
+      timetableFloatingBackToCurrentWeekButtonOpacity:
+          (timetableFloatingBackToCurrentWeekButtonOpacity ??
+                  this.timetableFloatingBackToCurrentWeekButtonOpacity)
+              .clamp(0.55, 1.0),
+      timetableLastViewedDayOfWeek:
+          (timetableLastViewedDayOfWeek ?? this.timetableLastViewedDayOfWeek)
+              .clamp(1, 7),
+      timetableSectionTimeDisplayMode:
+          timetableSectionTimeDisplayMode ??
+          this.timetableSectionTimeDisplayMode,
+      timetableHideWeekends:
+          timetableHideWeekends ?? this.timetableHideWeekends,
+      enableHaptics: enableHaptics ?? this.enableHaptics,
+      liveShowCourseName: liveShowCourseName ?? this.liveShowCourseName,
+      liveShowLocation: liveShowLocation ?? this.liveShowLocation,
+      liveShowCountdown: liveShowCountdown ?? this.liveShowCountdown,
+      liveCountdownTextStyle:
+          liveCountdownTextStyle ?? this.liveCountdownTextStyle,
+      liveShowStageText: liveShowStageText ?? this.liveShowStageText,
+      liveEnableBeforeClass:
+          liveEnableBeforeClass ?? this.liveEnableBeforeClass,
+      liveEnableDuringClass:
+          liveEnableDuringClass ?? this.liveEnableDuringClass,
+      liveEnableBeforeEnd: liveEnableBeforeEnd ?? this.liveEnableBeforeEnd,
+      livePromoteDuringClass:
+          livePromoteDuringClass ?? this.livePromoteDuringClass,
+      liveShowDuringClassNotification:
+          liveShowDuringClassNotification ??
+          this.liveShowDuringClassNotification,
+      liveUseShortName: liveUseShortName ?? this.liveUseShortName,
+      liveHidePrefixText: liveHidePrefixText ?? this.liveHidePrefixText,
+      liveDuringClassTimeDisplayMode:
+          liveDuringClassTimeDisplayMode ?? this.liveDuringClassTimeDisplayMode,
+      liveEnableMiuiIslandLabelImage:
+          liveEnableMiuiIslandLabelImage ?? this.liveEnableMiuiIslandLabelImage,
+      liveDuringEndShowCourseName:
+          liveDuringEndShowCourseName ?? this.liveDuringEndShowCourseName,
+      liveDuringEndShowLocation:
+          liveDuringEndShowLocation ?? this.liveDuringEndShowLocation,
+      liveDuringEndShowCountdown:
+          liveDuringEndShowCountdown ?? this.liveDuringEndShowCountdown,
+      liveDuringEndCountdownTextStyle:
+          liveDuringEndCountdownTextStyle ??
+          this.liveDuringEndCountdownTextStyle,
+      liveDuringEndShowStageText:
+          liveDuringEndShowStageText ?? this.liveDuringEndShowStageText,
+      liveDuringEndUseShortName:
+          liveDuringEndUseShortName ?? this.liveDuringEndUseShortName,
+      liveDuringEndHidePrefixText:
+          liveDuringEndHidePrefixText ?? this.liveDuringEndHidePrefixText,
+      liveDuringEndFollowBeforeClass:
+          liveDuringEndFollowBeforeClass ?? this.liveDuringEndFollowBeforeClass,
+      liveDuringEndTimeDisplayMode:
+          liveDuringEndTimeDisplayMode ?? this.liveDuringEndTimeDisplayMode,
+      liveDuringEndEnableMiuiIslandLabelImage:
+          liveDuringEndEnableMiuiIslandLabelImage ??
+          this.liveDuringEndEnableMiuiIslandLabelImage,
+      liveHideFromRecents: liveHideFromRecents ?? this.liveHideFromRecents,
+      liveEnableLocalDiagnostics:
+          liveEnableLocalDiagnostics ?? this.liveEnableLocalDiagnostics,
+      liveMiuiIslandLabelStyle:
+          liveMiuiIslandLabelStyle ?? this.liveMiuiIslandLabelStyle,
+      liveMiuiIslandLabelContent:
+          liveMiuiIslandLabelContent ?? this.liveMiuiIslandLabelContent,
+      liveMiuiIslandLabelFontColor:
+          liveMiuiIslandLabelFontColor ?? this.liveMiuiIslandLabelFontColor,
+      liveMiuiIslandLabelFontWeight:
+          liveMiuiIslandLabelFontWeight ?? this.liveMiuiIslandLabelFontWeight,
+      liveMiuiIslandLabelRenderQuality:
+          liveMiuiIslandLabelRenderQuality ??
+          this.liveMiuiIslandLabelRenderQuality,
+      liveMiuiIslandLabelFontSize:
+          liveMiuiIslandLabelFontSize ?? this.liveMiuiIslandLabelFontSize,
+      liveMiuiIslandLabelOffsetX:
+          liveMiuiIslandLabelOffsetX ?? this.liveMiuiIslandLabelOffsetX,
+      liveMiuiIslandLabelOffsetY:
+          liveMiuiIslandLabelOffsetY ?? this.liveMiuiIslandLabelOffsetY,
+      liveMiuiIslandLabelLogoPath: clearLiveMiuiIslandLabelLogoPath
+          ? null
+          : liveMiuiIslandLabelLogoPath ?? this.liveMiuiIslandLabelLogoPath,
+      liveMiuiIslandLabelLogoCornerRadius:
+          liveMiuiIslandLabelLogoCornerRadius ??
+          this.liveMiuiIslandLabelLogoCornerRadius,
+      liveMiuiIslandExpandedIconMode:
+          liveMiuiIslandExpandedIconMode ?? this.liveMiuiIslandExpandedIconMode,
+      liveMiuiIslandExpandedIconPath: clearLiveMiuiIslandExpandedIconPath
+          ? null
+          : liveMiuiIslandExpandedIconPath ??
+                this.liveMiuiIslandExpandedIconPath,
+      liveDuringEndMiuiIslandLabelStyle:
+          liveDuringEndMiuiIslandLabelStyle ??
+          this.liveDuringEndMiuiIslandLabelStyle,
+      liveDuringEndMiuiIslandLabelContent:
+          liveDuringEndMiuiIslandLabelContent ??
+          this.liveDuringEndMiuiIslandLabelContent,
+      liveDuringEndMiuiIslandLabelFontColor:
+          liveDuringEndMiuiIslandLabelFontColor ??
+          this.liveDuringEndMiuiIslandLabelFontColor,
+      liveDuringEndMiuiIslandLabelFontWeight:
+          liveDuringEndMiuiIslandLabelFontWeight ??
+          this.liveDuringEndMiuiIslandLabelFontWeight,
+      liveDuringEndMiuiIslandLabelRenderQuality:
+          liveDuringEndMiuiIslandLabelRenderQuality ??
+          this.liveDuringEndMiuiIslandLabelRenderQuality,
+      liveDuringEndMiuiIslandLabelFontSize:
+          liveDuringEndMiuiIslandLabelFontSize ??
+          this.liveDuringEndMiuiIslandLabelFontSize,
+      liveDuringEndMiuiIslandLabelOffsetX:
+          liveDuringEndMiuiIslandLabelOffsetX ??
+          this.liveDuringEndMiuiIslandLabelOffsetX,
+      liveDuringEndMiuiIslandLabelOffsetY:
+          liveDuringEndMiuiIslandLabelOffsetY ??
+          this.liveDuringEndMiuiIslandLabelOffsetY,
+      liveDuringEndMiuiIslandLabelLogoPath:
+          clearLiveDuringEndMiuiIslandLabelLogoPath
+          ? null
+          : liveDuringEndMiuiIslandLabelLogoPath ??
+                this.liveDuringEndMiuiIslandLabelLogoPath,
+      liveDuringEndMiuiIslandLabelLogoCornerRadius:
+          liveDuringEndMiuiIslandLabelLogoCornerRadius ??
+          this.liveDuringEndMiuiIslandLabelLogoCornerRadius,
+      liveDuringEndMiuiIslandExpandedIconMode:
+          liveDuringEndMiuiIslandExpandedIconMode ??
+          this.liveDuringEndMiuiIslandExpandedIconMode,
+      liveDuringEndMiuiIslandExpandedIconPath:
+          clearLiveDuringEndMiuiIslandExpandedIconPath
+          ? null
+          : liveDuringEndMiuiIslandExpandedIconPath ??
+                this.liveDuringEndMiuiIslandExpandedIconPath,
+      liveShowBeforeClassMinutes:
+          liveShowBeforeClassMinutes ?? this.liveShowBeforeClassMinutes,
+      liveClassReminderStartMinutes:
+          liveClassReminderStartMinutes ?? this.liveClassReminderStartMinutes,
+      liveEndSecondsCountdownThreshold:
+          liveEndSecondsCountdownThreshold ??
+          this.liveEndSecondsCountdownThreshold,
+      liveTimeCorrectionSeconds:
+          liveTimeCorrectionSeconds ?? this.liveTimeCorrectionSeconds,
+      liveBeforeClassQuickAction:
+          liveBeforeClassQuickAction ?? this.liveBeforeClassQuickAction,
+      themeSeedColor: themeSeedColor ?? this.themeSeedColor,
+      timetablePageBackgroundColor:
+          timetablePageBackgroundColor ?? this.timetablePageBackgroundColor,
+      timetableUseUnifiedCardColor:
+          timetableUseUnifiedCardColor ?? this.timetableUseUnifiedCardColor,
+      timetableUnifiedCardColor:
+          timetableUnifiedCardColor ?? this.timetableUnifiedCardColor,
+      appUpdateDownloadSource:
+          appUpdateDownloadSource ?? this.appUpdateDownloadSource,
+      appUpdateMirrorPreset:
+          appUpdateMirrorPreset ?? this.appUpdateMirrorPreset,
+      appUpdateIncludePrerelease:
+          appUpdateIncludePrerelease ?? this.appUpdateIncludePrerelease,
+      appUpdateMirrorUrlPrefix:
+          appUpdateMirrorUrlPrefix ?? this.appUpdateMirrorUrlPrefix,
+    );
+  }
+
+  int get sectionCount => sections.length;
+
+  LiveDisplaySettings get beforeClassDisplaySettings => LiveDisplaySettings(
+    showCourseName: liveShowCourseName,
+    showLocation: liveShowLocation,
+    showCountdown: liveShowCountdown,
+    countdownTextStyle: liveCountdownTextStyle,
+    showStageText: liveShowStageText,
+    useShortName: liveUseShortName,
+    hidePrefixText: liveHidePrefixText,
+    duringClassTimeDisplayMode: liveDuringClassTimeDisplayMode,
+    enableMiuiIslandLabelImage: liveEnableMiuiIslandLabelImage,
+    miuiIslandLabelStyle: liveMiuiIslandLabelStyle,
+    miuiIslandLabelContent: liveMiuiIslandLabelContent,
+    miuiIslandLabelFontColor: liveMiuiIslandLabelFontColor,
+    miuiIslandLabelFontWeight: liveMiuiIslandLabelFontWeight,
+    miuiIslandLabelRenderQuality: liveMiuiIslandLabelRenderQuality,
+    miuiIslandLabelFontSize: liveMiuiIslandLabelFontSize,
+    miuiIslandLabelOffsetX: liveMiuiIslandLabelOffsetX,
+    miuiIslandLabelOffsetY: liveMiuiIslandLabelOffsetY,
+    miuiIslandLabelLogoPath: liveMiuiIslandLabelLogoPath,
+    miuiIslandLabelLogoCornerRadius: liveMiuiIslandLabelLogoCornerRadius,
+    miuiIslandExpandedIconMode: liveMiuiIslandExpandedIconMode,
+    miuiIslandExpandedIconPath: liveMiuiIslandExpandedIconPath,
+  );
+
+  LiveDisplaySettings get duringEndDisplaySettings =>
+      liveDuringEndFollowBeforeClass
+      ? beforeClassDisplaySettings
+      : LiveDisplaySettings(
+          showCourseName: liveDuringEndShowCourseName,
+          showLocation: liveDuringEndShowLocation,
+          showCountdown: liveDuringEndShowCountdown,
+          countdownTextStyle: liveDuringEndCountdownTextStyle,
+          showStageText: liveDuringEndShowStageText,
+          useShortName: liveDuringEndUseShortName,
+          hidePrefixText: liveDuringEndHidePrefixText,
+          duringClassTimeDisplayMode: liveDuringEndTimeDisplayMode,
+          enableMiuiIslandLabelImage: liveDuringEndEnableMiuiIslandLabelImage,
+          miuiIslandLabelStyle: liveDuringEndMiuiIslandLabelStyle,
+          miuiIslandLabelContent: liveDuringEndMiuiIslandLabelContent,
+          miuiIslandLabelFontColor: liveDuringEndMiuiIslandLabelFontColor,
+          miuiIslandLabelFontWeight: liveDuringEndMiuiIslandLabelFontWeight,
+          miuiIslandLabelRenderQuality:
+              liveDuringEndMiuiIslandLabelRenderQuality,
+          miuiIslandLabelFontSize: liveDuringEndMiuiIslandLabelFontSize,
+          miuiIslandLabelOffsetX: liveDuringEndMiuiIslandLabelOffsetX,
+          miuiIslandLabelOffsetY: liveDuringEndMiuiIslandLabelOffsetY,
+          miuiIslandLabelLogoPath: liveDuringEndMiuiIslandLabelLogoPath,
+          miuiIslandLabelLogoCornerRadius:
+              liveDuringEndMiuiIslandLabelLogoCornerRadius,
+          miuiIslandExpandedIconMode: liveDuringEndMiuiIslandExpandedIconMode,
+          miuiIslandExpandedIconPath: liveDuringEndMiuiIslandExpandedIconPath,
+        );
+
+  TimetableSettings copyWithBeforeClassDisplaySettings(
+    LiveDisplaySettings settings, {
+    bool clearExpandedIconPath = false,
+    bool clearLabelLogoPath = false,
+  }) {
+    return copyWith(
+      liveShowCourseName: settings.showCourseName,
+      liveShowLocation: settings.showLocation,
+      liveShowCountdown: settings.showCountdown,
+      liveCountdownTextStyle: settings.countdownTextStyle,
+      liveShowStageText: settings.showStageText,
+      liveUseShortName: settings.useShortName,
+      liveHidePrefixText: settings.hidePrefixText,
+      liveDuringClassTimeDisplayMode: settings.duringClassTimeDisplayMode,
+      liveEnableMiuiIslandLabelImage: settings.enableMiuiIslandLabelImage,
+      liveMiuiIslandLabelStyle: settings.miuiIslandLabelStyle,
+      liveMiuiIslandLabelContent: settings.miuiIslandLabelContent,
+      liveMiuiIslandLabelFontColor: settings.miuiIslandLabelFontColor,
+      liveMiuiIslandLabelFontWeight: settings.miuiIslandLabelFontWeight,
+      liveMiuiIslandLabelRenderQuality: settings.miuiIslandLabelRenderQuality,
+      liveMiuiIslandLabelFontSize: settings.miuiIslandLabelFontSize,
+      liveMiuiIslandLabelOffsetX: settings.miuiIslandLabelOffsetX,
+      liveMiuiIslandLabelOffsetY: settings.miuiIslandLabelOffsetY,
+      liveMiuiIslandLabelLogoPath: settings.miuiIslandLabelLogoPath,
+      liveMiuiIslandLabelLogoCornerRadius:
+          settings.miuiIslandLabelLogoCornerRadius,
+      clearLiveMiuiIslandLabelLogoPath: clearLabelLogoPath,
+      liveMiuiIslandExpandedIconMode: settings.miuiIslandExpandedIconMode,
+      liveMiuiIslandExpandedIconPath: settings.miuiIslandExpandedIconPath,
+      clearLiveMiuiIslandExpandedIconPath: clearExpandedIconPath,
+    );
+  }
+
+  TimetableSettings copyWithDuringEndDisplaySettings(
+    LiveDisplaySettings settings, {
+    bool clearExpandedIconPath = false,
+    bool clearLabelLogoPath = false,
+  }) {
+    return copyWith(
+      liveDuringEndShowCourseName: settings.showCourseName,
+      liveDuringEndShowLocation: settings.showLocation,
+      liveDuringEndShowCountdown: settings.showCountdown,
+      liveDuringEndCountdownTextStyle: settings.countdownTextStyle,
+      liveDuringEndShowStageText: settings.showStageText,
+      liveDuringEndUseShortName: settings.useShortName,
+      liveDuringEndHidePrefixText: settings.hidePrefixText,
+      liveDuringEndTimeDisplayMode: settings.duringClassTimeDisplayMode,
+      liveDuringEndEnableMiuiIslandLabelImage:
+          settings.enableMiuiIslandLabelImage,
+      liveDuringEndMiuiIslandLabelStyle: settings.miuiIslandLabelStyle,
+      liveDuringEndMiuiIslandLabelContent: settings.miuiIslandLabelContent,
+      liveDuringEndMiuiIslandLabelFontColor: settings.miuiIslandLabelFontColor,
+      liveDuringEndMiuiIslandLabelFontWeight:
+          settings.miuiIslandLabelFontWeight,
+      liveDuringEndMiuiIslandLabelRenderQuality:
+          settings.miuiIslandLabelRenderQuality,
+      liveDuringEndMiuiIslandLabelFontSize: settings.miuiIslandLabelFontSize,
+      liveDuringEndMiuiIslandLabelOffsetX: settings.miuiIslandLabelOffsetX,
+      liveDuringEndMiuiIslandLabelOffsetY: settings.miuiIslandLabelOffsetY,
+      liveDuringEndMiuiIslandLabelLogoPath: settings.miuiIslandLabelLogoPath,
+      liveDuringEndMiuiIslandLabelLogoCornerRadius:
+          settings.miuiIslandLabelLogoCornerRadius,
+      clearLiveDuringEndMiuiIslandLabelLogoPath: clearLabelLogoPath,
+      liveDuringEndMiuiIslandExpandedIconMode:
+          settings.miuiIslandExpandedIconMode,
+      liveDuringEndMiuiIslandExpandedIconPath:
+          settings.miuiIslandExpandedIconPath,
+      clearLiveDuringEndMiuiIslandExpandedIconPath: clearExpandedIconPath,
+    );
+  }
+
+  List<int> get availableWeeks =>
+      List.generate(semesterWeekCount, (index) => index + 1);
+
+  SectionTime sectionAt(int section) => sections[section - 1];
+}
