@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -97,7 +97,7 @@ jobs:
             exit 1
           fi
           mkdir -p dist
-          cp "$APK_PATH" "dist/mikcb-${{ steps.meta.outputs.version_name }}-arm64-v8a.apk"
+          cp "$APK_PATH" "dist/mikcb-master-latest-arm64-v8a.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
@@ -107,3 +107,37 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      - name: Publish rolling GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: master-latest
+          RELEASE_APK: dist/mikcb-master-latest-arm64-v8a.apk
+          VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          cat > dist/release-notes.md <<EOF
+          此 APK 由 GitHub Actions 从 \`master\` 分支自动构建并覆盖更新。
+
+          - 版本：\`${VERSION_NAME}\`
+          - 提交：\`${GITHUB_SHA}\`
+          - 构建：\`${GITHUB_RUN_NUMBER}\`
+          EOF
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$RELEASE_APK" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Master Latest APK" \
+              --notes-file dist/release-notes.md \
+              --prerelease \
+              --latest=false
+          else
+            gh release create "$RELEASE_TAG" "$RELEASE_APK" \
+              --target "$GITHUB_SHA" \
+              --title "Master Latest APK" \
+              --notes-file dist/release-notes.md \
+              --prerelease \
+              --latest=false
+          fi
