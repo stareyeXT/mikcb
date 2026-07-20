@@ -1,0 +1,62 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Merge upstream into master
+    runs-on: ubuntu-latest
+    outputs:
+      updated: ${{ steps.merge.outputs.updated }}
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v6
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Configure Git identity
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/Mutx163/mikcb.git
+          git fetch upstream main --prune
+
+      - name: Merge upstream
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+            echo "master already contains upstream/main"
+            exit 0
+          fi
+
+          git merge --no-edit upstream/main
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push merged master
+        if: steps.merge.outputs.updated == 'true'
+        run: git push origin HEAD:master
+
+  build-release:
+    name: Build and publish updated APK
+    needs: sync
+    if: needs.sync.outputs.updated == 'true'
+    uses: ./.github/workflows/android-push-apk.yml
+    secrets: inherit

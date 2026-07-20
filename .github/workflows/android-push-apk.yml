@@ -5,6 +5,7 @@ on:
     branches:
       - master
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: master
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
