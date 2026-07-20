@@ -10,7 +10,9 @@ import 'package:university_timetable/l10n/app_localizations.dart';
 
 import '../providers/timetable_provider.dart';
 import '../utils/app_toast.dart';
+import '../services/lan_edit_foreground_service.dart';
 import '../services/lan_edit_network_utils.dart';
+import '../services/lan_edit_preferences.dart';
 import '../services/lan_edit_provider_host.dart';
 import '../services/lan_edit_server_service.dart';
 import '../services/lan_edit_session.dart';
@@ -25,33 +27,122 @@ class LanEditScreen extends StatefulWidget {
 
 class _LanEditScreenState extends State<LanEditScreen>
     with WidgetsBindingObserver {
-  final LanEditServerService _server = LanEditServerService();
+  /// Shared so the HTTP session can outlive this route when keep-alive is on.
+  final LanEditServerService _server = LanEditServerService.shared;
   LanEditSession? _session;
   String? _lanAddress;
   bool _isStarting = false;
   bool _isStopping = false;
+  bool _keepAliveWhenLeaving = LanEditPreferences.defaultKeepAliveWhenLeaving;
+  bool _preferencesLoaded = false;
   Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _server.onStopped = _handleServerStopped;
+    _server.addStoppedListener(_handleServerStopped);
+    // Restore immediately from the shared process server (before prefs / IP).
+    _applySharedServerState(syncOnly: true);
+    if (_server.isRunning) {
+      _startStatusTimer();
+    } else {
+      // Dart server already gone but Android notification may still be sticky.
+      unawaited(LanEditForegroundBridge.stop());
+    }
+    unawaited(_bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    final keepAlive = await LanEditPreferences.keepAliveWhenLeaving();
+    if (!mounted) {
+      return;
+    }
+    _server.retainAfterLeave = keepAlive;
+    setState(() {
+      _keepAliveWhenLeaving = keepAlive;
+      _preferencesLoaded = true;
+    });
+    // Re-apply after prefs; also refresh LAN URL / QR.
+    await _applySharedServerState(syncOnly: false);
+  }
+
+  /// Copies shared server → local UI fields.
+  ///
+  /// [syncOnly] skips the async IP lookup so the first frame can already show
+  /// PIN / port / stop button when re-entering a keep-alive session.
+  Future<void> _applySharedServerState({required bool syncOnly}) async {
+    final session = _server.session;
+    final isRunning = _server.isRunning && session != null;
+    if (!isRunning) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _session = null;
+        _lanAddress = null;
+        _isStopping = false;
+      });
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _session = session;
+    });
+
+    if (syncOnly) {
+      return;
+    }
+
+    try {
+      final ip = await findPreferredLanIPv4();
+      if (!mounted || !_server.isRunning || _server.session == null) {
+        return;
+      }
+      final port = _server.port;
+      setState(() {
+        _session = _server.session;
+        _lanAddress = (ip == null || port == null)
+            ? null
+            : encodeLanEditUrl(host: ip, port: port, pin: _server.session!.pin);
+      });
+      _startStatusTimer();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _session = _server.session;
+        // Keep PIN/port visible even if LAN IP detection fails.
+      });
+      _startStatusTimer();
+    }
+  }
+
+  void _syncRetainAfterLeave(bool enabled) {
+    _server.retainAfterLeave = enabled;
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _statusTimer?.cancel();
-    _server.onStopped = null;
-    _server.stop();
+    _server.removeStoppedListener(_handleServerStopped);
+    // Use the service flag (updated on toggle / prefs load / start), not a
+    // possibly-stale local field from a race with async bootstrap.
+    if (!_server.retainAfterLeave) {
+      unawaited(_server.stop(reason: 'page_pop'));
+    }
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _server.isRunning && mounted) {
-      setState(() {});
+    if (state == AppLifecycleState.resumed && mounted) {
+      unawaited(_applySharedServerState(syncOnly: false));
     }
   }
 
@@ -74,12 +165,22 @@ class _LanEditScreenState extends State<LanEditScreen>
       if (!mounted || !_server.isRunning) {
         return;
       }
-      setState(() {});
+      setState(() {
+        _session = _server.session;
+      });
     });
   }
 
+  Future<void> _onKeepAliveChanged(bool enabled) async {
+    setState(() {
+      _keepAliveWhenLeaving = enabled;
+    });
+    _syncRetainAfterLeave(enabled);
+    await LanEditPreferences.setKeepAliveWhenLeaving(enabled);
+  }
+
   Future<void> _startServer() async {
-    if (_server.isRunning || _isStarting) {
+    if (_server.isRunning || _isStarting || !_preferencesLoaded) {
       return;
     }
     setState(() {
@@ -90,18 +191,16 @@ class _LanEditScreenState extends State<LanEditScreen>
       await provider.initialize();
       final session = LanEditSession.create();
       final host = LanEditProviderHost(provider);
+      _syncRetainAfterLeave(_keepAliveWhenLeaving);
       await _server.start(host: host, session: session);
-      final ip = await findPreferredLanIPv4();
       if (!mounted) {
         return;
       }
       setState(() {
         _session = session;
-        _lanAddress = ip == null
-            ? null
-            : encodeLanEditUrl(host: ip, port: _server.port!, pin: session.pin);
       });
       _startStatusTimer();
+      await _applySharedServerState(syncOnly: false);
     } catch (error) {
       if (mounted) {
         showAppToast(
@@ -127,7 +226,14 @@ class _LanEditScreenState extends State<LanEditScreen>
     setState(() {
       _isStopping = true;
     });
-    await _server.stop();
+    await _server.stop(reason: 'manual');
+    if (mounted) {
+      setState(() {
+        _session = null;
+        _lanAddress = null;
+        _isStopping = false;
+      });
+    }
   }
 
   Future<void> _copyAddress() async {
@@ -156,15 +262,15 @@ class _LanEditScreenState extends State<LanEditScreen>
     final colors = context.theme.colors;
     final typo = context.theme.typography.body;
     final isRunning = _server.isRunning;
-    final session = _session;
+    final session = _session ?? _server.session;
 
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
       title: Text(l10n.lanEditTitle),
       child: HyperosListView(
         children: [
+          HyperosSectionLabel(text: l10n.lanEditTitle),
           HyperosControlCard(
-            subtitle: l10n.lanEditIntro,
             child: HyperosControlCardInset(
               child: isRunning
                   ? HyperosButton(
@@ -175,15 +281,28 @@ class _LanEditScreenState extends State<LanEditScreen>
                     )
                   : HyperosButton(
                       label: l10n.lanEditStart,
-                      loading: _isStarting,
-                      onPressed: _isStarting ? null : _startServer,
+                      loading: _isStarting || !_preferencesLoaded,
+                      onPressed: (_isStarting || !_preferencesLoaded)
+                          ? null
+                          : _startServer,
                     ),
             ),
           ),
+          const HyperosSectionGap(),
+          HyperosListGroup(
+            children: [
+              HyperosSwitchTile(
+                title: l10n.lanEditKeepAliveWhenLeavingTitle,
+                subtitle: l10n.lanEditKeepAliveWhenLeavingSubtitle,
+                value: _keepAliveWhenLeaving,
+                onChanged: _preferencesLoaded ? _onKeepAliveChanged : null,
+              ),
+            ],
+          ),
           if (isRunning && session != null) ...[
             const HyperosSectionGap(),
+            HyperosSectionLabel(text: l10n.lanEditStatusRunning),
             HyperosControlCard(
-              title: l10n.lanEditStatusRunning,
               child: HyperosControlCardInset(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,16 +340,11 @@ class _LanEditScreenState extends State<LanEditScreen>
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _InfoRow(
+                    _AddressBlock(
                       label: l10n.lanEditAddressLabel,
-                      value: _lanAddress ?? l10n.lanEditAddressUnavailable,
-                      trailing: _lanAddress == null
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.copy_rounded, size: 20),
-                              color: HyperosColors.actionIcon(context),
-                              onPressed: _copyAddress,
-                            ),
+                      address: _lanAddress,
+                      unavailableLabel: l10n.lanEditAddressUnavailable,
+                      onCopy: _lanAddress == null ? null : _copyAddress,
                     ),
                     _InfoRow(label: l10n.lanEditPinLabel, value: session.pin),
                     _InfoRow(
@@ -265,12 +379,80 @@ class _LanEditScreenState extends State<LanEditScreen>
   }
 }
 
+/// Address row aligned with [_InfoRow]: label left, value right (no chrome box).
+class _AddressBlock extends StatelessWidget {
+  const _AddressBlock({
+    required this.label,
+    required this.address,
+    required this.unavailableLabel,
+    this.onCopy,
+  });
+
+  final String label;
+  final String? address;
+  final String unavailableLabel;
+  final VoidCallback? onCopy;
+
+  /// Soft-wrap friendly URL: keep scheme + host together, prefer breaks at `?` / `&`.
+  static String formatForDisplay(String rawUrl) {
+    // Word joiner after "://" so the engine does not wrap between scheme and host.
+    var display = rawUrl.replaceFirst('://', '://\u2060');
+    // Prefer wrapping before query, not mid-token.
+    display = display.replaceAll('?', '\u200B?');
+    display = display.replaceAll('&', '\u200B&');
+    return display;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    final typo = context.theme.typography.body;
+    final hasAddress = address != null && address!.isNotEmpty;
+    final displayText = hasAddress
+        ? formatForDisplay(address!)
+        : unavailableLabel;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: typo.xs2.copyWith(color: colors.mutedForeground),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              displayText,
+              style: typo.sm.copyWith(
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+                color: hasAddress ? null : colors.mutedForeground,
+              ),
+            ),
+          ),
+          if (onCopy != null)
+            HyperosIconButton(
+              icon: Icons.copy_rounded,
+              iconSize: 20,
+              color: HyperosColors.actionIcon(context),
+              tooltip: MaterialLocalizations.of(context).copyButtonLabel,
+              onPressed: onCopy,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value, this.trailing});
+  const _InfoRow({required this.label, required this.value});
 
   final String label;
   final String value;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +477,6 @@ class _InfoRow extends StatelessWidget {
               style: typo.sm.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
-          ?trailing,
         ],
       ),
     );

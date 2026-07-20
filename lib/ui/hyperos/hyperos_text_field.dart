@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'hyperos_miuix_spec.dart';
 import 'hyperos_theme.dart';
+import 'hyperos_tokens.dart';
 
 /// HyperOS / Miuix-styled text field (16dp corner, 2dp focus border).
 class HyperosTextField extends StatelessWidget {
@@ -123,12 +124,106 @@ class HyperosTextField extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             helper!,
-            style: TextStyle(
-              fontSize: HyperosMiuixTypography.footnote1,
-              color: summary,
-            ),
+            style: HyperosTypography.sectionDescription(
+              context,
+            ).copyWith(color: summary),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// Tappable value field with the same chrome as [HyperosTextField].
+///
+/// Use on frosted sheets / forms instead of a bare [HyperosListTile] or white
+/// [HyperosListGroup] (those read as opaque square cards and break glass UI).
+class HyperosPickerField extends StatelessWidget {
+  const HyperosPickerField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onTap,
+    this.icon,
+    this.enabled = true,
+    this.isPlaceholder = false,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+  final IconData? icon;
+  final bool enabled;
+  final bool isPlaceholder;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = HyperosColors.primary(context);
+    final onSurface = HyperosColors.onSurface(context);
+    final summary = HyperosColors.onSurfaceVariantSummary(context);
+    final fill = HyperosColors.secondaryVariant(context);
+    final disabled = HyperosColors.disabledOnSurface(context);
+    final outline = HyperosColors.outline(context);
+    final canTap = enabled && onTap != null;
+    final radius = BorderRadius.circular(HyperosMiuixTextField.cornerRadius);
+    final valueColor = !canTap
+        ? disabled
+        : (isPlaceholder || value.isEmpty ? summary : onSurface);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: HyperosMiuixTextField.labelFontSizeNormal,
+            color: canTap ? onSurface : disabled,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Material(
+          color: canTap ? fill : fill.withValues(alpha: 0.5),
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: canTap ? onTap : null,
+            borderRadius: radius,
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: outline, width: 1),
+              ),
+              child: Padding(
+                padding: HyperosMiuixTextField.insideMargin,
+                child: Row(
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 20, color: canTap ? primary : disabled),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: Text(
+                        value.isEmpty ? '—' : value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: HyperosMiuixTextField.labelFontSizeNormal,
+                          color: valueColor,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: canTap ? summary : disabled,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -161,7 +256,7 @@ class HyperosTextFieldTile extends StatelessWidget {
             if (cardTitle != null) ...[
               Text(cardTitle!, style: HyperosTypography.title(context)),
               if (cardSubtitle != null) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: HyperosTokens.titleCaptionGap),
                 Text(
                   cardSubtitle!,
                   style: HyperosTypography.sectionDescription(context),

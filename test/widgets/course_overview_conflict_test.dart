@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:university_timetable/models/course.dart';
 import 'package:university_timetable/models/timetable_profile.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
-import 'package:university_timetable/providers/timetable_provider.dart';
 import 'package:university_timetable/screens/course_overview_screen.dart';
 import 'package:university_timetable/services/storage_service.dart';
 import '../helpers_test_app.dart';
@@ -44,9 +43,11 @@ void main() {
   const analyticsChannel = MethodChannel('com.mutx163.qingyu/umeng_analytics');
   const liveChannel = MethodChannel('com.mutx163.qingyu/miui_live');
 
-  setUp(() {
+  setUp(() async {
     StorageService().resetForTesting();
     _seedInitializedPrefs();
+    // Ensure mock prefs are live before any StorageService.init().
+    await SharedPreferences.getInstance();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(homeWidgetChannel, (call) async => null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -65,37 +66,37 @@ void main() {
   });
 
   testWidgets('course overview marks actual conflicts', (tester) async {
-    final provider = TimetableProvider(
-      autoInitialize: false,
-      enableLiveActivitySync: false,
-    );
-    await provider.initialize();
-    await provider.addCourse(
-      Course(
-        id: 'course-a',
-        name: '线性代数',
-        teacher: '张老师',
-        location: 'A101',
-        dayOfWeek: 2,
-        startSection: 1,
-        endSection: 2,
-        startTime: '08:00',
-        endTime: '09:40',
-      ),
-    );
-    await provider.addCourse(
-      Course(
-        id: 'course-b',
-        name: '大学物理',
-        teacher: '李老师',
-        location: 'B202',
-        dayOfWeek: 2,
-        startSection: 2,
-        endSection: 3,
-        startTime: '08:55',
-        endTime: '10:35',
-      ),
-    );
+    final provider = await createInitializedTestProvider(tester);
+    await runRealAsync(tester, () async {
+      await provider.addCourse(
+        Course(
+          id: 'course-a',
+          name: '线性代数',
+          teacher: '张老师',
+          location: 'A101',
+          dayOfWeek: 2,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+        ),
+      );
+    });
+    await runRealAsync(tester, () async {
+      await provider.addCourse(
+        Course(
+          id: 'course-b',
+          name: '大学物理',
+          teacher: '李老师',
+          location: 'B202',
+          dayOfWeek: 2,
+          startSection: 2,
+          endSection: 3,
+          startTime: '08:55',
+          endTime: '10:35',
+        ),
+      );
+    });
 
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
@@ -105,48 +106,54 @@ void main() {
     );
     await _pumpScreen(tester);
 
-    expect(find.textContaining('检测到 2 门排课存在实际冲突'), findsOneWidget);
-    expect(find.text('冲突 1 节'), findsNWidgets(2));
+    // Single entry into the dedicated conflict page (not the old banner/split list).
+    expect(find.text('查看冲突详情'), findsOneWidget);
+    // Two schedule entries participate in the conflict → "冲突 2 节".
+    expect(find.text('冲突 2 节'), findsOneWidget);
+    // Each conflicting course group is tagged in the main list.
+    expect(find.text('冲突'), findsNWidgets(2));
+    expect(find.text('线性代数'), findsOneWidget);
+    expect(find.text('大学物理'), findsOneWidget);
   });
 
   testWidgets('course overview does not mark same slot on different weeks', (
     tester,
   ) async {
-    final provider = TimetableProvider(
-      autoInitialize: false,
-      enableLiveActivitySync: false,
-    );
-    await provider.initialize();
-    await provider.addCourse(
-      Course(
-        id: 'course-a',
-        name: '高等数学',
-        teacher: '张老师',
-        location: 'A101',
-        dayOfWeek: 2,
-        startSection: 1,
-        endSection: 2,
-        startWeek: 1,
-        endWeek: 8,
-        startTime: '08:00',
-        endTime: '09:40',
-      ),
-    );
-    await provider.addCourse(
-      Course(
-        id: 'course-b',
-        name: '大学英语',
-        teacher: '李老师',
-        location: 'B202',
-        dayOfWeek: 2,
-        startSection: 1,
-        endSection: 2,
-        startWeek: 9,
-        endWeek: 16,
-        startTime: '08:00',
-        endTime: '09:40',
-      ),
-    );
+    final provider = await createInitializedTestProvider(tester);
+    await runRealAsync(tester, () async {
+      await provider.addCourse(
+        Course(
+          id: 'course-a',
+          name: '高等数学',
+          teacher: '张老师',
+          location: 'A101',
+          dayOfWeek: 2,
+          startSection: 1,
+          endSection: 2,
+          startWeek: 1,
+          endWeek: 8,
+          startTime: '08:00',
+          endTime: '09:40',
+        ),
+      );
+    });
+    await runRealAsync(tester, () async {
+      await provider.addCourse(
+        Course(
+          id: 'course-b',
+          name: '大学英语',
+          teacher: '李老师',
+          location: 'B202',
+          dayOfWeek: 2,
+          startSection: 1,
+          endSection: 2,
+          startWeek: 9,
+          endWeek: 16,
+          startTime: '08:00',
+          endTime: '09:40',
+        ),
+      );
+    });
 
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
@@ -156,8 +163,10 @@ void main() {
     );
     await _pumpScreen(tester);
 
-    expect(find.textContaining('检测到'), findsNothing);
+    expect(find.text('查看冲突详情'), findsNothing);
     expect(find.textContaining('冲突 '), findsNothing);
-    expect(find.textContaining('展开查看冲突详情'), findsNothing);
+    expect(find.text('冲突'), findsNothing);
+    expect(find.text('高等数学'), findsOneWidget);
+    expect(find.text('大学英语'), findsOneWidget);
   });
 }

@@ -7,6 +7,7 @@ import '../hyperos_miuix_spec.dart';
 import '../hyperos_switch.dart';
 import '../hyperos_theme.dart';
 import '../hyperos_tokens.dart';
+import 'adaptive_card.dart';
 import 'indicators.dart';
 import 'layout.dart';
 
@@ -133,12 +134,15 @@ class _HyperosPressableRowState extends State<HyperosPressableRow> {
       _resetGesture();
       return;
     }
+    // Keep press fill visible through a quick tap. [onTap] promotes this to
+    // the post-tap flash so anchored popups can paint one gray frame before
+    // [Navigator.pop] disposes the row.
+    _downPosition = null;
     if (_phase == PressPhase.pending) {
       _highlightTimer?.cancel();
-      _downPosition = null;
-      setState(() => _phase = PressPhase.idle);
+      _highlightTimer = null;
+      setState(() => _phase = PressPhase.highlighted);
     }
-    // Keep [highlighted] until [onTap] extends it through the page transition.
   }
 
   void _handleTapCancel() {
@@ -184,22 +188,33 @@ class _HyperosPressableRowState extends State<HyperosPressableRow> {
 
     final cardScope = HyperosControlCardScope.maybeOf(context);
     final cardRowScope = HyperosControlCardRowScope.maybeOf(context);
-    final clipHighlightBottom =
-        _showHighlight &&
-        cardScope != null &&
-        cardRowScope != null &&
-        cardRowScope.isLast;
+    final listScope = HyperosListTileScope.maybeOf(context);
+    final isFirst =
+        listScope?.isFirst ?? cardRowScope?.isFirst ?? cardScope != null;
+    final isLast =
+        listScope?.isLast ?? cardRowScope?.isLast ?? cardScope != null;
+    final surfaceRadius = HyperosSurfaceRadiusScope.of(
+      context,
+      fallback: cardScope?.cornerRadius,
+    );
+
+    final clipTop = _showHighlight && isFirst;
+    final clipBottom = _showHighlight && isLast;
 
     Widget highlighted = ColoredBox(
       color: _showHighlight ? highlight : bg,
       child: SizedBox(width: double.infinity, child: widget.child),
     );
 
-    if (clipHighlightBottom) {
+    if (clipTop || clipBottom) {
       highlighted = ClipRRect(
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(cardScope.cornerRadius),
-          bottomRight: Radius.circular(cardScope.cornerRadius),
+          topLeft: clipTop ? Radius.circular(surfaceRadius) : Radius.zero,
+          topRight: clipTop ? Radius.circular(surfaceRadius) : Radius.zero,
+          bottomLeft: clipBottom ? Radius.circular(surfaceRadius) : Radius.zero,
+          bottomRight: clipBottom
+              ? Radius.circular(surfaceRadius)
+              : Radius.zero,
         ),
         child: highlighted,
       );
@@ -343,10 +358,9 @@ class HyperosSwitchTile extends StatelessWidget {
     final titleStyle = HyperosTypography.listTitle(context).copyWith(
       color: enabled ? primaryText : primaryText.withValues(alpha: 0.45),
     );
+    final secondaryText = HyperosColors.secondaryText(context);
     final subtitleStyle = HyperosTypography.listDetail(context).copyWith(
-      color: enabled
-          ? HyperosColors.secondaryText(context)
-          : HyperosColors.secondaryText(context).withValues(alpha: 0.45),
+      color: enabled ? secondaryText : secondaryText.withValues(alpha: 0.45),
     );
 
     final rowHeight = subtitle != null
@@ -379,7 +393,7 @@ class HyperosSwitchTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: HyperosTokens.titleCaptionGap),
                   Text(subtitle!, style: subtitleStyle, softWrap: true),
                 ],
               ],
@@ -477,6 +491,7 @@ class HyperosChoiceTile extends StatelessWidget {
     this.prefix,
     this.dividerIndent,
     this.titleStyle,
+    this.forceHighlighted = false,
   });
 
   final String title;
@@ -502,9 +517,20 @@ class HyperosChoiceTile extends StatelessWidget {
   /// can preview the typeface directly inside the select list.
   final TextStyle? titleStyle;
 
+  /// Forces the press fill while selection chrome (blue title / check) has
+  /// already moved — used by the anchored select popup commit window.
+  final bool forceHighlighted;
+
   @override
   Widget build(BuildContext context) {
-    final cardColor = HyperosColors.card(context);
+    final isPopup = variant == HyperosChoiceVariant.popup;
+    final isDialog = variant == HyperosChoiceVariant.dialog;
+    // Popup / dialog sit on frosted [HyperosSheetFrame] or surfaceContainer —
+    // keep row fill transparent so the glass shows through (same as popup).
+    // List cards still use the opaque card surface.
+    final cardColor = (isPopup || isDialog)
+        ? Colors.transparent
+        : HyperosColors.card(context);
     final highlightColor = HyperosColors.rowHighlight(context);
     final effectiveEnabled = enabled && onTap != null;
     final primaryText = HyperosColors.primaryText(context);
@@ -518,67 +544,75 @@ class HyperosChoiceTile extends StatelessWidget {
     final resolvedTitleStyle = titleStyle != null
         ? baseTitleStyle.merge(titleStyle)
         : baseTitleStyle;
+    final secondaryText = HyperosColors.secondaryText(context);
     final subtitleStyle = HyperosTypography.listDetail(context).copyWith(
       color: effectiveEnabled
-          ? HyperosColors.secondaryText(context)
-          : HyperosColors.secondaryText(context).withValues(alpha: 0.45),
+          ? secondaryText
+          : secondaryText.withValues(alpha: 0.45),
     );
 
     final padding = _paddingForVariant(context);
-    final isPopup = variant == HyperosChoiceVariant.popup;
-    // Popup rows: total height = content min height + vertical padding so
-    // [hyperosSelectPopupEstimatedHeight] matches laid-out size.
+    // Popup rows stay content-sized (padding + title line), matching v2.0.4.
+    // Do not force settings-row min height — that stacks 56dp under the
+    // already-large first/last vertical padding and makes options look bloated.
     final rowHeight = isPopup
-        ? HyperosMiuixSpec.settingsRowMinHeight + padding.vertical
+        ? null
         : (subtitle != null ? HyperosTokens.listRowTwoLineMinHeight : null);
 
-    final row = hyperosListRowShell(
-      padding: padding,
-      minHeight: rowHeight,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (prefix != null &&
-              variant != HyperosChoiceVariant.popup &&
-              variant != HyperosChoiceVariant.dialog) ...[
-            prefix!,
-            const SizedBox(width: HyperosTokens.rowContentGap),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: resolvedTitleStyle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  DefaultTextStyle.merge(
-                    style: subtitleStyle,
-                    child: subtitle!,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) ...[const SizedBox(width: 6), trailing!],
-          if (selected) ...[
-            const SizedBox(width: 6),
-            HyperosSelectedCheckmark(
-              size: variant == HyperosChoiceVariant.radio ? 20 : 22,
-            ),
-          ],
+    final rowChild = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (prefix != null &&
+            variant != HyperosChoiceVariant.popup &&
+            variant != HyperosChoiceVariant.dialog) ...[
+          prefix!,
+          const SizedBox(width: HyperosTokens.rowContentGap),
         ],
-      ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: resolvedTitleStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: HyperosTokens.titleCaptionGap),
+                DefaultTextStyle.merge(style: subtitleStyle, child: subtitle!),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 6), trailing!],
+        if (selected) ...[
+          const SizedBox(width: 6),
+          HyperosSelectedCheckmark(
+            size: variant == HyperosChoiceVariant.radio ? 20 : 22,
+          ),
+        ],
+      ],
     );
+
+    // [hyperosListRowShell] always sizes to list-row min height when
+    // [minHeight] is null — popup must wrap with padding only.
+    final row = isPopup
+        ? Padding(padding: padding, child: rowChild)
+        : hyperosListRowShell(
+            padding: padding,
+            minHeight: rowHeight,
+            child: rowChild,
+          );
 
     return HyperosPressableRow(
       onTap: effectiveEnabled ? onTap : null,
+      // Popup / dialog options dismiss immediately on select; keep the same
+      // gray press fill as outer settings rows through the brief commit delay.
+      holdHighlightThroughTransition: isPopup || isDialog,
+      forceHighlighted: forceHighlighted,
       backgroundColor: cardColor,
       highlightColor: highlightColor,
       child: Column(
@@ -594,8 +628,8 @@ class HyperosChoiceTile extends StatelessWidget {
     );
   }
 
-  /// Settings-list rows use [HyperosListTileScope]; popup rows use the
-  /// explicit [isFirstInPopup] / [isLastInPopup] flags from the select body.
+  /// Settings-list rows use [HyperosListTileScope] / [HyperosControlCardRowScope];
+  /// popup rows use the explicit [isFirstInPopup] / [isLastInPopup] flags.
   EdgeInsets _paddingForVariant(BuildContext context) {
     if (variant == HyperosChoiceVariant.popup) {
       return _popupChoiceRowPadding(
@@ -603,10 +637,7 @@ class HyperosChoiceTile extends StatelessWidget {
         isLast: isLastInPopup,
       );
     }
-    final scope = HyperosListTileScope.maybeOf(context);
-    final isFirst = scope?.isFirst ?? true;
-    final isLast = scope?.isLast ?? true;
-    return HyperosTokens.chevronRowPadding(isFirst: isFirst, isLast: isLast);
+    return hyperosChevronRowPadding(context);
   }
 }
 
@@ -649,9 +680,11 @@ class HyperosNavTile extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.onTap,
+    this.onLongPress,
     this.details,
     this.iconAccent,
     this.enabled = true,
+    this.showChevron = true,
     this.holdHighlightThroughTransition = true,
   });
 
@@ -660,8 +693,12 @@ class HyperosNavTile extends StatelessWidget {
   final String? subtitle;
   final String? details;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final Color? iconAccent;
   final bool enabled;
+
+  /// When false, omits the trailing chevron (read-only preference rows).
+  final bool showChevron;
   final bool holdHighlightThroughTransition;
 
   @override
@@ -669,6 +706,8 @@ class HyperosNavTile extends StatelessWidget {
     final cardColor = HyperosColors.card(context);
     final highlightColor = HyperosColors.rowHighlight(context);
     final canTap = onTap != null && enabled;
+    final canLongPress = onLongPress != null && enabled;
+    final interactive = canTap || canLongPress;
     final primaryText = HyperosColors.primaryText(context);
 
     final rowHeight = subtitle != null
@@ -676,16 +715,20 @@ class HyperosNavTile extends StatelessWidget {
         : null;
 
     final titleStyle = HyperosTypography.listTitle(context).copyWith(
-      color: canTap ? primaryText : primaryText.withValues(alpha: 0.45),
+      color: interactive || !showChevron
+          ? primaryText
+          : primaryText.withValues(alpha: 0.45),
     );
     final subtitleStyle = HyperosTypography.listDetail(context).copyWith(
-      color: canTap
+      color: interactive || !showChevron
           ? HyperosColors.secondaryText(context)
           : HyperosColors.secondaryText(context).withValues(alpha: 0.45),
     );
 
     final row = hyperosListRowShell(
-      padding: hyperosChevronRowPadding(context),
+      padding: showChevron
+          ? hyperosChevronRowPadding(context)
+          : hyperosRowPadding(context),
       minHeight: rowHeight,
       child: Row(
         children: [
@@ -709,7 +752,7 @@ class HyperosNavTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: HyperosTokens.titleCaptionGap),
                   Text(subtitle!, style: subtitleStyle, softWrap: true),
                 ],
               ],
@@ -718,16 +761,21 @@ class HyperosNavTile extends StatelessWidget {
           if (details != null) ...[
             const SizedBox(width: 6),
             _hyperosTrailingDetails(context, details!),
-            SizedBox(width: HyperosTokens.detailChevronGap),
-          ] else
+            if (showChevron) SizedBox(width: HyperosTokens.detailChevronGap),
+          ] else if (showChevron)
             SizedBox(width: HyperosTokens.titleChevronGap),
-          Opacity(opacity: canTap ? 1 : 0.45, child: const HyperosChevron()),
+          if (showChevron)
+            Opacity(
+              opacity: interactive ? 1 : 0.45,
+              child: const HyperosChevron(),
+            ),
         ],
       ),
     );
 
     return HyperosPressableRow(
       onTap: canTap ? onTap : null,
+      onLongPress: canLongPress ? onLongPress : null,
       holdHighlightThroughTransition: holdHighlightThroughTransition,
       backgroundColor: cardColor,
       highlightColor: highlightColor,

@@ -25,6 +25,8 @@ import 'screens/lan_edit_screen.dart';
 import 'utils/app_toast.dart';
 import 'services/app_log_service.dart';
 import 'services/bundled_assets.dart';
+import 'services/debug_deep_link_navigator.dart';
+import 'services/debug_deep_link_service.dart';
 import 'services/lan_edit_foreground_service.dart';
 import 'services/app_migration_service.dart';
 import 'services/storage_service.dart';
@@ -51,10 +53,7 @@ ThemeMode _themeModeFromSettings(AppThemeMode mode) {
   };
 }
 
-FTypeface _typefaceWithFontFamily(
-  FTypeface source,
-  AppFontSpec fontSpec,
-) {
+FTypeface _typefaceWithFontFamily(FTypeface source, AppFontSpec fontSpec) {
   TextStyle withFont(TextStyle style) => style.copyWith(
     fontFamily: fontSpec.fontFamily,
     fontFamilyFallback: fontSpec.fontFamilyFallback.isEmpty
@@ -97,19 +96,28 @@ FThemeData _foruiThemeDataWithFont(FThemeData theme, AppFontSpec fontSpec) {
     style: theme.style,
     touch: true,
   );
-  final headerStylesDelta = FVariantsDelta<FHeaderVariantConstraint, FHeaderVariant,
-      FHeaderStyle, FHeaderStyleDelta>.delta([
-    FVariantOperation<FHeaderVariantConstraint, FHeaderVariant, FHeaderStyle,
-        FHeaderStyleDelta>.all(
-      FHeaderStyleDelta.delta(
-        titleTextStyle: TextStyleDelta.delta(
-          fontSize: 20,
-          fontWeight: FontWeight.w400,
-          height: 1.2,
+  final headerStylesDelta =
+      FVariantsDelta<
+        FHeaderVariantConstraint,
+        FHeaderVariant,
+        FHeaderStyle,
+        FHeaderStyleDelta
+      >.delta([
+        FVariantOperation<
+          FHeaderVariantConstraint,
+          FHeaderVariant,
+          FHeaderStyle,
+          FHeaderStyleDelta
+        >.all(
+          FHeaderStyleDelta.delta(
+            titleTextStyle: TextStyleDelta.delta(
+              fontSize: 20,
+              fontWeight: FontWeight.w400,
+              height: 1.2,
+            ),
+          ),
         ),
-      ),
-    ),
-  ]);
+      ]);
   final patchedHeaderStyles = headerStylesDelta(nextHeaderStyles);
 
   return FThemeData(
@@ -437,6 +445,11 @@ class MyApp extends StatelessWidget {
                 themeMode: _themeModeFromSettings(settings.themeMode),
                 theme: _appThemeData(foruiLight, fontSpec: fontSpec),
                 darkTheme: _appThemeData(foruiDark, fontSpec: fontSpec),
+                // Android VIEW deep links (mikcb-debug://...) are also delivered
+                // as Flutter pushNamed routes. We navigate via MethodChannel +
+                // DebugDeepLinkNavigator; swallow unknown platform routes so
+                // WidgetsApp does not assert "Could not find a generator".
+                onUnknownRoute: _buildUnknownPlatformRoute,
                 navigatorObservers: <NavigatorObserver>[
                   _AppRouteLogObserver(),
                   hyperosRouteObserver,
@@ -444,8 +457,10 @@ class MyApp extends StatelessWidget {
                 builder: (context, child) {
                   final isDark =
                       Theme.of(context).brightness == Brightness.dark;
-                  final frostedAppearance =
-                      context.watch<TimetableProvider>().settings.frostedAppearance;
+                  final frostedAppearance = context
+                      .watch<TimetableProvider>()
+                      .settings
+                      .frostedAppearance;
                   return HyperosLayoutTuningHost(
                     child: HyperosMotionHost(
                       child: FrostedAppearanceScope(
@@ -474,6 +489,35 @@ class MyApp extends StatelessWidget {
   }
 }
 
+/// Ghost route for platform deep links that Flutter auto pushNamed's.
+///
+/// Immediately removes itself so the navigation stack stays clean while our
+/// debug MethodChannel handler performs the real navigation.
+Route<dynamic> _buildUnknownPlatformRoute(RouteSettings settings) {
+  return PageRouteBuilder<void>(
+    settings: settings,
+    opaque: false,
+    barrierDismissible: true,
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+    pageBuilder: (context, animation, secondaryAnimation) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) {
+          return;
+        }
+        final route = ModalRoute.of(context);
+        if (route != null && route.isActive) {
+          final navigator = Navigator.of(context);
+          if (navigator.canPop()) {
+            navigator.removeRoute(route);
+          }
+        }
+      });
+      return const SizedBox.shrink();
+    },
+  );
+}
+
 class AppEntryScreen extends StatefulWidget {
   const AppEntryScreen({super.key});
 
@@ -496,11 +540,38 @@ class _AppEntryScreenState extends State<AppEntryScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     scheduleCloudSyncUpload = _cloudSyncCoordinator.scheduleUpload;
+    // Shared MethodChannel handler for external import + debug deep links.
+    // Installed early so routes that arrive during splash are not dropped.
+    unawaited(_installSharedMethodChannelHandler());
+    if (!kReleaseMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        DebugDeepLinkNavigator.attach(context);
+        unawaited(DebugDeepLinkService.drainPending());
+      });
+    }
     unawaited(_handleStartupFlows());
+  }
+
+  Future<void> _installSharedMethodChannelHandler() async {
+    const channel = MethodChannel('com.mutx163.qingyu/miui_live');
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'onExternalImportReceived') {
+        await Future.delayed(const Duration(milliseconds: 300));
+        await _checkPendingExternalImport();
+      } else if (call.method == 'onDebugRouteReceived' && !kReleaseMode) {
+        await DebugDeepLinkService.onNativeRouteReceived();
+      }
+    });
   }
 
   @override
   void dispose() {
+    if (!kReleaseMode) {
+      DebugDeepLinkNavigator.detach();
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -509,8 +580,27 @@ class _AppEntryScreenState extends State<AppEntryScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(refreshHyperosMotionFromAndroid());
-      unawaited(_cloudSyncCoordinator.maybePullRemote());
+      // Pull first, then live resync. Concurrent pull apply + handleAppResumed
+      // can push stale schedule snapshots to the island / home widget.
+      unawaited(_handleAppResumedWithCloudPull());
     }
+  }
+
+  /// Serializes WebDAV auto-pull and live-activity resume recovery.
+  Future<void> _handleAppResumedWithCloudPull() async {
+    await _cloudSyncCoordinator.maybePullRemote();
+    if (!mounted) {
+      return;
+    }
+    await context.read<TimetableProvider>().handleAppResumed();
+  }
+
+  /// Ensures local provider init finishes before the first auto pull apply.
+  Future<void> _initializeThenMaybePullRemote(
+    TimetableProvider provider,
+  ) async {
+    await provider.initialize();
+    await _cloudSyncCoordinator.maybePullRemote();
   }
 
   Future<void> _handleStartupFlows() async {
@@ -531,8 +621,8 @@ class _AppEntryScreenState extends State<AppEntryScreen>
         return;
       }
 
-      final hasAcceptedPrivacy =
-          await _storageService.hasAcceptedPrivacyPolicy();
+      final hasAcceptedPrivacy = await _storageService
+          .hasAcceptedPrivacyPolicy();
       final hasSeenGuide = await _storageService.hasSeenUserGuide();
       if (!mounted) {
         return;
@@ -542,8 +632,7 @@ class _AppEntryScreenState extends State<AppEntryScreen>
       // 老用户快速路径：不等待课表 JSON 解析/Provider 初始化，先进入主界面。
       if (hasAcceptedPrivacy && hasSeenGuide) {
         _cloudSyncCoordinator.bindProvider(provider);
-        unawaited(provider.initialize());
-        unawaited(_cloudSyncCoordinator.maybePullRemote());
+        unawaited(_initializeThenMaybePullRemote(provider));
         unawaited(AppLogService.instance.updatePrivacyAccepted(true));
         unawaited(UmengAnalyticsService.initializeIfNeeded());
         unawaited(_checkPendingExternalImport());
@@ -678,7 +767,8 @@ class _AppEntryScreenState extends State<AppEntryScreen>
       if (!await _storageService.isAppDataEffectivelyEmpty()) {
         return;
       }
-      final legacyPackage = await _migrationService.findInstalledLegacyPackage();
+      final legacyPackage = await _migrationService
+          .findInstalledLegacyPackage();
       if (!mounted || legacyPackage == null) {
         return;
       }
@@ -880,12 +970,6 @@ class _AppEntryScreenState extends State<AppEntryScreen>
   Future<void> _checkPendingExternalImport() async {
     try {
       const channel = MethodChannel('com.mutx163.qingyu/miui_live');
-      channel.setMethodCallHandler((call) async {
-        if (call.method == 'onExternalImportReceived') {
-          await Future.delayed(const Duration(milliseconds: 300));
-          await _checkPendingExternalImport();
-        }
-      });
       final payload = await channel.invokeMethod<Map<Object?, Object?>>(
         'getPendingExternalImport',
       );

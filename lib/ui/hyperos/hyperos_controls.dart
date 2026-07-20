@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'hyperos_blurred_header.dart';
 import 'hyperos_miuix_spec.dart';
+import 'hyperos_radius.dart';
+import 'hyperos_sheet.dart';
 import 'hyperos_text_field.dart';
 import 'hyperos_theme.dart';
 import 'hyperos_tokens.dart';
@@ -38,6 +40,13 @@ class HyperosControlCardInset extends StatelessWidget {
 
 /// White card for sliders, button groups, and custom controls (Miuix Card +
 /// preference section layout).
+///
+/// **Multi-row full-bleed content:** wrap rows in [HyperosControlCardRows].
+/// Do not stack [HyperosSelectTile] / [HyperosSliderTile] with [SizedBox]
+/// spacers in a plain [Column] — those tiles only get correct first/last
+/// padding through [HyperosControlCardRows] or [HyperosListGroup].
+///
+/// **List-only blocks** (no title/subtitle): prefer [HyperosListGroup] instead.
 class HyperosControlCard extends StatelessWidget {
   const HyperosControlCard({
     super.key,
@@ -53,6 +62,7 @@ class HyperosControlCard extends StatelessWidget {
 
   /// When true the card body stays edge-to-edge (e.g. [HyperosSelectTile] rows).
   /// Headerless cards with only inset content default to [headerlessBodyPadding].
+  /// Multi-row edge-to-edge bodies must use [HyperosControlCardRows].
   final bool edgeToEdge;
 
   /// Stadium outline for child-only status rows (e.g. connected account strip).
@@ -79,13 +89,13 @@ class HyperosControlCard extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      child: Material(
-        color: HyperosColors.card(context),
-        shape: useStrip ? HyperosTheme.stripShape() : HyperosTheme.cardShape(),
-        clipBehavior: Clip.antiAlias,
+      child: HyperosAdaptiveCard(
         child: HyperosControlCardScope(
           hasHeader: hasHeader,
-          bodyBottomInset: useStrip
+          // Edge-to-edge bodies already use first/last row padding (same as
+          // [HyperosListGroup]). An extra bodyBottomInset under a lone select
+          // row leaves a dead band and makes the label look top-heavy.
+          bodyBottomInset: useStrip || edgeToEdge
               ? 0
               : HyperosControlCardScope.defaultBodyBottomInset,
           cornerRadius: HyperosTokens.cardRadius,
@@ -116,7 +126,9 @@ class HyperosControlCard extends StatelessWidget {
                               ),
                             if (subtitle != null) ...[
                               if (title != null && title!.isNotEmpty)
-                                const SizedBox(height: 2),
+                                const SizedBox(
+                                  height: HyperosTokens.titleCaptionGap,
+                                ),
                               Text(
                                 subtitle!,
                                 style: HyperosTypography.sectionDescription(
@@ -308,23 +320,48 @@ class HyperosSlider extends StatelessWidget {
 }
 
 EdgeInsets _hyperosSliderTilePadding(BuildContext context) {
+  final listScope = HyperosListTileScope.maybeOf(context);
   final cardRowScope = HyperosControlCardRowScope.maybeOf(context);
   final cardScope = HyperosControlCardScope.maybeOf(context);
 
-  // Mirrors [hyperosSelectRowLayout]: when no explicit row scope exists but the
-  // tile sits inside a [HyperosControlCard], treat it as the card's last block.
-  final isLast = cardRowScope?.isLast ?? cardScope != null;
-
-  var bottom = 0.0;
-  if (cardScope != null && isLast) {
-    bottom = cardScope.bodyBottomInset;
+  // Inside [HyperosListGroup] or [HyperosControlCardRows]: same first/last
+  // row insets as switches and select tiles.
+  if (listScope != null) {
+    return HyperosTokens.rowPadding(
+      isFirst: listScope.isFirst,
+      isLast: listScope.isLast,
+    );
+  }
+  if (cardRowScope != null) {
+    var padding = HyperosTokens.rowPadding(
+      isFirst: cardRowScope.isFirst,
+      isLast: cardRowScope.isLast,
+    );
+    if (cardScope != null && cardRowScope.isLast) {
+      padding = padding.copyWith(
+        bottom: padding.bottom + cardScope.bodyBottomInset,
+      );
+    }
+    return padding;
   }
 
-  return EdgeInsets.fromLTRB(
+  // Bare [HyperosControlCard] with a single slider (no row scope): treat as
+  // the card's only full-bleed block. Multi-row cards must use
+  // [HyperosControlCardRows] instead of a plain Column + SizedBox.
+  if (cardScope != null) {
+    return EdgeInsets.fromLTRB(
+      HyperosControlCardScope.defaultHorizontalPadding,
+      12,
+      HyperosControlCardScope.defaultHorizontalPadding,
+      cardScope.bodyBottomInset,
+    );
+  }
+
+  return const EdgeInsets.fromLTRB(
     HyperosControlCardScope.defaultHorizontalPadding,
-    0,
+    12,
     HyperosControlCardScope.defaultHorizontalPadding,
-    bottom,
+    12,
   );
 }
 
@@ -396,29 +433,20 @@ Future<double?> showHyperosSliderValueDialog({
   required String confirmLabel,
   String? helper,
 }) {
-  return showModalBottomSheet<double>(
+  return showHyperosSheet<double>(
     context: context,
-    isScrollControlled: true,
-    isDismissible: true,
-    enableDrag: true,
     useRootNavigator: true,
-    backgroundColor: Colors.transparent,
     barrierColor: HyperosColors.windowDimming(context),
     builder: (sheetContext) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-        ),
-        child: _HyperosSliderValueSheetBody(
-          title: title,
-          value: value,
-          min: min,
-          max: max,
-          divisions: divisions,
-          cancelLabel: cancelLabel,
-          confirmLabel: confirmLabel,
-          helper: helper,
-        ),
+      return _HyperosSliderValueSheetBody(
+        title: title,
+        value: value,
+        min: min,
+        max: max,
+        divisions: divisions,
+        cancelLabel: cancelLabel,
+        confirmLabel: confirmLabel,
+        helper: helper,
       );
     },
   );
@@ -499,71 +527,49 @@ class _HyperosSliderValueSheetBodyState
 
   @override
   Widget build(BuildContext context) {
-    final background = HyperosColors.surfaceContainer(context);
-    final borderColor = HyperosColors.outline(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Material(
-          color: background,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(HyperosTokens.cardRadius),
-            side: BorderSide(color: borderColor.withValues(alpha: 0.2)),
+    return HyperosSheetFrame(
+      chrome: HyperosSheetChrome.floating,
+      frosted: true,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: HyperosTypography.sheetTitle(context)),
+          const SizedBox(height: 16),
+          HyperosTextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+            ],
+            helper:
+                _errorText ?? widget.helper ?? '${widget.min} - ${widget.max}',
+            onSubmitted: (_) => _submit(),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.title,
-                  style: HyperosTypography.sheetTitle(context),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: HyperosButton(
+                  label: widget.cancelLabel,
+                  variant: HyperosButtonVariant.secondary,
+                  expand: true,
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
-                const SizedBox(height: 16),
-                HyperosTextField(
-                  controller: _controller,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  helper:
-                      _errorText ??
-                      widget.helper ??
-                      '${widget.min} - ${widget.max}',
-                  onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: HyperosButton(
+                  label: widget.confirmLabel,
+                  expand: true,
+                  onPressed: _submit,
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: HyperosButton(
-                        label: widget.cancelLabel,
-                        variant: HyperosButtonVariant.secondary,
-                        expand: true,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: HyperosButton(
-                        label: widget.confirmLabel,
-                        expand: true,
-                        onPressed: _submit,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -750,6 +756,8 @@ class HyperosButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
+    final onFrostedPanel = HyperosFrostedPanelScope.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final (bg, fg, disabledBg, disabledFg) = switch (variant) {
       HyperosButtonVariant.primary => (
@@ -758,12 +766,26 @@ class HyperosButton extends StatelessWidget {
         HyperosColors.disabledPrimaryButton(context),
         HyperosColors.disabledOnPrimaryButton(context),
       ),
-      HyperosButtonVariant.secondary => (
-        HyperosColors.secondaryVariant(context),
-        HyperosColors.onSecondaryVariant(context),
-        HyperosColors.disabledSecondaryVariant(context),
-        HyperosColors.disabledOnSecondaryVariant(context),
-      ),
+      // Flat #E6E6E6 secondary washes out on milky frosted glass; use a clearer
+      // fill (+ light outline) when nested under [HyperosFrostedPanelScope].
+      HyperosButtonVariant.secondary =>
+        onFrostedPanel
+            ? (
+                isDark
+                    ? Colors.white.withValues(alpha: 0.16)
+                    : const Color(0xFFD8D8D8),
+                HyperosColors.onSecondaryVariant(context),
+                isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFE8E8E8),
+                HyperosColors.disabledOnSecondaryVariant(context),
+              )
+            : (
+                HyperosColors.secondary(context),
+                HyperosColors.onSecondaryVariant(context),
+                HyperosColors.disabledSecondary(context),
+                HyperosColors.disabledOnSecondaryVariant(context),
+              ),
       HyperosButtonVariant.destructive => (
         HyperosColors.error(context),
         HyperosColors.onError(context),
@@ -803,9 +825,19 @@ class HyperosButton extends StatelessWidget {
           )
         : Text(label, style: labelStyle);
 
+    final minHeight = dense ? 36.0 : HyperosMiuixButton.minHeight;
+    final cornerRadius = HyperosRadius.clampCornerRadius(
+      HyperosMiuixButton.cornerRadius,
+      minHeight,
+    );
+    final borderRadius = BorderRadius.circular(cornerRadius);
+    final outline = HyperosColors.outline(context);
+    final showFrostedSecondaryEdge =
+        onFrostedPanel && variant == HyperosButtonVariant.secondary;
+
     final button = Material(
       color: enabled ? bg : disabledBg,
-      borderRadius: BorderRadius.circular(HyperosMiuixButton.cornerRadius),
+      borderRadius: borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: enabled
@@ -814,16 +846,27 @@ class HyperosButton extends StatelessWidget {
                 onPressed!();
               }
             : null,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: dense ? 0 : HyperosMiuixButton.minWidth,
-            minHeight: dense ? 36 : HyperosMiuixButton.minHeight,
-          ),
-          child: Padding(
-            padding: dense
-                ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
-                : HyperosMiuixButton.insideMargin,
-            child: Center(child: labelChild),
+        borderRadius: borderRadius,
+        child: Ink(
+          decoration: showFrostedSecondaryEdge
+              ? BoxDecoration(
+                  borderRadius: borderRadius,
+                  border: Border.all(
+                    color: outline.withValues(alpha: isDark ? 0.45 : 0.55),
+                  ),
+                )
+              : null,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: dense ? 0 : HyperosMiuixButton.minWidth,
+              minHeight: minHeight,
+            ),
+            child: Padding(
+              padding: dense
+                  ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
+                  : HyperosMiuixButton.insideMargin,
+              child: Center(child: labelChild),
+            ),
           ),
         ),
       ),

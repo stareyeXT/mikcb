@@ -168,10 +168,9 @@ class HyperosCheckboxTile extends StatelessWidget {
     final titleStyle = HyperosTypography.listTitle(context).copyWith(
       color: enabled ? primaryText : primaryText.withValues(alpha: 0.45),
     );
+    final secondaryText = HyperosColors.secondaryText(context);
     final subtitleStyle = HyperosTypography.listDetail(context).copyWith(
-      color: enabled
-          ? HyperosColors.secondaryText(context)
-          : HyperosColors.secondaryText(context).withValues(alpha: 0.45),
+      color: enabled ? secondaryText : secondaryText.withValues(alpha: 0.45),
     );
 
     final row = ConstrainedBox(
@@ -190,7 +189,7 @@ class HyperosCheckboxTile extends StatelessWidget {
                 children: [
                   Text(title, style: titleStyle),
                   if (subtitle != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: HyperosTokens.titleCaptionGap),
                     Text(subtitle!, style: subtitleStyle),
                   ],
                 ],
@@ -238,10 +237,9 @@ class HyperosRadioTile<T> extends StatelessWidget {
     final titleStyle = HyperosTypography.listTitle(context).copyWith(
       color: enabled ? primaryText : primaryText.withValues(alpha: 0.45),
     );
+    final secondaryText = HyperosColors.secondaryText(context);
     final subtitleStyle = HyperosTypography.listDetail(context).copyWith(
-      color: enabled
-          ? HyperosColors.secondaryText(context)
-          : HyperosColors.secondaryText(context).withValues(alpha: 0.45),
+      color: enabled ? secondaryText : secondaryText.withValues(alpha: 0.45),
     );
 
     final row = ConstrainedBox(
@@ -260,7 +258,7 @@ class HyperosRadioTile<T> extends StatelessWidget {
                 children: [
                   Text(title, style: titleStyle),
                   if (subtitle != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: HyperosTokens.titleCaptionGap),
                     Text(subtitle!, style: subtitleStyle),
                   ],
                 ],

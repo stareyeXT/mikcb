@@ -15,6 +15,14 @@ class WebdavConnectionParams {
     required this.username,
     required this.password,
   });
+
+  /// Whether [url] uses HTTPS.
+  ///
+  /// Kept for callers that want to display a soft hint. HTTP is fully allowed
+  /// (campus portals, LAN WebDAV, release builds).
+  static bool isSecureUrl(String url) {
+    return url.trim().toLowerCase().startsWith('https://');
+  }
 }
 
 class WebdavGetBytesResult {

@@ -76,6 +76,7 @@ void main() {
     await pumpEventQueue();
     liveService.stopLiveUpdateCallCount = 0;
     liveService.startLiveUpdateCallCount = 0;
+    liveService.syncScheduleSnapshotCallCount = 0;
   }
 
   setUp(() {
@@ -393,6 +394,61 @@ void main() {
     expect(provider.courses.single.startTime, '07:50');
     expect(provider.courses.single.endTime, '09:30');
   });
+
+  test(
+    'applying a shorter time scheme is rejected when courses exceed it',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      final longScheme = await provider.createTimeScheme(
+        name: '24时段',
+        sections: List<SectionTime>.generate(
+          12,
+          (index) => SectionTime(
+            startTime: '${(8 + index).toString().padLeft(2, '0')}:00',
+            endTime: '${(8 + index).toString().padLeft(2, '0')}:45',
+          ),
+        ),
+      );
+      final applyLong = await provider.applyTimeScheme(longScheme.id);
+      expect(applyLong, isNull);
+
+      await provider.addCourse(
+        Course(
+          id: 'late-slot',
+          name: '晚课',
+          teacher: '王老师',
+          location: 'D101',
+          dayOfWeek: 1,
+          startSection: 11,
+          endSection: 12,
+          startTime: '18:00',
+          endTime: '19:45',
+        ),
+      );
+
+      final shortScheme = await provider.createTimeScheme(
+        name: '10节作息',
+        sections: List<SectionTime>.generate(
+          10,
+          (index) => SectionTime(
+            startTime: '${(8 + index).toString().padLeft(2, '0')}:00',
+            endTime: '${(8 + index).toString().padLeft(2, '0')}:45',
+          ),
+        ),
+      );
+
+      final applyShort = await provider.applyTimeScheme(shortScheme.id);
+      expect(applyShort, isNotNull);
+      expect(applyShort, contains('section_count_below_usage'));
+      expect(provider.settings.activeTimeSchemeId, longScheme.id);
+      expect(provider.settings.sectionCount, 12);
+    },
+  );
 
   test('updating a time scheme syncs profiles using it', () async {
     final provider = TimetableProvider(
@@ -1305,7 +1361,7 @@ void main() {
   });
 
   test(
-    'import parsed courses updates current timetable by replacement while keeping local metadata',
+    'import parsed courses updates matching same-day course while keeping local metadata',
     () async {
       final provider = TimetableProvider(
         autoInitialize: false,
@@ -1320,7 +1376,7 @@ void main() {
           shortName: '高数',
           teacher: '张老师',
           location: 'A101',
-          dayOfWeek: 1,
+          dayOfWeek: 3,
           startSection: 1,
           endSection: 2,
           startTime: '08:00',
@@ -1627,11 +1683,7 @@ void main() {
     () async {
       final provider = await _createLiveActivityTestProvider();
       await provider.addCourse(
-        _liveMondayCourse(
-          id: 'odd-week-course',
-          name: '单周课',
-          isOddWeek: true,
-        ),
+        _liveMondayCourse(id: 'odd-week-course', name: '单周课', isOddWeek: true),
       );
 
       final evenWeekMonday = DateTime(2026, 3, 30, 7, 45);
@@ -1687,7 +1739,10 @@ void main() {
     final week5Monday = DateTime(2026, 3, 23, 8, 30);
     final week6Monday = DateTime(2026, 3, 30, 7, 45);
     expect(provider.getLiveActivityCourseSelection(now: week5Monday), isNull);
-    expect(provider.getLiveActivityCourseSelection(now: week6Monday), isNotNull);
+    expect(
+      provider.getLiveActivityCourseSelection(now: week6Monday),
+      isNotNull,
+    );
   });
 
   test('live activity returns null when week is suspended', () async {
@@ -1721,12 +1776,17 @@ void main() {
           date: DateTime(2026, 4, 13),
           name: '测试假期',
           type: HolidayType.vacation,
+          groupId: 'custom-test-holiday',
         ),
       );
       await pumpEventQueue();
 
       final holidayMonday = DateTime(2026, 4, 13, 8, 30);
       expect(provider.isHoliday(holidayMonday), isTrue);
+      expect(
+        provider.getLiveActivityCourseSelection(now: holidayMonday),
+        isNull,
+      );
 
       liveService.stopLiveUpdateCallCount = 0;
       liveService.startLiveUpdateCallCount = 0;
@@ -1738,11 +1798,98 @@ void main() {
     },
   );
 
+  test(
+    'adding custom holiday for today stops live update via surface sync',
+    () async {
+      final liveService = TestMiuiLiveActivitiesService();
+      final provider = await _createLiveActivityTestProvider(
+        enableLiveActivitySync: true,
+        liveActivitiesService: liveService,
+      );
+      await settleLiveActivityStartup(liveService);
+      await provider.addCourse(
+        _liveMondayCourse(id: 'today-holiday-course', name: '今日假期课'),
+      );
+      provider.seedLiveActivityTrackingForTesting(
+        lastStageKey: 'seeded-stage',
+        currentCourseId: 'seeded-course',
+      );
+
+      liveService.stopLiveUpdateCallCount = 0;
+      liveService.startLiveUpdateCallCount = 0;
+      final today = DateTime.now();
+      await provider.addCustomHoliday(
+        HolidayEntry(
+          date: DateTime(today.year, today.month, today.day),
+          name: '今日放假',
+          type: HolidayType.vacation,
+          groupId: 'custom-today-holiday',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(provider.isHoliday(today), isTrue);
+      expect(provider.getLiveActivityCourseSelection(now: today), isNull);
+      expect(liveService.stopLiveUpdateCallCount, greaterThanOrEqualTo(1));
+      expect(liveService.startLiveUpdateCallCount, 0);
+    },
+  );
+
+  test(
+    'home widget snapshot uses full isHoliday semantics for custom vacation',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+      await provider.updateTimetableSettings(
+        provider.settings.copyWith(
+          semesterStartDate: DateTime(2026, 3, 23),
+          enableHolidayMarking: true,
+        ),
+      );
+      await provider.addCourse(
+        Course(
+          id: 'holiday-widget-course',
+          name: '操作系统',
+          teacher: '张老师',
+          location: 'A203',
+          dayOfWeek: 1,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+        ),
+      );
+      await provider.addCustomHoliday(
+        HolidayEntry(
+          date: DateTime(2026, 4, 13),
+          name: '测试假期',
+          type: HolidayType.vacation,
+          groupId: 'custom-widget-holiday',
+        ),
+      );
+      await pumpEventQueue();
+
+      final snapshot = provider.buildHomeWidgetSnapshot(
+        now: DateTime(2026, 4, 13, 8, 30),
+      );
+
+      expect(snapshot, isNotNull);
+      expect(snapshot!.state, HomeWidgetSnapshotState.holiday);
+      expect(snapshot.holidayName, '测试假期');
+      expect(snapshot.todayCourses, isEmpty);
+      expect(snapshot.highlightedCourse, isNull);
+      expect(snapshot.nextCourse, isNull);
+      expect(snapshot.totalTodayCourseCount, 0);
+    },
+  );
+
   test('live activity returns null before before-class window opens', () async {
     final provider = await _createLiveActivityTestProvider(
-      configureSettings: (settings) => settings.copyWith(
-        liveShowBeforeClassMinutes: 20,
-      ),
+      configureSettings: (settings) =>
+          settings.copyWith(liveShowBeforeClassMinutes: 20),
     );
     await provider.addCourse(
       _liveMondayCourse(id: 'window-course', name: '窗口课'),
@@ -1757,109 +1904,99 @@ void main() {
     );
   });
 
-  test('live activity returns null after class and stops live update', () async {
-    final liveService = TestMiuiLiveActivitiesService();
-    final provider = await _createLiveActivityTestProvider(
-      enableLiveActivitySync: true,
-      liveActivitiesService: liveService,
-    );
-    await settleLiveActivityStartup(liveService);
-    await provider.addCourse(
-      _liveMondayCourse(id: 'after-class-course', name: '课后课'),
-    );
-    await pumpEventQueue();
-
-    final afterClass = DateTime(2026, 3, 23, 10, 0);
-    expect(provider.getLiveActivityCourseSelection(now: afterClass), isNull);
-
-    liveService.stopLiveUpdateCallCount = 0;
-    liveService.startLiveUpdateCallCount = 0;
-    await provider.updateLiveActivityForTesting(syncScheduleSnapshot: false);
-    await pumpEventQueue();
-
-    expect(liveService.stopLiveUpdateCallCount, 1);
-    expect(liveService.startLiveUpdateCallCount, 0);
-  });
-
   test(
-    'live activity selection matches kotlin scheduler vectors',
+    'live activity returns null after class and stops live update',
     () async {
-      final provider = await _createLiveActivityTestProvider();
+      final liveService = TestMiuiLiveActivitiesService();
+      final provider = await _createLiveActivityTestProvider(
+        enableLiveActivitySync: true,
+        liveActivitiesService: liveService,
+      );
+      await settleLiveActivityStartup(liveService);
       await provider.addCourse(
-        _liveMondayCourse(
-          id: 'parity-course',
-          name: '对齐课',
-          isOddWeek: true,
-        ),
+        _liveMondayCourse(id: 'after-class-course', name: '课后课'),
       );
+      await pumpEventQueue();
 
-      final activeNow = DateTime(2026, 3, 23, 7, 45);
-      final inactiveWeekNow = DateTime(2026, 3, 30, 8, 30);
-      final afterEndWeekNow = DateTime(2026, 6, 15, 8, 30);
-      final beforeWindowNow = DateTime(2026, 3, 23, 7, 30);
-      final afterClassNow = DateTime(2026, 3, 23, 10, 0);
+      final afterClass = DateTime(2026, 3, 23, 10, 0);
+      expect(provider.getLiveActivityCourseSelection(now: afterClass), isNull);
 
-      expect(
-        provider.getLiveActivityCourseSelection(now: activeNow)?.currentCourse.id,
-        'parity-course',
-      );
-      expect(
-        provider.getLiveActivityCourseSelection(now: inactiveWeekNow),
-        isNull,
-      );
-      expect(
-        provider.getLiveActivityCourseSelection(now: afterEndWeekNow),
-        isNull,
-      );
-      expect(
-        provider.getLiveActivityCourseSelection(now: beforeWindowNow),
-        isNull,
-      );
-      expect(
-        provider.getLiveActivityCourseSelection(now: afterClassNow),
-        isNull,
-      );
+      liveService.stopLiveUpdateCallCount = 0;
+      liveService.startLiveUpdateCallCount = 0;
+      await provider.updateLiveActivityForTesting(syncScheduleSnapshot: false);
+      await pumpEventQueue();
 
-      final startTime = LiveActivityLogic.buildCourseDateTime(
-        activeNow,
-        '08:00',
-      );
-      final endTime = LiveActivityLogic.buildCourseDateTime(activeNow, '09:40');
-      expect(startTime, isNotNull);
-      expect(endTime, isNotNull);
-      expect(
-        LiveActivityLogic.resolveLiveActivityStage(
-          currentTime: activeNow,
-          startTime: startTime!,
-          endTime: endTime!,
-          aheadTime: startTime.subtract(const Duration(minutes: 20)),
-          settings: provider.settings,
-          endReminderWindow: const Duration(minutes: 10),
-        ),
-        LiveActivityStage.beforeClass,
-      );
-      expect(
-        LiveActivityLogic.resolveLiveActivityStage(
-          currentTime: beforeWindowNow,
-          startTime: startTime,
-          endTime: endTime,
-          aheadTime: startTime.subtract(const Duration(minutes: 20)),
-          settings: provider.settings,
-          endReminderWindow: const Duration(minutes: 10),
-        ),
-        isNull,
-      );
-      expect(
-        LiveActivityLogic.resolveLiveActivityStage(
-          currentTime: afterClassNow,
-          startTime: startTime,
-          endTime: endTime,
-          aheadTime: startTime.subtract(const Duration(minutes: 20)),
-          settings: provider.settings,
-          endReminderWindow: const Duration(minutes: 10),
-        ),
-        isNull,
-      );
+      expect(liveService.stopLiveUpdateCallCount, 1);
+      expect(liveService.startLiveUpdateCallCount, 0);
     },
   );
+
+  test('live activity selection matches kotlin scheduler vectors', () async {
+    final provider = await _createLiveActivityTestProvider();
+    await provider.addCourse(
+      _liveMondayCourse(id: 'parity-course', name: '对齐课', isOddWeek: true),
+    );
+
+    final activeNow = DateTime(2026, 3, 23, 7, 45);
+    final inactiveWeekNow = DateTime(2026, 3, 30, 8, 30);
+    final afterEndWeekNow = DateTime(2026, 6, 15, 8, 30);
+    final beforeWindowNow = DateTime(2026, 3, 23, 7, 30);
+    final afterClassNow = DateTime(2026, 3, 23, 10, 0);
+
+    expect(
+      provider.getLiveActivityCourseSelection(now: activeNow)?.currentCourse.id,
+      'parity-course',
+    );
+    expect(
+      provider.getLiveActivityCourseSelection(now: inactiveWeekNow),
+      isNull,
+    );
+    expect(
+      provider.getLiveActivityCourseSelection(now: afterEndWeekNow),
+      isNull,
+    );
+    expect(
+      provider.getLiveActivityCourseSelection(now: beforeWindowNow),
+      isNull,
+    );
+    expect(provider.getLiveActivityCourseSelection(now: afterClassNow), isNull);
+
+    final startTime = LiveActivityLogic.buildCourseDateTime(activeNow, '08:00');
+    final endTime = LiveActivityLogic.buildCourseDateTime(activeNow, '09:40');
+    expect(startTime, isNotNull);
+    expect(endTime, isNotNull);
+    expect(
+      LiveActivityLogic.resolveLiveActivityStage(
+        currentTime: activeNow,
+        startTime: startTime!,
+        endTime: endTime!,
+        aheadTime: startTime.subtract(const Duration(minutes: 20)),
+        settings: provider.settings,
+        endReminderWindow: const Duration(minutes: 10),
+      ),
+      LiveActivityStage.beforeClass,
+    );
+    expect(
+      LiveActivityLogic.resolveLiveActivityStage(
+        currentTime: beforeWindowNow,
+        startTime: startTime,
+        endTime: endTime,
+        aheadTime: startTime.subtract(const Duration(minutes: 20)),
+        settings: provider.settings,
+        endReminderWindow: const Duration(minutes: 10),
+      ),
+      isNull,
+    );
+    expect(
+      LiveActivityLogic.resolveLiveActivityStage(
+        currentTime: afterClassNow,
+        startTime: startTime,
+        endTime: endTime,
+        aheadTime: startTime.subtract(const Duration(minutes: 20)),
+        settings: provider.settings,
+        endReminderWindow: const Duration(minutes: 10),
+      ),
+      isNull,
+    );
+  });
 }

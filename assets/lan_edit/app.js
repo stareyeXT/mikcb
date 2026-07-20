@@ -1,5 +1,53 @@
 const t = (key, ...args) => window.LanEditI18n?.t(key, ...args) ?? key;
 
+const THEME_STORAGE_KEY = 'lanEditTheme';
+
+function resolvePreferredTheme() {
+  try {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      return storedTheme;
+    }
+  } catch (_) {
+    // localStorage may be unavailable in private mode.
+  }
+  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
+
+function applyTheme(theme) {
+  const nextTheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', nextTheme);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  } catch (_) {
+    // Ignore persistence failures; theme still applies for this session.
+  }
+  document.querySelectorAll('[data-theme-toggle]').forEach((toggleButton) => {
+    const nextLabel =
+      nextTheme === 'dark' ? t('switchToLightTheme') : t('switchToDarkTheme');
+    toggleButton.setAttribute('aria-label', nextLabel);
+    toggleButton.setAttribute('title', nextLabel);
+  });
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme') === 'dark'
+    ? 'dark'
+    : 'light';
+  applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+function bindThemeToggles() {
+  document.querySelectorAll('[data-theme-toggle]').forEach((toggleButton) => {
+    toggleButton.addEventListener('click', () => toggleTheme());
+  });
+}
+
+applyTheme(resolvePreferredTheme());
+
 const state = {
   token: sessionStorage.getItem('lanEditToken') || '',
   pin: sessionStorage.getItem('lanEditPin') || '',
@@ -210,10 +258,33 @@ async function api(path, options = {}) {
   if (state.token) {
     headers.Authorization = `Bearer ${state.token}`;
   }
-  if (options.body && !headers['Content-Type']) {
+  const profileId = state.session?.profileId || state.meta?.profileId || '';
+  if (profileId) {
+    headers['X-Profile-Id'] = profileId;
+  }
+  let body = options.body;
+  const method = (options.method || 'GET').toUpperCase();
+  if (
+    profileId &&
+    body &&
+    typeof body === 'string' &&
+    method !== 'GET' &&
+    method !== 'HEAD'
+  ) {
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && !parsed.profileId) {
+        parsed.profileId = profileId;
+        body = JSON.stringify(parsed);
+      }
+    } catch (_) {
+      // Non-JSON body (e.g. raw backup import) — header carries profileId.
+    }
+  }
+  if (body && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(path, { ...options, headers, body });
   const text = await response.text();
   let data = {};
   if (text) {
@@ -225,6 +296,9 @@ async function api(path, options = {}) {
   }
   if (!response.ok) {
     const code = response.status;
+    if (code === 409 && data.error === 'profile_mismatch') {
+      throw new Error(data.message || '课表已切换，请刷新后重试');
+    }
     if (code === 502 || code === 504) {
       throw new Error(t('connectionError', code));
     }
@@ -379,7 +453,9 @@ function renderDashboard() {
         syncTabsUI();
         const groups = getCourseGroups(state.courses);
         const group = groups.find(g => g.name === course.name);
-        if (group) openEditor(group);
+        if (group) {
+          openEditor(group, course.dayOfWeek, course.startSection, course.id);
+        }
       });
       todayCourseList.appendChild(item);
     });
@@ -433,7 +509,9 @@ function buildCourseBlock(course) {
     event.stopPropagation();
     const groups = getCourseGroups(state.courses);
     const group = groups.find(g => g.name === course.name);
-    if (group) openEditor(group);
+    if (group) {
+      openEditor(group, course.dayOfWeek, course.startSection, course.id);
+    }
   });
   return block;
 }
@@ -569,39 +647,51 @@ function renderCoursesTable() {
 
       return `
         <div class="card-slot-item">
-          <span class="slot-time"><i class="ti ti-calendar me-1"></i>${dayName} ${sectionText} <span class="slot-weeks">(${weekText})</span></span>
-          <div class="slot-details">
-            ${course.teacher ? `<span class="slot-detail-pill"><i class="ti ti-user me-1"></i>${escapeHtml(course.teacher)}</span>` : ''}
-            ${course.location ? `<span class="slot-detail-pill"><i class="ti ti-map-pin me-1"></i>${escapeHtml(course.location)}</span>` : ''}
+          <div class="slot-time-line">
+            <i class="ti ti-calendar-event"></i>
+            <span class="slot-time-main">${dayName} · ${sectionText}</span>
+            <span class="slot-weeks">${weekText}</span>
           </div>
+          ${(course.teacher || course.location) ? `
+          <div class="slot-details">
+            ${course.teacher ? `<span class="slot-detail-pill"><i class="ti ti-user"></i>${escapeHtml(course.teacher)}</span>` : ''}
+            ${course.location ? `<span class="slot-detail-pill"><i class="ti ti-map-pin"></i>${escapeHtml(course.location)}</span>` : ''}
+          </div>` : ''}
         </div>
       `;
     }).join('');
 
     const natureBadge = group.courseNature === 'elective'
-      ? '<span class="badge badge-success">选修</span>'
-      : '<span class="badge badge-destructive">必修</span>';
+      ? '<span class="badge badge-success course-nature-badge">选修</span>'
+      : '<span class="badge badge-primary course-nature-badge">必修</span>';
 
+    const accentColor = group.color || '#3482ff';
+    const slotCount = group.courses.length;
     card.className = 'card course-group-card';
     card.innerHTML = `
-      <div class="card-header-band" style="background-color: ${group.color || '#4f46e5'}"></div>
-      <div class="card-body">
-        <div class="flex items-start gap-2 mb-2">
-          <label class="form-check mb-0" title="批量删除">
+      <div class="course-card-accent" style="background-color: ${accentColor}"></div>
+      <div class="course-card-body">
+        <div class="course-card-top">
+          <label class="course-card-check" title="批量删除">
             <input type="checkbox" class="form-check-input library-course-select" data-course-ids="${group.courses.map(c => c.id).join(',')}" />
           </label>
-          <div class="flex-fill min-w-0">
-            <h3 class="card-title mb-0">${escapeHtml(group.name)}</h3>
-            ${group.shortName ? `<div class="text-muted text-xs">${escapeHtml(group.shortName)}</div>` : ''}
+          <div class="course-card-heading min-w-0">
+            <div class="course-card-title-row">
+              <h3 class="course-card-title" title="${escapeHtml(group.name)}">${escapeHtml(group.name)}</h3>
+              ${natureBadge}
+            </div>
+            <div class="course-card-meta">
+              ${group.shortName ? `<span class="course-card-short">${escapeHtml(group.shortName)}</span>` : ''}
+              <span class="course-card-slot-count">${slotCount} 个时段</span>
+            </div>
           </div>
-          ${natureBadge}
         </div>
         <div class="card-slots-list">${slotsHtml}</div>
-        ${group.note ? `<p class="text-muted text-xs mt-2 mb-0"><i class="ti ti-notes me-1"></i>${escapeHtml(group.note)}</p>` : ''}
-        <div class="btn-list mt-3">
-          <button type="button" class="btn btn-outline btn-sm action-edit-btn">编辑</button>
-          <button type="button" class="btn btn-outline btn-sm action-copy-btn">复制</button>
-          <button type="button" class="btn btn-destructive btn-sm action-delete-btn">删除</button>
+        ${group.note ? `<p class="course-card-note"><i class="ti ti-notes"></i><span>${escapeHtml(group.note)}</span></p>` : ''}
+        <div class="course-card-actions">
+          <button type="button" class="btn btn-outline btn-sm action-edit-btn"><i class="ti ti-edit"></i>编辑</button>
+          <button type="button" class="btn btn-ghost btn-sm action-copy-btn"><i class="ti ti-copy"></i>复制</button>
+          <button type="button" class="btn btn-ghost btn-sm course-card-delete action-delete-btn"><i class="ti ti-trash"></i>删除</button>
         </div>
       </div>
     `;
@@ -792,16 +882,21 @@ function handleSelectedFile(file) {
 }
 
 // 动态时间段表单项生成
-function addSlotField(data = {}) {
+function addSlotField(data = {}, options = {}) {
   const slotId = `slot-${slotCounter++}`;
   const card = document.createElement('div');
-  card.className = 'slot-card';
+  card.className = options.focused ? 'slot-card slot-card-focused' : 'slot-card';
   card.id = slotId;
   card.dataset.id = data.id || ''; // 保存的原课程 ID (如果有)
+  if (data.id) {
+    card.dataset.courseId = data.id;
+  }
+
+  const slotTitle = options.focused ? '时间段 · 当前点击' : '时间段';
 
   card.innerHTML = `
     <div class="slot-card-header">
-      <h4>时间段</h4>
+      <h4 class="slot-card-title">${slotTitle}</h4>
       <button type="button" class="btn-remove-slot" title="删除此时间段">&times; 删除</button>
     </div>
     <div class="form-grid">
@@ -1041,7 +1136,8 @@ function fillColorSwatches(selectedColor) {
 }
 
 // 课程表单编辑 Modal (按组聚合打开)
-function openEditor(courseGroup, defaultDay, defaultSection) {
+// focusCourseId / defaultDay / defaultSection：从课表网格点进时，把对应时间段排到第一并高亮
+function openEditor(courseGroup, defaultDay, defaultSection, focusCourseId) {
   scheduleSlotsContainer.innerHTML = '';
   
   if (courseGroup) {
@@ -1053,10 +1149,27 @@ function openEditor(courseGroup, defaultDay, defaultSection) {
     courseForm.note.value = courseGroup.note || '';
     fillColorSwatches(courseGroup.color);
 
-    // 载入所有的上课时间段
-    courseGroup.courses.forEach(c => {
-      addSlotField(c);
+    const orderedSlots = orderSlotsForFocus(
+      courseGroup.courses,
+      focusCourseId,
+      defaultDay,
+      defaultSection,
+    );
+    const focusKey = resolveFocusSlotKey(orderedSlots, focusCourseId, defaultDay, defaultSection);
+
+    orderedSlots.forEach((courseSlot) => {
+      const isFocused = focusKey != null && slotMatchesFocus(courseSlot, focusKey);
+      addSlotField(courseSlot, { focused: isFocused });
     });
+
+    // 若未匹配到任何时段（异常数据），仍保证至少有一张卡
+    if (orderedSlots.length === 0) {
+      addSlotField({
+        dayOfWeek: defaultDay || 1,
+        startSection: defaultSection || 1,
+        endSection: defaultSection || 2,
+      }, { focused: true });
+    }
 
     show(deleteCourseBtn);
     show(duplicateCourseBtn);
@@ -1069,12 +1182,12 @@ function openEditor(courseGroup, defaultDay, defaultSection) {
     courseForm.note.value = '';
     fillColorSwatches(state.meta?.presetColors?.[0] || '#2196F3');
 
-    // 默认提供一个上课时间段项
+    // 默认提供一个上课时间段项（空格点击时带上星期/节次）
     addSlotField({
       dayOfWeek: defaultDay || 1,
       startSection: defaultSection || 1,
       endSection: defaultSection || 2,
-    });
+    }, { focused: true });
 
     hide(deleteCourseBtn);
     hide(duplicateCourseBtn);
@@ -1082,7 +1195,80 @@ function openEditor(courseGroup, defaultDay, defaultSection) {
   
   setError(formError, '');
   showCourseModal();
-  courseForm.name.focus();
+  focusPrimaryEditorField();
+}
+
+/** Put the clicked timetable slot first (same UX as phone course editor). */
+function orderSlotsForFocus(courses, focusCourseId, defaultDay, defaultSection) {
+  const list = Array.isArray(courses) ? [...courses] : [];
+  const focusKey = resolveFocusSlotKey(list, focusCourseId, defaultDay, defaultSection);
+  if (!focusKey) {
+    return list.sort(compareSlotsByDayAndSection);
+  }
+  return list.sort((left, right) => {
+    const leftFocused = slotMatchesFocus(left, focusKey);
+    const rightFocused = slotMatchesFocus(right, focusKey);
+    if (leftFocused && !rightFocused) return -1;
+    if (!leftFocused && rightFocused) return 1;
+    return compareSlotsByDayAndSection(left, right);
+  });
+}
+
+function resolveFocusSlotKey(courses, focusCourseId, defaultDay, defaultSection) {
+  if (focusCourseId) {
+    const byId = courses.find((course) => course.id === focusCourseId);
+    if (byId) {
+      return { type: 'id', courseId: focusCourseId };
+    }
+  }
+  if (defaultDay != null && defaultSection != null) {
+    return {
+      type: 'daySection',
+      dayOfWeek: Number(defaultDay),
+      section: Number(defaultSection),
+    };
+  }
+  return null;
+}
+
+function slotMatchesFocus(course, focusKey) {
+  if (!course || !focusKey) return false;
+  if (focusKey.type === 'id') {
+    return course.id === focusKey.courseId;
+  }
+  if (focusKey.type === 'daySection') {
+    const day = Number(course.dayOfWeek);
+    const start = Number(course.startSection);
+    const end = Number(course.endSection || course.startSection);
+    return (
+      day === focusKey.dayOfWeek &&
+      start <= focusKey.section &&
+      end >= focusKey.section
+    );
+  }
+  return false;
+}
+
+function compareSlotsByDayAndSection(left, right) {
+  const dayDelta = Number(left.dayOfWeek || 0) - Number(right.dayOfWeek || 0);
+  if (dayDelta !== 0) return dayDelta;
+  return Number(left.startSection || 0) - Number(right.startSection || 0);
+}
+
+function focusPrimaryEditorField() {
+  // Prefer the focused slot (clicked cell); fall back to course name.
+  const focusedSlot = scheduleSlotsContainer?.querySelector('.slot-card-focused');
+  if (focusedSlot) {
+    requestAnimationFrame(() => {
+      focusedSlot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const daySelect = focusedSlot.querySelector('.field-slot-day');
+      if (daySelect && typeof daySelect.focus === 'function') {
+        daySelect.focus({ preventScroll: true });
+      }
+    });
+    return;
+  }
+  courseForm?.name?.focus?.();
 }
 
 function closeEditor() {
@@ -1791,6 +1977,8 @@ async function bootstrap() {
     // i18n is optional; login must still work if the asset fails to load.
   }
 
+  bindThemeToggles();
+  applyTheme(resolvePreferredTheme());
   renderActivityLog();
   const params = new URLSearchParams(window.location.search);
   const urlToken = params.get('token');

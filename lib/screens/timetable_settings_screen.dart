@@ -36,7 +36,7 @@ import '../widgets/semester_week_count_picker_sheet.dart';
 import '../widgets/theme_manage_sheets.dart';
 import '../widgets/timetable_text_color_settings.dart';
 import '../widgets/timetable_week_preview.dart';
-import '../services/android_animation_scale_service.dart';
+import '../widgets/course_field_picker_sheet.dart';
 import '../services/bundled_assets.dart';
 import '../services/live_testing_fixture_service.dart';
 import '../services/live_testing_trigger.dart';
@@ -443,10 +443,9 @@ class TimetableSettingsScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    showAppToast(
+    showAppLightTip(
       context,
-      message: l10n.currentWeekBullet(provider.currentWeek),
-      kind: AppToastKind.success,
+      message: l10n.syncedCurrentWeekMessage(provider.currentWeek),
     );
   }
 
@@ -496,7 +495,7 @@ class _AppearanceSettingsScreen extends StatefulWidget {
 }
 
 class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
-  static const _appearanceSectionCount = 11;
+  static const _appearanceSectionCount = 12;
 
   static const List<String> _backgroundColors = [
     '#F8FAFC',
@@ -713,11 +712,18 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
+            HyperosControlCard(
+              edgeToEdge: true,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: _HomeTitleStylePreview(style: _draft.homeTitleStyle),
+              ),
+            ),
+            const SizedBox(height: 12),
             HyperosListGroup(
               children: [
                 HyperosSelectTile<HomeTitleStyle>(
                   label: l10n.homeTitleStyleLabel,
-                  subtitle: l10n.homeTitleSectionSubtitle,
                   items: {
                     for (final v in HomeTitleStyle.values)
                       homeTitleStyleLabel(l10n, v): v,
@@ -728,20 +734,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                   },
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            HyperosControlCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HomeTitleStylePreview(style: _draft.homeTitleStyle),
-                  const SizedBox(height: 8),
-                  Text(
-                    homeTitleStyleDescription(l10n, _draft.homeTitleStyle),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -775,25 +767,15 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  HyperosHexColorChipGroup(
-                    colorHexes: _backgroundColors,
-                    selectedHex: _draft.timetablePageBackgroundColor,
-                    colorParser: _colorFromHex,
-                    onSelectedHex: (color) {
-                      _updateDraft(
-                        _draft.copyWith(timetablePageBackgroundColor: color),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.timetableBackgroundColorSectionSubtitle,
-                    style: HyperosTypography.sectionDescription(context),
-                  ),
-                ],
+              child: HyperosHexColorChipGroup(
+                colorHexes: _backgroundColors,
+                selectedHex: _draft.timetablePageBackgroundColor,
+                colorParser: _colorFromHex,
+                onSelectedHex: (color) {
+                  _updateDraft(
+                    _draft.copyWith(timetablePageBackgroundColor: color),
+                  );
+                },
               ),
             ),
           ],
@@ -805,35 +787,22 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
           children: [
             HyperosSwitchTile(
               title: l10n.frostedBlurEnabledTitle,
-              subtitle: l10n.frostedBlurEnabledSubtitle,
               value: _draft.frostedBlurEnabled,
               onChanged: (value) {
                 _updateDraft(_draft.copyWith(frostedBlurEnabled: value));
               },
             ),
-            HyperosInsetDivider(indent: HyperosTokens.listTileDividerIndent),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FrostedSheetSettingsPreview(
-                    provider: provider,
-                    settings: _draft,
-                    week: provider.currentWeek,
-                    blurSigma: _draft.frostedSheetBlurSigma,
-                    tintAlpha: _draft.frostedSheetTintAlpha,
-                    barrierAlpha: _draft.frostedSheetBarrierAlpha,
-                    blurEnabled: _draft.frostedBlurEnabled,
-                    onOpenDemoSheet: () =>
-                        showFrostedSheetSettingsDemo(context),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.frostedSheetSectionSubtitle,
-                    style: HyperosTypography.sectionDescription(context),
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: FrostedSheetSettingsPreview(
+                provider: provider,
+                settings: _draft,
+                week: provider.currentWeek,
+                blurSigma: _draft.frostedSheetBlurSigma,
+                tintAlpha: _draft.frostedSheetTintAlpha,
+                barrierAlpha: _draft.frostedSheetBarrierAlpha,
+                blurEnabled: _draft.frostedBlurEnabled,
+                onOpenDemoSheet: () => showFrostedSheetSettingsDemo(context),
               ),
             ),
             HyperosSliderTile(
@@ -850,7 +819,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 8),
             HyperosSliderTile(
               title: l10n.frostedSheetTintLabel,
               value: _draft.frostedSheetTintAlpha,
@@ -865,15 +833,40 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 12),
           ],
         ),
       ),
-      8 => HyperosListGroup(
+      // After frosted blur, above background display scope.
+      8 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.pageTransitionSpeedTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSliderTile(
+                title: l10n.pageTransitionSpeedTitle,
+                value: _draft.pageTransitionSpeed,
+                min: TimetableSettings.minPageTransitionSpeed,
+                max: TimetableSettings.maxPageTransitionSpeed,
+                divisions: 20,
+                valueLabel: '${_draft.pageTransitionSpeed.toStringAsFixed(1)}×',
+                onChanged: (value) {
+                  HyperosNavigation.applyUserTransitionSpeed(context, value);
+                  _updateDraft(
+                    _draft.copyWith(pageTransitionSpeed: value),
+                    debounce: true,
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+      9 => HyperosListGroup(
         children: [
           HyperosSwitchTile(
             title: l10n.unifiedCourseCardColorTitle,
-            subtitle: l10n.unifiedCourseCardColorSubtitle,
             value: _draft.timetableUseUnifiedCardColor,
             onChanged: (value) {
               _updateDraft(
@@ -881,10 +874,9 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
               );
             },
           ),
-          if (_draft.timetableUseUnifiedCardColor) ...[
-            HyperosInsetDivider(indent: HyperosTokens.listTileDividerIndent),
+          if (_draft.timetableUseUnifiedCardColor)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
               child: HyperosHexColorChipGroup(
                 colorHexes: _cardColors,
                 selectedHex: _draft.timetableUnifiedCardColor,
@@ -896,10 +888,9 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 },
               ),
             ),
-          ],
         ],
       ),
-      9 => HyperosSettingsBlock(
+      10 => HyperosSettingsBlock(
         title: l10n.homePageBackgroundScopeTitle,
         child: HyperosListGroup(
           children: [
@@ -907,7 +898,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
               context,
               l10n: l10n,
               title: l10n.homePageWallpaperTitle,
-              subtitle: l10n.homePageWallpaperSubtitle,
               path: resolveHomePageBackdropImagePath(_draft),
               onPick: _pickHomePageBackdropImage,
               onClear: () {
@@ -922,10 +912,8 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 );
               },
             ),
-            HyperosInsetDivider(indent: HyperosTokens.listTileDividerIndent),
             HyperosSwitchTile(
               title: l10n.homePageBackdropFollowsWeekPagerTitle,
-              subtitle: l10n.homePageBackdropFollowsWeekPagerSubtitle,
               value: _draft.homePageBackdropFollowsWeekPager,
               onChanged: (value) {
                 _updateDraft(
@@ -933,7 +921,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 );
               },
             ),
-            HyperosInsetDivider(indent: HyperosTokens.listTileDividerIndent),
             HyperosSwitchTile(
               title: l10n.homePageBackgroundScopeStatusBar,
               value: HomePageBackgroundScope.includes(
@@ -1006,16 +993,8 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 );
               },
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text(
-                l10n.homePageBackgroundScopeSubtitle,
-                style: HyperosTypography.sectionDescription(context),
-              ),
-            ),
             HyperosSwitchTile(
               title: l10n.homePageHeaderBlurTitle,
-              subtitle: l10n.homePageHeaderBlurSubtitle,
               value: _draft.homePageHeaderBlurEnabled,
               onChanged: (value) {
                 _updateDraft(_draft.copyWith(homePageHeaderBlurEnabled: value));
@@ -1023,7 +1002,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
             ),
             HyperosSwitchTile(
               title: l10n.homePageWeekdayBarBlurTitle,
-              subtitle: l10n.homePageWeekdayBarBlurSubtitle,
               value: _draft.homePageWeekdayBarBlurEnabled,
               onChanged: (value) {
                 _updateDraft(
@@ -1033,7 +1011,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
             ),
             HyperosSwitchTile(
               title: l10n.homePageTimeColumnBlurTitle,
-              subtitle: l10n.homePageTimeColumnBlurSubtitle,
               value: _draft.homePageTimeColumnBlurEnabled,
               onChanged: (value) {
                 _updateDraft(
@@ -1041,17 +1018,10 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
                 );
               },
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text(
-                l10n.homePageRegionBlurSectionSubtitle,
-                style: HyperosTypography.sectionDescription(context),
-              ),
-            ),
           ],
         ),
       ),
-      10 => TimetableTextColorSettings(
+      11 => TimetableTextColorSettings(
         settings: _draft,
         onChanged: (next) => _updateDraft(next),
       ),
@@ -1071,7 +1041,6 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
     BuildContext context, {
     required AppLocalizations l10n,
     required String title,
-    required String subtitle,
     required String? path,
     required Future<void> Function() onPick,
     required VoidCallback onClear,
@@ -1080,15 +1049,13 @@ class _AppearanceSettingsScreenState extends State<_AppearanceSettingsScreen> {
         ? l10n.homePageImageNotSelected
         : path.split(Platform.pathSeparator).last;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(title, style: HyperosTypography.listTitle(context)),
           const SizedBox(height: 4),
-          Text(subtitle, style: HyperosTypography.sectionDescription(context)),
-          const SizedBox(height: 12),
-          Text(fileName, style: Theme.of(context).textTheme.bodySmall),
+          Text(fileName, style: HyperosTypography.listDetail(context)),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1637,6 +1604,12 @@ class _HomeTitleStylePreview extends StatelessWidget {
   }
 }
 
+/// Public factory for debug deep-link navigation (debug builds only).
+Widget createLiveSettingsScreen() => const _LiveSettingsScreen();
+
+/// Public factory for debug deep-link navigation (debug builds only).
+Widget createLiveTestingSettingsScreen() => const _LiveTestingSettingsScreen();
+
 class _LiveSettingsScreen extends StatefulWidget {
   const _LiveSettingsScreen();
 
@@ -1741,21 +1714,20 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
             });
           },
         ),
-        if (!kReleaseMode)
-          HyperosListTile(
-            icon: Icons.science_outlined,
-            title: l10n.liveTestingEntryTitle,
-            onTap: () async {
-              await HyperosNavigation.push(
-                context,
-                builder: (_) => const _LiveTestingSettingsScreen(),
-              );
-              if (!mounted) return;
-              setState(() {
-                _draft = context.read<TimetableProvider>().settings;
-              });
-            },
-          ),
+        HyperosListTile(
+          icon: Icons.science_outlined,
+          title: l10n.liveTestingEntryTitle,
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              builder: (_) => const _LiveTestingSettingsScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
+        ),
       ],
     );
   }
@@ -2419,153 +2391,165 @@ class _LiveTestingSettingsScreenState extends State<_LiveTestingSettingsScreen>
     BuildContext context,
     AppLocalizations l10n,
   ) {
-    final theme = Theme.of(context);
     final provider = context.watch<TimetableProvider>();
     final now = DateTime.now();
-    final currentHour = LiveTestingFixtureService.hourSlotFor(now);
-    final nextHour = LiveTestingFixtureService.nextHourSlotFor(now);
+    final sections = provider.settings.sections;
+    final sectionCount = sections.length;
+    final currentSection = LiveTestingFixtureService.sectionNumberForTime(
+      now,
+      sections,
+    );
+    final nextSection = LiveTestingFixtureService.nextSectionNumberForTime(
+      now,
+      sections,
+    );
     final fixtureCount = provider.courses
         .where(LiveTestingFixtureService.isFixtureCourse)
         .length;
+    final hasFixtures = fixtureCount > 0;
+    final canTrigger = sectionCount > 0;
+    final activeSchemeName =
+        provider.activeTimeScheme?.name ?? l10n.unsetLabel;
+    final leadOptions = LiveTestingFixtureService.supportedLeadMinutes;
+    final leadIndex = leadOptions
+        .indexOf(_fixtureLeadMinutes)
+        .clamp(0, leadOptions.length - 1);
+    final currentStart = canTrigger
+        ? sections[currentSection - 1].startTime
+        : '--:--';
+    final nextStart = canTrigger
+        ? sections[nextSection - 1].startTime
+        : '--:--';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const HyperosSectionLabel(text: '快捷测试课表'),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.download_outlined,
+              iconAccent: HyperosIconColors.indigo,
+              title: _installingFixtureGrid ? '正在安装…' : '安装 24 时段测试课表',
+              details: _installingFixtureGrid
+                  ? null
+                  : (canTrigger ? '$fixtureCount/$sectionCount' : '未安装'),
+              onTap: _installingFixtureGrid
+                  ? null
+                  : () => _installQuickFixtureGrid(context),
+            ),
+            HyperosListTile(
+              icon: Icons.delete_outline,
+              iconAccent: HyperosIconColors.orange,
+              title: _clearingFixtureGrid ? '正在清除…' : '清除测试课表',
+              details: hasFixtures ? '$fixtureCount 门' : null,
+              onTap: _clearingFixtureGrid || !hasFixtures
+                  ? null
+                  : () => _clearQuickFixtureGrid(context),
+            ),
+          ],
+        ),
+        HyperosSectionDescription(
+          text:
+              '当前方案：$activeSchemeName。安装会创建并自动套用「超级岛测试24时段」，按第 1～24 节生成测试课（与正常课程同一套逻辑）。'
+              '测完请先「清除测试课表」再切回自己的时间方案；若仍有第 11 节及以后的课，系统会拒绝切到更短的方案。',
+        ),
+        const HyperosSectionGap(),
         HyperosControlCard(
-          title: '快捷测试课表',
-          subtitle:
-              '仅调试版可用。会创建「${LiveTestingFixtureService.timeSchemeName}」时间模板（24 个节次），并在今天生成 00:00–23:00 各一门测试课；测试课 ID 以 ${LiveTestingFixtureService.courseIdPrefix} 开头，可一键清除。',
+          title: '课前提醒',
+          subtitle: '发送超级岛测试时，提前多久进入课前态',
           child: HyperosControlCardInset(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '课前提醒：$fixtureCount/24 个测试时段已安装',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                Text('多少分钟后上课', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final minutes
-                        in LiveTestingFixtureService.supportedLeadMinutes)
-                      ChoiceChip(
-                        label: Text('$minutes 分钟'),
-                        selected: _fixtureLeadMinutes == minutes,
-                        onSelected: (selected) {
-                          if (!selected) return;
-                          setState(() => _fixtureLeadMinutes = minutes);
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    HyperosButton(
-                      label: _installingFixtureGrid ? '安装中…' : '安装 24 小时测试课表',
-                      variant: HyperosButtonVariant.secondary,
-                      onPressed: _installingFixtureGrid
-                          ? null
-                          : () => _installQuickFixtureGrid(context),
+            child: HyperosSegmentedControl(
+              tabs: [for (final minutes in leadOptions) '$minutes 分钟'],
+              selectedIndex: leadIndex,
+              onChanged: (index) {
+                setState(() => _fixtureLeadMinutes = leadOptions[index]);
+              },
+            ),
+          ),
+        ),
+        const HyperosSectionGap(),
+        const HyperosSectionLabel(text: '一键发送'),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.play_circle_outline,
+              iconAccent: HyperosIconColors.blue,
+              title: '当前节次 · 第$currentSection节',
+              details: currentStart,
+              onTap: !canTrigger
+                  ? null
+                  : () => _triggerQuickFixtureSlot(
+                      context,
+                      sectionNumber: currentSection,
+                      source: 'quick_fixture_current_slot',
                     ),
-                    HyperosButton(
-                      label: _clearingFixtureGrid ? '清除中…' : '清除测试课表',
-                      variant: HyperosButtonVariant.secondary,
-                      onPressed: _clearingFixtureGrid || fixtureCount == 0
-                          ? null
-                          : () => _clearQuickFixtureGrid(context),
+            ),
+            HyperosListTile(
+              icon: Icons.skip_next_outlined,
+              iconAccent: HyperosIconColors.purple,
+              title: '下一节次 · 第$nextSection节',
+              details: nextStart,
+              onTap: !canTrigger
+                  ? null
+                  : () => _triggerQuickFixtureSlot(
+                      context,
+                      sectionNumber: nextSection,
+                      source: 'quick_fixture_next_slot',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    HyperosButton(
-                      label:
-                          '当前时段（${currentHour.toString().padLeft(2, '0')}:00）',
-                      variant: HyperosButtonVariant.primary,
-                      onPressed: () => _triggerQuickFixtureSlot(
-                        context,
-                        hour: currentHour,
-                        source: 'quick_fixture_current_slot',
-                      ),
-                    ),
-                    HyperosButton(
-                      label: '下一时段（${nextHour.toString().padLeft(2, '0')}:00）',
-                      variant: HyperosButtonVariant.secondary,
-                      onPressed: () => _triggerQuickFixtureSlot(
-                        context,
-                        hour: nextHour,
-                        source: 'quick_fixture_next_slot',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '点选时段：把该时段测试课设为 $_fixtureLeadMinutes 分钟后上课并发送超级岛测试',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: 24,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1.8,
-                  ),
-                  itemBuilder: (context, index) {
-                    final installed =
-                        LiveTestingFixtureService.findFixtureForHour(
-                          provider,
-                          index,
-                        ) !=
-                        null;
-                    final isCurrent = index == currentHour;
-                    final color = tryParseHexColor(
-                      LiveTestingFixtureService.colorForHour(index),
-                    );
-                    return Material(
-                      color: (color ?? theme.colorScheme.primaryContainer)
-                          .withValues(alpha: isCurrent ? 0.95 : 0.55),
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
+            ),
+          ],
+        ),
+        HyperosSectionDescription(
+          text: '将对应节次设为 $_fixtureLeadMinutes 分钟后上课，并发送超级岛测试（请回桌面查看）。',
+        ),
+        const HyperosSectionGap(),
+        HyperosControlCard(
+          title: '按节次发送',
+          subtitle: canTrigger
+              ? '点选某一节，立即写入并触发超级岛测试'
+              : '请先安装 24 时段测试课表',
+          child: HyperosControlCardInset(
+            child: canTrigger
+                ? GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: sectionCount,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 1.15,
+                        ),
+                    itemBuilder: (context, index) {
+                      final sectionNumber = index + 1;
+                      final section = sections[index];
+                      final installed =
+                          LiveTestingFixtureService.findFixtureForSection(
+                            provider,
+                            sectionNumber,
+                          ) !=
+                          null;
+                      final isCurrent = sectionNumber == currentSection;
+                      return _QuickFixtureSectionCell(
+                        sectionNumber: sectionNumber,
+                        startTime: section.startTime,
+                        installed: installed,
+                        isCurrent: isCurrent,
                         onTap: () => _triggerQuickFixtureSlot(
                           context,
-                          hour: index,
+                          sectionNumber: sectionNumber,
                           source: 'quick_fixture_grid',
                         ),
-                        child: Center(
-                          child: Text(
-                            '${index.toString().padLeft(2, '0')}:00'
-                            '${installed ? '\n已装' : ''}'
-                            '${isCurrent ? '\n现在' : ''}',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: isCurrent
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
+                      );
+                    },
+                  )
+                : Text(
+                    '安装后这里会列出全部节次',
+                    style: HyperosTypography.sectionDescription(context),
+                  ),
           ),
         ),
         const HyperosSectionGap(),
@@ -2578,13 +2562,17 @@ class _LiveTestingSettingsScreenState extends State<_LiveTestingSettingsScreen>
     setState(() => _installingFixtureGrid = true);
     try {
       final provider = context.read<TimetableProvider>();
-      final count = await LiveTestingFixtureService.installTwentyFourHourGrid(
+      final count = await LiveTestingFixtureService.installSectionGrid(
         provider,
       );
       if (!context.mounted) return;
+      final schemeName =
+          provider.activeTimeScheme?.name ??
+          LiveTestingFixtureService.timeSchemeName;
       showAppToast(
         context,
-        message: '已安装 $count 个测试时段（今天星期${DateTime.now().weekday}）',
+        message:
+            '已套用「$schemeName」并安装 $count 门测试课（今天星期${DateTime.now().weekday}）',
         kind: AppToastKind.success,
       );
     } catch (e) {
@@ -2623,15 +2611,15 @@ class _LiveTestingSettingsScreenState extends State<_LiveTestingSettingsScreen>
 
   Future<void> _triggerQuickFixtureSlot(
     BuildContext context, {
-    required int hour,
+    required int sectionNumber,
     required String source,
   }) async {
     final provider = context.read<TimetableProvider>();
     final lead = Duration(minutes: _fixtureLeadMinutes);
-    final result = await triggerLiveUpdateTestForHourSlot(
+    final result = await triggerLiveUpdateTestForSectionSlot(
       context: context,
       provider: provider,
-      hour: hour,
+      sectionNumber: sectionNumber,
       lead: lead,
       source: source,
     );
@@ -2660,6 +2648,93 @@ enum _LiveTestingSection {
   debugRecentLogs,
   rawJson,
   localLogs,
+}
+
+/// Compact section cell for the live-testing fixture grid (HyperOS surface style).
+class _QuickFixtureSectionCell extends StatelessWidget {
+  const _QuickFixtureSectionCell({
+    required this.sectionNumber,
+    required this.startTime,
+    required this.installed,
+    required this.isCurrent,
+    required this.onTap,
+  });
+
+  final int sectionNumber;
+  final String startTime;
+  final bool installed;
+  final bool isCurrent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = HyperosColors.primary(context);
+    final onPrimary = HyperosColors.onPrimary(context);
+    final surface = HyperosColors.surface(context);
+    final onSurface = HyperosColors.onSurface(context);
+    final muted = HyperosColors.onSurfaceVariantSummary(context);
+    final background = isCurrent ? primary : surface;
+    final titleColor = isCurrent ? onPrimary : onSurface;
+    final captionColor = isCurrent
+        ? onPrimary.withValues(alpha: 0.86)
+        : muted;
+    final radius = BorderRadius.circular(HyperosTokens.cardRadius * 0.55);
+
+    return Material(
+      color: background,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '第$sectionNumber节',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w500,
+                  color: titleColor,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                startTime,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  color: captionColor,
+                  height: 1.1,
+                ),
+              ),
+              if (installed || isCurrent) ...[
+                const SizedBox(height: 3),
+                Text(
+                  isCurrent ? '现在' : '已装',
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: captionColor,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 BuildContext? _debugL10nContext;
@@ -2960,64 +3035,74 @@ class _HomeWidgetSettingsScreenState extends State<_HomeWidgetSettingsScreen> {
     }
 
     final Widget content = switch (section) {
-      0 => HyperosControlCard(
-        title: l10n.homeWidgetQuickAddTitle,
-        subtitle: _isCheckingPinSupport
-            ? l10n.homeWidgetCheckingPinSupport
-            : (_canRequestPinWidget
-                  ? l10n.homeWidgetPinSupported
-                  : l10n.homeWidgetPinUnsupported),
-        child: HyperosControlCardInset(
-          child: Column(
-            children: [
-              Row(
+      0 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.homeWidgetQuickAddTitle),
+          HyperosControlCard(
+            child: HyperosControlCardInset(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: _buildPinWidgetButton(HomeWidgetPinTarget.compact22),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildPinWidgetButton(
+                          HomeWidgetPinTarget.compact22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildPinWidgetButton(
+                          HomeWidgetPinTarget.miniList22,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildPinWidgetButton(
-                      HomeWidgetPinTarget.miniList22,
-                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildPinWidgetButton(
+                          HomeWidgetPinTarget.medium24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildPinWidgetButton(
+                          HomeWidgetPinTarget.large44,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildPinWidgetButton(HomeWidgetPinTarget.medium24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildPinWidgetButton(HomeWidgetPinTarget.large44),
-                  ),
-                ],
+            ),
+          ),
+        ],
+      ),
+      1 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.homeWidgetTodayCourseTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSelectTile<WidgetBackgroundStyle>(
+                label: l10n.homeWidgetBackgroundStyleLabel,
+                items: {
+                  for (final v in WidgetBackgroundStyle.values)
+                    widgetBackgroundStyleLabel(l10n, v): v,
+                },
+                value: _draft.widgetBackgroundStyle,
+                onChanged: (value) {
+                  _updateDraft(_draft.copyWith(widgetBackgroundStyle: value));
+                },
               ),
             ],
           ),
-        ),
-      ),
-      1 => HyperosControlCard(
-        title: l10n.homeWidgetTodayCourseTitle,
-        subtitle: l10n.homeWidgetTodayCourseSubtitle,
-        edgeToEdge: true,
-        child: HyperosControlCardRowScope(
-          isFirst: true,
-          isLast: false,
-          child: HyperosSelectTile<WidgetBackgroundStyle>(
-            label: l10n.homeWidgetBackgroundStyleLabel,
-            items: {
-              for (final v in WidgetBackgroundStyle.values)
-                widgetBackgroundStyleLabel(l10n, v): v,
-            },
-            value: _draft.widgetBackgroundStyle,
-            onChanged: (value) {
-              _updateDraft(_draft.copyWith(widgetBackgroundStyle: value));
-            },
-          ),
-        ),
+        ],
       ),
       2 => HyperosListGroup(
         children: [
@@ -3055,74 +3140,77 @@ class _HomeWidgetSettingsScreenState extends State<_HomeWidgetSettingsScreen> {
           ),
         ],
       ),
-      3 => HyperosControlCard(
-        title: l10n.homeWidgetCountdownLeadTitle,
-        subtitle: l10n.homeWidgetCountdownLeadSubtitle,
-        edgeToEdge: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            HyperosSelectTile<int>(
-              label: l10n.homeWidgetCountdownLeadTitle,
-              items: {
-                l10n.homeWidgetCountdownLeadAlways: 0,
-                for (final m in const [1, 5, 10, 15, 20, 30, 40, 50, 60])
-                  l10n.beforeClassMinutesOption(m): m,
-              },
-              value: _draft.widgetCountdownLeadMinutes,
-              onChanged: (value) {
-                _updateDraft(
-                  _draft.copyWith(widgetCountdownLeadMinutes: value),
-                );
-              },
-            ),
-            HyperosSelectTile<LiveCountdownTextStyle>(
-              label: l10n.widgetCountdownStyleTitle,
-              items: {
-                for (final v in LiveCountdownTextStyle.values)
-                  liveCountdownTextStyleLabel(l10n, v): v,
-              },
-              value: _draft.widgetCountdownTextStyle,
-              onChanged: (value) {
-                _updateDraft(_draft.copyWith(widgetCountdownTextStyle: value));
-              },
-            ),
-          ],
-        ),
+      3 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.homeWidgetCountdownLeadTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSelectTile<int>(
+                label: l10n.homeWidgetCountdownLeadTitle,
+                items: {
+                  l10n.homeWidgetCountdownLeadAlways: 0,
+                  for (final m in const [1, 5, 10, 15, 20, 30, 40, 50, 60])
+                    l10n.beforeClassMinutesOption(m): m,
+                },
+                value: _draft.widgetCountdownLeadMinutes,
+                onChanged: (value) {
+                  _updateDraft(
+                    _draft.copyWith(widgetCountdownLeadMinutes: value),
+                  );
+                },
+              ),
+              HyperosSelectTile<LiveCountdownTextStyle>(
+                label: l10n.widgetCountdownStyleTitle,
+                items: {
+                  for (final v in LiveCountdownTextStyle.values)
+                    liveCountdownTextStyleLabel(l10n, v): v,
+                },
+                value: _draft.widgetCountdownTextStyle,
+                onChanged: (value) {
+                  _updateDraft(
+                    _draft.copyWith(widgetCountdownTextStyle: value),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
       ),
-      4 => HyperosControlCard(
-        title: l10n.homeWidgetHeightAdjustTitle,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            HyperosSliderTile(
-              title: _widgetHeightAdjustmentLabel(l10n),
-              value: _draft.widgetHeightAdjustment,
-              min: _defaultWidgetHeightAdjustment - 16,
-              max: _defaultWidgetHeightAdjustment + 16,
-              divisions: 32,
-              onChanged: (value) => _updateDraft(
-                _draft.copyWith(widgetHeightAdjustment: value),
-                debounce: true,
+      4 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.homeWidgetHeightAdjustTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSliderTile(
+                title: _widgetHeightAdjustmentLabel(l10n),
+                value: _draft.widgetHeightAdjustment,
+                min: _defaultWidgetHeightAdjustment - 16,
+                max: _defaultWidgetHeightAdjustment + 16,
+                divisions: 32,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(widgetHeightAdjustment: value),
+                  debounce: true,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            HyperosSliderTile(
-              title: l10n.homeWidgetCornerRadiusTitle,
-              valueLabel: '${_draft.widgetCornerRadius.toStringAsFixed(0)}dp',
-              value: _draft.widgetCornerRadius,
-              min: _defaultWidgetCornerRadius - 14,
-              max: _defaultWidgetCornerRadius + 14,
-              divisions: 28,
-              onChanged: (value) => _updateDraft(
-                _draft.copyWith(widgetCornerRadius: value),
-                debounce: true,
+              HyperosSliderTile(
+                title: l10n.homeWidgetCornerRadiusTitle,
+                valueLabel: '${_draft.widgetCornerRadius.toStringAsFixed(0)}dp',
+                value: _draft.widgetCornerRadius,
+                min: _defaultWidgetCornerRadius - 14,
+                max: _defaultWidgetCornerRadius + 14,
+                divisions: 28,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(widgetCornerRadius: value),
+                  debounce: true,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
       _ => const SizedBox.shrink(),
     };
@@ -3216,14 +3304,15 @@ class _HomeWidgetSettingsScreenState extends State<_HomeWidgetSettingsScreen> {
 
   Widget _buildPinWidgetButton(HomeWidgetPinTarget target) {
     final isLoading = _pinningTargets.contains(target);
+    final canPin = !_isCheckingPinSupport && _canRequestPinWidget && !isLoading;
     return SizedBox(
       width: double.infinity,
       child: HyperosButton(
         label: _homeWidgetTargetLabel(context, target),
         variant: HyperosButtonVariant.secondary,
         expand: true,
-        loading: isLoading,
-        onPressed: isLoading ? null : () => _requestPinWidget(target),
+        loading: isLoading || _isCheckingPinSupport,
+        onPressed: canPin ? () => _requestPinWidget(target) : null,
       ),
     );
   }
@@ -3313,7 +3402,7 @@ class _LayoutSettingsScreenState extends State<_LayoutSettingsScreen> {
     );
   }
 
-  static const _layoutSectionCount = 15;
+  static const _layoutSectionCount = 12;
 
   Widget _buildLayoutSection(BuildContext context, int index) {
     final l10n = AppLocalizations.of(context)!;
@@ -3346,175 +3435,131 @@ class _LayoutSettingsScreenState extends State<_LayoutSettingsScreen> {
         ],
       ),
       1 => const HyperosSectionGap(),
-      2 => HyperosControlCard(
-        subtitle: l10n.pageTransitionSpeedSubtitle,
-        edgeToEdge: true,
-        child: HyperosSliderTile(
-          title: l10n.pageTransitionSpeedLabel(
-            _draft.pageTransitionSpeed.toStringAsFixed(1),
-          ),
-          value: _draft.pageTransitionSpeed,
-          min: TimetableSettings.minPageTransitionSpeed,
-          max: TimetableSettings.maxPageTransitionSpeed,
-          divisions: 20,
-          valueLabel: l10n.pageTransitionSpeedDurationHint(
-            AndroidAnimationScaleService.scaledDuration(
-              HyperosMiuixNavigation.transitionDurationMs,
-            ).inMilliseconds,
-          ),
-          onChanged: (value) {
-            HyperosNavigation.applyUserTransitionSpeed(context, value);
-            _updateDraft(
-              _draft.copyWith(pageTransitionSpeed: value),
-              debounce: true,
-            );
-          },
-        ),
-      ),
-      3 => const HyperosSectionGap(),
-      4 => HyperosControlCard(
-        subtitle: l10n.layoutEntrySubtitle,
-        edgeToEdge: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            HyperosSelectTile<SectionTimeDisplayMode>(
-              label: l10n.layoutTimeColumnDisplayLabel,
-              items: {
-                for (final v in SectionTimeDisplayMode.values)
-                  sectionTimeDisplayModeLabel(l10n, v): v,
-              },
-              value: _draft.timetableSectionTimeDisplayMode,
-              onChanged: (value) {
-                _updateDraft(
-                  _draft.copyWith(timetableSectionTimeDisplayMode: value),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            HyperosSelectTile<TimetableTimeColumnWidthMode>(
-              label: l10n.layoutTimeColumnWidthLabel,
-              items: {
-                for (final v in TimetableTimeColumnWidthMode.values)
-                  timetableTimeColumnWidthModeLabel(l10n, v): v,
-              },
-              value: _draft.timetableTimeColumnWidthMode,
-              onChanged: (value) {
-                _updateDraft(
-                  _draft.copyWith(timetableTimeColumnWidthMode: value),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            HyperosSelectTile<BackToCurrentWeekButtonStyle>(
-              label: l10n.layoutBackToCurrentWeekButtonStyleLabel,
-              items: {
-                for (final v in BackToCurrentWeekButtonStyle.values)
-                  _backToCurrentWeekButtonStyleLabel(l10n, v): v,
-              },
-              value: _draft.timetableBackToCurrentWeekButtonStyle,
-              onChanged: (value) {
-                _updateDraft(
-                  _draft.copyWith(timetableBackToCurrentWeekButtonStyle: value),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: HyperosControlCardScope.defaultHorizontalPadding,
+      // Preference rows only: gray [HyperosSectionLabel] above, white list card.
+      // Do not put black/muted titles or long footnotes on the card itself.
+      2 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.layoutDensityTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSelectTile<SectionTimeDisplayMode>(
+                label: l10n.layoutTimeColumnDisplayLabel,
+                items: {
+                  for (final v in SectionTimeDisplayMode.values)
+                    sectionTimeDisplayModeLabel(l10n, v): v,
+                },
+                value: _draft.timetableSectionTimeDisplayMode,
+                onChanged: (value) {
+                  _updateDraft(
+                    _draft.copyWith(timetableSectionTimeDisplayMode: value),
+                  );
+                },
               ),
-              child: Text(
-                l10n.layoutBackToCurrentWeekButtonStyleHelper,
-                style: HyperosTypography.sectionDescription(context),
-                softWrap: true,
+              HyperosSelectTile<TimetableTimeColumnWidthMode>(
+                label: l10n.layoutTimeColumnWidthLabel,
+                items: {
+                  for (final v in TimetableTimeColumnWidthMode.values)
+                    timetableTimeColumnWidthModeLabel(l10n, v): v,
+                },
+                value: _draft.timetableTimeColumnWidthMode,
+                onChanged: (value) {
+                  _updateDraft(
+                    _draft.copyWith(timetableTimeColumnWidthMode: value),
+                  );
+                },
               ),
-            ),
-            if (_draft.timetableBackToCurrentWeekButtonStyle ==
-                BackToCurrentWeekButtonStyle.floating) ...[
-              const SizedBox(height: 12),
-              HyperosSliderTile(
-                title: l10n.layoutBackToCurrentWeekButtonOpacityLabel(
-                  (_draft.timetableFloatingBackToCurrentWeekButtonOpacity * 100)
-                      .round(),
-                ),
-                value: _draft.timetableFloatingBackToCurrentWeekButtonOpacity,
-                min: 0.55,
-                max: 1.0,
-                divisions: 9,
-                onChanged: (value) => _updateDraft(
-                  _draft.copyWith(
-                    timetableFloatingBackToCurrentWeekButtonOpacity: value,
+              HyperosSelectTile<BackToCurrentWeekButtonStyle>(
+                label: l10n.layoutBackToCurrentWeekButtonStyleLabel,
+                items: {
+                  for (final v in BackToCurrentWeekButtonStyle.values)
+                    _backToCurrentWeekButtonStyleLabel(l10n, v): v,
+                },
+                value: _draft.timetableBackToCurrentWeekButtonStyle,
+                onChanged: (value) {
+                  _updateDraft(
+                    _draft.copyWith(
+                      timetableBackToCurrentWeekButtonStyle: value,
+                    ),
+                  );
+                },
+              ),
+              if (_draft.timetableBackToCurrentWeekButtonStyle ==
+                  BackToCurrentWeekButtonStyle.floating)
+                HyperosSliderTile(
+                  title: l10n.layoutBackToCurrentWeekButtonOpacityTitle,
+                  value: _draft.timetableFloatingBackToCurrentWeekButtonOpacity,
+                  min: 0.55,
+                  max: 1.0,
+                  divisions: 9,
+                  valueLabel:
+                      '${(_draft.timetableFloatingBackToCurrentWeekButtonOpacity * 100).round()}%',
+                  onChanged: (value) => _updateDraft(
+                    _draft.copyWith(
+                      timetableFloatingBackToCurrentWeekButtonOpacity: value,
+                    ),
+                    debounce: true,
                   ),
+                ),
+              HyperosSliderTile(
+                title: l10n.layoutCourseCardGapTitle,
+                value: _draft.timetableCourseCardGap,
+                min: 0,
+                max: 3,
+                divisions: 12,
+                valueLabel: _draft.timetableCourseCardGap.toStringAsFixed(1),
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(timetableCourseCardGap: value),
+                  debounce: true,
+                ),
+              ),
+              HyperosSliderTile(
+                title: l10n.layoutSectionHeightTitle,
+                value: _draft.sectionHeight,
+                min: 48,
+                max: 92,
+                divisions: 11,
+                enabled: !_draft.timetableAutoFitSectionHeight,
+                valueLabel: _draft.sectionHeight.toStringAsFixed(0),
+                onChanged: !_draft.timetableAutoFitSectionHeight
+                    ? (value) => _updateDraft(
+                        _draft.copyWith(sectionHeight: value),
+                        debounce: true,
+                      )
+                    : null,
+              ),
+              HyperosSliderTile(
+                title: l10n.layoutCompactFontSizeTitle,
+                value: _draft.compactFontSize,
+                min: 7,
+                max: 12,
+                divisions: 10,
+                valueLabel: _draft.compactFontSize.toStringAsFixed(1),
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(compactFontSize: value),
+                  debounce: true,
+                ),
+              ),
+              HyperosSliderTile(
+                title: l10n.layoutCourseCardFontSizeTitle,
+                value: _draft.courseCardFontSize,
+                min: 7,
+                max: 12,
+                divisions: 10,
+                valueLabel: _draft.courseCardFontSize.toStringAsFixed(1),
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(courseCardFontSize: value),
                   debounce: true,
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            HyperosSliderTile(
-              title: l10n.layoutCourseCardGapLabel(
-                _draft.timetableCourseCardGap.toStringAsFixed(1),
-              ),
-              value: _draft.timetableCourseCardGap,
-              min: 0,
-              max: 3,
-              divisions: 12,
-              onChanged: (value) => _updateDraft(
-                _draft.copyWith(timetableCourseCardGap: value),
-                debounce: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            HyperosSliderTile(
-              title: l10n.layoutSectionHeightLabel(
-                _draft.sectionHeight.toStringAsFixed(0),
-              ),
-              value: _draft.sectionHeight,
-              min: 48,
-              max: 92,
-              divisions: 11,
-              enabled: !_draft.timetableAutoFitSectionHeight,
-              onChanged: !_draft.timetableAutoFitSectionHeight
-                  ? (value) => _updateDraft(
-                      _draft.copyWith(sectionHeight: value),
-                      debounce: true,
-                    )
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            HyperosSliderTile(
-              title: l10n.layoutCompactFontSizeLabel(
-                _draft.compactFontSize.toStringAsFixed(1),
-              ),
-              value: _draft.compactFontSize,
-              min: 7,
-              max: 12,
-              divisions: 10,
-              onChanged: (value) => _updateDraft(
-                _draft.copyWith(compactFontSize: value),
-                debounce: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            HyperosSliderTile(
-              title: l10n.layoutCourseCardFontSizeLabel(
-                _draft.courseCardFontSize.toStringAsFixed(1),
-              ),
-              value: _draft.courseCardFontSize,
-              min: 7,
-              max: 12,
-              divisions: 10,
-              onChanged: (value) => _updateDraft(
-                _draft.copyWith(courseCardFontSize: value),
-                debounce: true,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-      5 => const HyperosSectionGap(),
-      6 => HyperosSectionLabel(text: l10n.layoutCourseCardDisplayTitle),
-      7 => HyperosListGroup(
+      3 => const HyperosSectionGap(),
+      4 => HyperosSectionLabel(text: l10n.layoutCourseCardDisplayTitle),
+      5 => HyperosListGroup(
         children: [
           HyperosSwitchTile(
             title: l10n.showCourseNameTitle,
@@ -3589,193 +3634,200 @@ class _LayoutSettingsScreenState extends State<_LayoutSettingsScreen> {
           ),
         ],
       ),
-      8 => HyperosSectionDescription(
-        text: l10n.layoutCourseCardDisplaySubtitle,
-      ),
-      9 => const HyperosSectionGap(),
-      10 => HyperosControlCard(
-        edgeToEdge: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            HyperosSelectTile<CourseCardVerticalAlign>(
-              label: l10n.layoutVerticalAlignLabel,
-              items: {
-                for (final v in CourseCardVerticalAlign.values)
-                  courseCardVerticalAlignLabel(l10n, v): v,
-              },
-              value: _draft.courseCardVerticalAlign,
-              onChanged: (value) {
-                _updateDraft(_draft.copyWith(courseCardVerticalAlign: value));
-              },
-            ),
-            const SizedBox(height: 12),
-            HyperosSelectTile<CourseCardHorizontalAlign>(
-              label: l10n.layoutHorizontalAlignLabel,
-              items: {
-                for (final v in CourseCardHorizontalAlign.values)
-                  courseCardHorizontalAlignLabel(l10n, v): v,
-              },
-              value: _draft.courseCardHorizontalAlign,
-              onChanged: (value) {
-                _updateDraft(_draft.copyWith(courseCardHorizontalAlign: value));
-              },
-            ),
-          ],
-        ),
-      ),
-      11 => const HyperosSectionGap(),
-      12 => HyperosControlCard(
-        title: l10n.layoutConflictOpacityLabel(
-          (_draft.timetableConflictCourseOpacity * 100).round(),
-        ),
-        subtitle: l10n.layoutConflictOpacitySubtitle,
-        child: HyperosSliderTile(
-          value: _draft.timetableConflictCourseOpacity,
-          min: 0.2,
-          max: 1.0,
-          divisions: 16,
-          onChanged: (value) => _updateDraft(
-            _draft.copyWith(timetableConflictCourseOpacity: value),
-            debounce: true,
+      6 => const HyperosSectionGap(),
+      7 => HyperosListGroup(
+        children: [
+          HyperosSelectTile<CourseCardVerticalAlign>(
+            label: l10n.layoutVerticalAlignLabel,
+            items: {
+              for (final v in CourseCardVerticalAlign.values)
+                courseCardVerticalAlignLabel(l10n, v): v,
+            },
+            value: _draft.courseCardVerticalAlign,
+            onChanged: (value) {
+              _updateDraft(_draft.copyWith(courseCardVerticalAlign: value));
+            },
           ),
-        ),
+          HyperosSelectTile<CourseCardHorizontalAlign>(
+            label: l10n.layoutHorizontalAlignLabel,
+            items: {
+              for (final v in CourseCardHorizontalAlign.values)
+                courseCardHorizontalAlignLabel(l10n, v): v,
+            },
+            value: _draft.courseCardHorizontalAlign,
+            onChanged: (value) {
+              _updateDraft(_draft.copyWith(courseCardHorizontalAlign: value));
+            },
+          ),
+        ],
       ),
-      13 => const HyperosSectionGap(),
-      14 => HyperosControlCard(
-        title: l10n.textColorTitle,
-        subtitle: l10n.textColorSubtitle,
-        edgeToEdge: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            HyperosSwitchTile(
-              title: l10n.textColorIndependentDetail,
-              value: !_draft.linkCourseCardColors,
-              onChanged: (value) {
-                if (!value) {
-                  _updateDraft(
-                    _draft.copyWith(
-                      linkCourseCardColors: true,
-                      courseCardDetailColorLight:
-                          _draft.courseCardTitleColorLight,
-                      courseCardDetailColorDark:
-                          _draft.courseCardTitleColorDark,
-                    ),
-                  );
-                } else {
-                  _updateDraft(_draft.copyWith(linkCourseCardColors: false));
-                }
-              },
-            ),
-            Column(
+      8 => const HyperosSectionGap(),
+      9 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.layoutConflictOpacityTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSliderTile(
+                title: l10n.layoutConflictOpacityTitle,
+                value: _draft.timetableConflictCourseOpacity,
+                min: 0.2,
+                max: 1.0,
+                divisions: 16,
+                valueLabel:
+                    '${(_draft.timetableConflictCourseOpacity * 100).round()}%',
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(timetableConflictCourseOpacity: value),
+                  debounce: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      10 => const HyperosSectionGap(),
+      11 => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(text: l10n.textColorTitle),
+          HyperosControlCard(
+            edgeToEdge: true,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 浅色模式颜色设置
-                _buildModeColorSettings(
-                  context,
-                  l10n: l10n,
-                  modeLabel: l10n.themeModeLight,
-                  containerColor: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerLow,
-                  titleColor: _draft.courseCardTitleColorLight,
-                  detailColor: _draft.courseCardDetailColorLight,
-                  weekdayColor: _draft.weekdayBarFontColorLight,
-                  timeAxisColor: _draft.timeAxisFontColorLight,
-                  accentColor: _draft.weekdayBarAccentColorLight,
-                  onTitleColorChanged: (color) {
-                    if (_draft.linkCourseCardColors) {
+                HyperosSwitchTile(
+                  title: l10n.textColorIndependentDetail,
+                  value: !_draft.linkCourseCardColors,
+                  onChanged: (value) {
+                    if (!value) {
                       _updateDraft(
                         _draft.copyWith(
-                          courseCardTitleColorLight: color,
-                          courseCardDetailColorLight: color,
+                          linkCourseCardColors: true,
+                          courseCardDetailColorLight:
+                              _draft.courseCardTitleColorLight,
+                          courseCardDetailColorDark:
+                              _draft.courseCardTitleColorDark,
                         ),
                       );
                     } else {
                       _updateDraft(
-                        _draft.copyWith(courseCardTitleColorLight: color),
+                        _draft.copyWith(linkCourseCardColors: false),
                       );
                     }
                   },
-                  onDetailColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(courseCardDetailColorLight: color),
-                  ),
-                  onWeekdayColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(weekdayBarFontColorLight: color),
-                  ),
-                  onTimeAxisColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(timeAxisFontColorLight: color),
-                  ),
-                  onAccentColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(weekdayBarAccentColorLight: color),
-                  ),
-                  defaultTitleColor:
-                      TimetableSettings.defaultCourseCardTitleColor,
-                  defaultDetailColor:
-                      TimetableSettings.defaultCourseCardDetailColor,
-                  defaultWeekdayColor:
-                      TimetableSettings.defaultWeekdayBarFontColorLight,
-                  defaultTimeAxisColor:
-                      TimetableSettings.defaultTimeAxisFontColorLight,
-                  defaultAccentColor:
-                      TimetableSettings.defaultWeekdayBarAccentColorLight,
                 ),
-                const SizedBox(height: 12),
-                // 深色模式颜色设置
-                _buildModeColorSettings(
-                  context,
-                  l10n: l10n,
-                  modeLabel: l10n.themeModeDark,
-                  containerColor: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerHigh,
-                  titleColor: _draft.courseCardTitleColorDark,
-                  detailColor: _draft.courseCardDetailColorDark,
-                  weekdayColor: _draft.weekdayBarFontColorDark,
-                  timeAxisColor: _draft.timeAxisFontColorDark,
-                  accentColor: _draft.weekdayBarAccentColorDark,
-                  onTitleColorChanged: (color) {
-                    if (_draft.linkCourseCardColors) {
-                      _updateDraft(
-                        _draft.copyWith(
-                          courseCardTitleColorDark: color,
-                          courseCardDetailColorDark: color,
-                        ),
-                      );
-                    } else {
-                      _updateDraft(
-                        _draft.copyWith(courseCardTitleColorDark: color),
-                      );
-                    }
-                  },
-                  onDetailColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(courseCardDetailColorDark: color),
-                  ),
-                  onWeekdayColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(weekdayBarFontColorDark: color),
-                  ),
-                  onTimeAxisColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(timeAxisFontColorDark: color),
-                  ),
-                  onAccentColorChanged: (color) => _updateDraft(
-                    _draft.copyWith(weekdayBarAccentColorDark: color),
-                  ),
-                  defaultTitleColor:
-                      TimetableSettings.defaultCourseCardTitleColor,
-                  defaultDetailColor:
-                      TimetableSettings.defaultCourseCardDetailColor,
-                  defaultWeekdayColor:
-                      TimetableSettings.defaultWeekdayBarFontColorDark,
-                  defaultTimeAxisColor:
-                      TimetableSettings.defaultTimeAxisFontColorDark,
-                  defaultAccentColor:
-                      TimetableSettings.defaultWeekdayBarAccentColorDark,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 浅色模式颜色设置
+                    _buildModeColorSettings(
+                      context,
+                      l10n: l10n,
+                      modeLabel: l10n.themeModeLight,
+                      containerColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerLow,
+                      titleColor: _draft.courseCardTitleColorLight,
+                      detailColor: _draft.courseCardDetailColorLight,
+                      weekdayColor: _draft.weekdayBarFontColorLight,
+                      timeAxisColor: _draft.timeAxisFontColorLight,
+                      accentColor: _draft.weekdayBarAccentColorLight,
+                      onTitleColorChanged: (color) {
+                        if (_draft.linkCourseCardColors) {
+                          _updateDraft(
+                            _draft.copyWith(
+                              courseCardTitleColorLight: color,
+                              courseCardDetailColorLight: color,
+                            ),
+                          );
+                        } else {
+                          _updateDraft(
+                            _draft.copyWith(courseCardTitleColorLight: color),
+                          );
+                        }
+                      },
+                      onDetailColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(courseCardDetailColorLight: color),
+                      ),
+                      onWeekdayColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(weekdayBarFontColorLight: color),
+                      ),
+                      onTimeAxisColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(timeAxisFontColorLight: color),
+                      ),
+                      onAccentColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(weekdayBarAccentColorLight: color),
+                      ),
+                      defaultTitleColor:
+                          TimetableSettings.defaultCourseCardTitleColor,
+                      defaultDetailColor:
+                          TimetableSettings.defaultCourseCardDetailColor,
+                      defaultWeekdayColor:
+                          TimetableSettings.defaultWeekdayBarFontColorLight,
+                      defaultTimeAxisColor:
+                          TimetableSettings.defaultTimeAxisFontColorLight,
+                      defaultAccentColor:
+                          TimetableSettings.defaultWeekdayBarAccentColorLight,
+                    ),
+                    const SizedBox(height: 12),
+                    // 深色模式颜色设置
+                    _buildModeColorSettings(
+                      context,
+                      l10n: l10n,
+                      modeLabel: l10n.themeModeDark,
+                      containerColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHigh,
+                      titleColor: _draft.courseCardTitleColorDark,
+                      detailColor: _draft.courseCardDetailColorDark,
+                      weekdayColor: _draft.weekdayBarFontColorDark,
+                      timeAxisColor: _draft.timeAxisFontColorDark,
+                      accentColor: _draft.weekdayBarAccentColorDark,
+                      onTitleColorChanged: (color) {
+                        if (_draft.linkCourseCardColors) {
+                          _updateDraft(
+                            _draft.copyWith(
+                              courseCardTitleColorDark: color,
+                              courseCardDetailColorDark: color,
+                            ),
+                          );
+                        } else {
+                          _updateDraft(
+                            _draft.copyWith(courseCardTitleColorDark: color),
+                          );
+                        }
+                      },
+                      onDetailColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(courseCardDetailColorDark: color),
+                      ),
+                      onWeekdayColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(weekdayBarFontColorDark: color),
+                      ),
+                      onTimeAxisColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(timeAxisFontColorDark: color),
+                      ),
+                      onAccentColorChanged: (color) => _updateDraft(
+                        _draft.copyWith(weekdayBarAccentColorDark: color),
+                      ),
+                      defaultTitleColor:
+                          TimetableSettings.defaultCourseCardTitleColor,
+                      defaultDetailColor:
+                          TimetableSettings.defaultCourseCardDetailColor,
+                      defaultWeekdayColor:
+                          TimetableSettings.defaultWeekdayBarFontColorDark,
+                      defaultTimeAxisColor:
+                          TimetableSettings.defaultTimeAxisFontColorDark,
+                      defaultAccentColor:
+                          TimetableSettings.defaultWeekdayBarAccentColorDark,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       _ => const SizedBox.shrink(),
     };
@@ -3865,10 +3917,9 @@ class _LayoutSettingsScreenState extends State<_LayoutSettingsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
               modeLabel,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+              style: HyperosTypography.sectionLabel(
+                context,
+              ).copyWith(fontWeight: FontWeight.w400),
             ),
           ),
           _buildColorSettingRow(
@@ -4198,138 +4249,139 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
     DateTime? endDate = initialEnd ?? existing?.date;
     HolidayType selectedType = existing?.type ?? HolidayType.vacation;
 
-    final result = await showHyperosSheet<bool>(
+    final result = await showHyperosSheet<String>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            return HyperosSheetFrame(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + MediaQuery.of(ctx).viewInsets.bottom,
+            // showHyperosSheet already pads by viewInsets.bottom — do not add it
+            // again on the frame or keyboard leaves a huge empty band.
+            final dateSummary = startDate != null && endDate != null
+                ? _formatHolidayRange(startDate!, endDate!, l10n)
+                : '--';
+
+            return PickerSheetScaffold(
+              actions: Row(
+                children: [
+                  Expanded(
+                    child: HyperosButton(
+                      label: l10n.cancelAction,
+                      variant: HyperosButtonVariant.secondary,
+                      expand: true,
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: HyperosButton(
+                      label: l10n.saveAction,
+                      expand: true,
+                      onPressed: () {
+                        if (nameController.text.trim().isEmpty) {
+                          showAppToast(
+                            ctx,
+                            message: l10n.customHolidayNameRequired,
+                            kind: AppToastKind.warning,
+                          );
+                          return;
+                        }
+                        if (startDate == null || endDate == null) {
+                          return;
+                        }
+                        Navigator.pop(ctx, 'save');
+                      },
+                    ),
+                  ),
+                ],
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      existing != null
-                          ? l10n.customHolidayEdit
-                          : l10n.customHolidayAdd,
-                      style: HyperosTypography.sheetTitle(ctx),
-                    ),
-                    const SizedBox(height: 12),
-                    HyperosTextField(
-                      controller: nameController,
-                      label: l10n.customHolidayNameLabel,
-                    ),
-                    const SizedBox(height: 12),
-                    HyperosListGroup(
-                      children: [
-                        HyperosChoiceTile(
-                          prefix: Icon(
-                            Icons.date_range,
-                            size: 18,
-                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                          ),
-                          title:
-                              '${l10n.customHolidayStartDate} / ${l10n.customHolidayEndDate}',
-                          subtitle: Text(
-                            startDate != null && endDate != null
-                                ? '${startDate!.month}/${startDate!.day} — ${endDate!.month}/${endDate!.day}'
-                                : '--',
-                          ),
-                          onTap: () async {
-                            FocusManager.instance.primaryFocus?.unfocus();
-                            final now = DateTime.now();
-                            final picked = await showDateRangePicker(
-                              context: ctx,
-                              initialDateRange:
-                                  startDate != null && endDate != null
-                                  ? DateTimeRange(
-                                      start: startDate!,
-                                      end: endDate!,
-                                    )
-                                  : null,
-                              firstDate: DateTime(now.year - 1),
-                              lastDate: DateTime(now.year + 2),
-                            );
-                            if (picked != null) {
-                              setDialogState(() {
-                                startDate = picked.start;
-                                endDate = picked.end;
-                              });
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.customHolidayType,
-                      style: HyperosTypography.sectionLabel(ctx),
-                    ),
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: HyperosSegmentedControl(
-                        tabs: [
-                          l10n.customHolidayTypeVacation,
-                          l10n.customHolidayTypeWorkday,
-                        ],
-                        selectedIndex: selectedType == HolidayType.vacation
-                            ? 0
-                            : 1,
-                        onChanged: (index) {
-                          setDialogState(() {
-                            selectedType = index == 0
-                                ? HolidayType.vacation
-                                : HolidayType.adjustedWorkday;
-                          });
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    existing != null
+                        ? l10n.customHolidayEdit
+                        : l10n.customHolidayAdd,
+                    style: HyperosTypography.sheetTitle(ctx),
+                  ),
+                  const SizedBox(height: 16),
+                  HyperosTextField(
+                    controller: nameController,
+                    label: l10n.customHolidayNameLabel,
+                  ),
+                  const SizedBox(height: 12),
+                  // Match [HyperosTextField] / [HyperosPickerField] chrome on
+                  // frosted sheets — avoid white [HyperosListGroup] islands.
+                  HyperosPickerField(
+                    label: l10n.customHolidayStartDate,
+                    value: dateSummary,
+                    icon: Icons.date_range_outlined,
+                    isPlaceholder: startDate == null || endDate == null,
+                    onTap: () async {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      final now = DateTime.now();
+                      final picked = await showDateRangePicker(
+                        context: ctx,
+                        initialDateRange: startDate != null && endDate != null
+                            ? DateTimeRange(start: startDate!, end: endDate!)
+                            : null,
+                        firstDate: DateTime(now.year - 1),
+                        lastDate: DateTime(now.year + 2),
+                        builder: (pickerContext, child) {
+                          return Theme(
+                            data: Theme.of(pickerContext).copyWith(
+                              colorScheme: ColorScheme.fromSeed(
+                                seedColor: HyperosColors.primary(pickerContext),
+                                brightness: Theme.of(pickerContext).brightness,
+                              ),
+                            ),
+                            child: child ?? const SizedBox.shrink(),
+                          );
                         },
-                      ),
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          startDate = picked.start;
+                          endDate = picked.end;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.customHolidayType,
+                    style: TextStyle(
+                      fontSize: HyperosMiuixTextField.labelFontSizeNormal,
+                      color: HyperosColors.onSurface(ctx),
                     ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: HyperosFrostedSheetButton(
-                            label: MaterialLocalizations.of(
-                              ctx,
-                            ).cancelButtonLabel,
-                            expand: true,
-                            bordered: true,
-                            onPressed: () => Navigator.pop(ctx, false),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: HyperosButton(
-                            label: MaterialLocalizations.of(ctx).okButtonLabel,
-                            expand: true,
-                            onPressed: () {
-                              if (nameController.text.trim().isEmpty) {
-                                showAppToast(
-                                  ctx,
-                                  message: l10n.customHolidayNameRequired,
-                                  kind: AppToastKind.warning,
-                                );
-                                return;
-                              }
-                              if (startDate == null || endDate == null) {
-                                return;
-                              }
-                              Navigator.pop(ctx, true);
-                            },
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(height: 8),
+                  HyperosSegmentedControl(
+                    tabs: [
+                      l10n.customHolidayTypeVacation,
+                      l10n.customHolidayTypeWorkday,
+                    ],
+                    selectedIndex: selectedType == HolidayType.vacation ? 0 : 1,
+                    onChanged: (index) {
+                      setDialogState(() {
+                        selectedType = index == 0
+                            ? HolidayType.vacation
+                            : HolidayType.adjustedWorkday;
+                      });
+                    },
+                  ),
+                  if (existing?.groupId != null) ...[
+                    const SizedBox(height: 16),
+                    HyperosButton(
+                      label: l10n.customHolidayDelete,
+                      variant: HyperosButtonVariant.destructive,
+                      expand: true,
+                      // Close the edit sheet first; confirm is a separate
+                      // bottom sheet so we never stack dialog-on-sheet.
+                      onPressed: () => Navigator.pop(ctx, 'delete'),
                     ),
                   ],
-                ),
+                ],
               ),
             );
           },
@@ -4337,14 +4389,17 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
       },
     );
 
-    if (result != true || startDate == null || endDate == null) return;
     if (!mounted) return;
+    if (result == 'delete' && existing?.groupId != null) {
+      await _confirmDeleteCustomHoliday(existing!.groupId!);
+      return;
+    }
+    if (result != 'save' || startDate == null || endDate == null) return;
     final name = nameController.text.trim();
     final groupId =
         existing?.groupId ?? 'custom-${DateTime.now().millisecondsSinceEpoch}';
     final provider = context.read<TimetableProvider>();
 
-    // Build entries for each day in range
     final entries = <HolidayEntry>[];
     var d = startDate!;
     while (!d.isAfter(endDate!)) {
@@ -4359,7 +4414,6 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
       d = d.add(const Duration(days: 1));
     }
 
-    // Batch save: load existing → add/update → save once (avoid race condition)
     if (existing != null) {
       await provider.updateCustomHoliday(groupId, entries);
     } else {
@@ -4368,17 +4422,60 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
     await _loadCustomHolidays();
   }
 
-  Future<void> _confirmDeleteCustomHoliday(String groupId) async {
+  /// Bottom confirm sheet with solid HyperOS buttons (not center HyperosDialog).
+  Future<bool> _showCustomHolidayDeleteConfirmSheet() async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showHyperosConfirmDialog(
+    final confirmed = await showHyperosSheet<bool>(
       context: context,
-      title: l10n.customHolidayDelete,
-      message: l10n.customHolidayDeleteConfirm,
-      cancelLabel: MaterialLocalizations.of(context).cancelButtonLabel,
-      confirmLabel: l10n.customHolidayDelete,
-      destructive: true,
+      builder: (sheetContext) {
+        return HyperosSheetFrame(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.customHolidayDelete,
+                style: HyperosTypography.sheetTitle(sheetContext),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                l10n.customHolidayDeleteConfirm,
+                style: HyperosTypography.listDetail(sheetContext),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: HyperosButton(
+                      label: l10n.cancelAction,
+                      variant: HyperosButtonVariant.secondary,
+                      expand: true,
+                      onPressed: () => Navigator.pop(sheetContext, false),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: HyperosButton(
+                      label: l10n.deleteAction,
+                      variant: HyperosButtonVariant.destructive,
+                      expand: true,
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
-    if (confirmed == true && mounted) {
+    return confirmed == true;
+  }
+
+  Future<void> _confirmDeleteCustomHoliday(String groupId) async {
+    final confirmed = await _showCustomHolidayDeleteConfirmSheet();
+    if (confirmed && mounted) {
       final provider = context.read<TimetableProvider>();
       await provider.removeCustomHoliday(groupId);
       await _loadCustomHolidays();
@@ -4458,17 +4555,14 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
       onBack: () => Navigator.pop(context),
       suffixes: [
         FHeaderAction(
-          icon: const Icon(Icons.refresh),
-          semanticsLabel: l10n.holidayCheckUpdate,
-          onPress: () async {
-            await provider.refreshHolidayData();
-            if (context.mounted) {
-              showAppToast(
-                context,
-                message: l10n.holidayCheckUpdate,
-                kind: AppToastKind.success,
-              );
-            }
+          icon: const Icon(Icons.tune_rounded),
+          semanticsLabel: l10n.cloudSyncAdvancedTitle,
+          onPress: () {
+            HyperosNavigation.push(
+              context,
+              settings: const RouteSettings(name: '/settings/holiday/advanced'),
+              builder: (_) => const _HolidayAdvancedSettingsScreen(),
+            );
           },
         ),
       ],
@@ -4479,7 +4573,6 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
           context,
           index,
           l10n: l10n,
-          provider: provider,
           holidayData: holidayData,
           officialHolidays: officialHolidays,
         ),
@@ -4487,13 +4580,12 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
     );
   }
 
-  static const _holidaySectionCount = 4;
+  static const _holidaySectionCount = 3;
 
   Widget _buildHolidaySection(
     BuildContext context,
     int index, {
     required AppLocalizations l10n,
-    required TimetableProvider provider,
     required HolidayData? holidayData,
     required List<_HolidayDisplayItem> officialHolidays,
   }) {
@@ -4518,306 +4610,99 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
       ),
       1 => Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          HyperosCard(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.edit_note,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        l10n.customHolidayTitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    HyperosButton(
-                      label: l10n.customHolidayAdd,
-                      variant: HyperosButtonVariant.secondary,
-                      onPressed: () => _showCustomHolidayDialog(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                if (_customHolidays.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: Text(
-                        l10n.customHolidayEmpty,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  ..._groupCustomHolidays().map((group) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Dismissible(
-                        key: ValueKey(group.groupId),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 16),
-                          color: Theme.of(context).colorScheme.errorContainer,
-                          child: Icon(
-                            Icons.delete_outline,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
-                          ),
-                        ),
-                        confirmDismiss: (_) async {
-                          await _confirmDeleteCustomHoliday(group.groupId);
-                          return false;
-                        },
-                        child: HyperosChoiceTile(
-                          prefix: Container(
-                            width: 4,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: group.type == HolidayType.vacation
-                                  ? Colors.orange
-                                  : Colors.blue,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          title: group.name,
-                          subtitle: Text(
-                            _formatHolidayRange(
-                              group.startDate,
-                              group.endDate,
-                              l10n,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.delete_outline,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                          onTap: () {
-                            final entries = _customHolidays
-                                .where((e) => e.groupId == group.groupId)
-                                .toList();
-                            if (entries.isNotEmpty) {
-                              _showCustomHolidayDialog(
-                                existing: entries.first,
-                                initialStart: group.startDate,
-                                initialEnd: group.endDate,
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  }),
-              ],
-            ),
+          HyperosSectionLabel(text: l10n.customHolidayTitle),
+          HyperosListGroup(
+            children: [
+              if (_customHolidays.isEmpty)
+                HyperosNavTile(
+                  title: l10n.customHolidayEmpty,
+                  enabled: false,
+                  showChevron: false,
+                )
+              else
+                ..._groupCustomHolidays().map((group) {
+                  final typeLabel = group.type == HolidayType.vacation
+                      ? l10n.customHolidayTypeVacation
+                      : l10n.customHolidayTypeWorkday;
+                  final rangeLabel = _formatHolidayRange(
+                    group.startDate,
+                    group.endDate,
+                    l10n,
+                  );
+                  return HyperosNavTile(
+                    title: group.name,
+                    // System preference style: primary title, gray caption, trailing summary.
+                    subtitle: typeLabel,
+                    details: rangeLabel,
+                    holdHighlightThroughTransition: false,
+                    onTap: () {
+                      final entries = _customHolidays
+                          .where((e) => e.groupId == group.groupId)
+                          .toList();
+                      if (entries.isNotEmpty) {
+                        _showCustomHolidayDialog(
+                          existing: entries.first,
+                          initialStart: group.startDate,
+                          initialEnd: group.endDate,
+                        );
+                      }
+                    },
+                    onLongPress: () =>
+                        _confirmDeleteCustomHoliday(group.groupId),
+                  );
+                }),
+            ],
           ),
-          const HyperosSectionGap(),
-        ],
-      ),
-      2 => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          HyperosCard(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.celebration_outlined,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        l10n.holidayDataYearLabel(holidayData?.year ?? ''),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (officialHolidays.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: Text(
-                        l10n.holidayNoUpcoming,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  ...officialHolidays.map(
-                    (h) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Opacity(
-                        opacity: h.isPast ? 0.4 : 1.0,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: h.type == HolidayType.vacation
-                                    ? Colors.orange
-                                    : Colors.blue,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    h.name,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  Text(
-                                    _formatHolidayRange(
-                                      h.startDate,
-                                      h.endDate,
-                                      l10n,
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const HyperosSectionGap(),
-        ],
-      ),
-      _ => HyperosCard(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.history,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    l10n.holidayUpdateLog,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                if (provider.holidayLogs.isNotEmpty)
-                  Text(
-                    l10n.holidayUpdateLogCount(provider.holidayLogs.length),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (provider.holidayLogs.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '暂无日志',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 140),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const ClampingScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: provider.holidayLogs.length,
-                  itemBuilder: (_, i) {
-                    final log = provider.holidayLogs[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            log.timeString,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant
-                                  .withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              HolidayLogLocalizer.localize(l10n, log.message),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+          const SizedBox(height: 12),
+          // Full-width Miuix button (same pattern as data transfer / empty states).
+          HyperosControlCard(
+            child: HyperosControlCardInset(
+              child: HyperosButton(
+                label: l10n.customHolidayAdd,
+                variant: HyperosButtonVariant.secondary,
+                expand: true,
+                onPressed: () => _showCustomHolidayDialog(),
               ),
-          ],
-        ),
+            ),
+          ),
+          const HyperosSectionGap(),
+        ],
+      ),
+      _ => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HyperosSectionLabel(
+            text: l10n.holidayDataYearLabel(holidayData?.year ?? ''),
+          ),
+          if (officialHolidays.isEmpty)
+            HyperosListGroup(
+              children: [
+                HyperosNavTile(title: l10n.holidayNoUpcoming, enabled: false),
+              ],
+            )
+          else
+            HyperosListGroup(
+              children: [
+                for (final holiday in officialHolidays)
+                  Opacity(
+                    opacity: holiday.isPast ? 0.55 : 1,
+                    child: HyperosNavTile(
+                      title: holiday.name,
+                      details: _formatHolidayRange(
+                        holiday.startDate,
+                        holiday.endDate,
+                        l10n,
+                      ),
+                      showChevron: false,
+                      holdHighlightThroughTransition: false,
+                    ),
+                  ),
+              ],
+            ),
+        ],
       ),
     };
   }
@@ -4843,6 +4728,162 @@ class _HolidaySettingsScreenState extends State<_HolidaySettingsScreen> {
 
   bool _isSameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+/// Advanced holiday tools: manual refresh + update log (hidden from casual users).
+class _HolidayAdvancedSettingsScreen extends StatefulWidget {
+  const _HolidayAdvancedSettingsScreen();
+
+  @override
+  State<_HolidayAdvancedSettingsScreen> createState() =>
+      _HolidayAdvancedSettingsScreenState();
+}
+
+class _HolidayAdvancedSettingsScreenState
+    extends State<_HolidayAdvancedSettingsScreen> {
+  bool _refreshing = false;
+
+  Future<void> _refreshHolidayData() async {
+    if (_refreshing) {
+      return;
+    }
+    setState(() => _refreshing = true);
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await context.read<TimetableProvider>().refreshHolidayData();
+      if (!mounted) {
+        return;
+      }
+      showAppToast(
+        context,
+        message: l10n.holidayCheckUpdate,
+        kind: AppToastKind.success,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final provider = context.watch<TimetableProvider>();
+    final logs = provider.holidayLogs;
+    final cardColor = HyperosColors.card(context);
+    final divider = HyperosColors.dividerLine(context);
+
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: Text(l10n.cloudSyncAdvancedTitle),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: HyperosBlurredBodyInset(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 4),
+                  HyperosSectionLabel(text: l10n.holidayUpdateLog),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Material(
+                        color: cardColor,
+                        shape: HyperosTheme.cardShape(),
+                        clipBehavior: Clip.antiAlias,
+                        child: logs.isEmpty
+                            ? Center(
+                                child: Text(
+                                  '暂无日志',
+                                  style: HyperosTypography.listDetail(context),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  12,
+                                ),
+                                itemCount: logs.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 6),
+                                itemBuilder: (_, index) {
+                                  final log = logs[index];
+                                  final message = HolidayLogLocalizer.localize(
+                                    l10n,
+                                    log.message,
+                                  );
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        log.timeString,
+                                        style:
+                                            HyperosTypography.listDetail(
+                                              context,
+                                            ).copyWith(
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                              height: 1.2,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        message,
+                                        style:
+                                            HyperosTypography.listDetail(
+                                              context,
+                                            ).copyWith(
+                                              color: HyperosColors.primaryText(
+                                                context,
+                                              ),
+                                              height: 1.4,
+                                              letterSpacing: 0.1,
+                                            ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Fixed footer: solid bar + full-width refresh action.
+          Material(
+            color: cardColor,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: cardColor,
+                border: Border(top: BorderSide(color: divider, width: 0.5)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: HyperosButton(
+                    label: l10n.holidayCheckUpdate,
+                    expand: true,
+                    loading: _refreshing,
+                    onPressed: _refreshing ? null : _refreshHolidayData,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _HolidayDisplayItem {

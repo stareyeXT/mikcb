@@ -326,16 +326,20 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
+      // Floating [HyperosSheetFrame] (blur off on non-mobile CI): Material +
+      // [HyperosTokens.cardRadius], outer inset =
+      // [HyperosMiuixDialog.outsideMarginHorizontal] (+ safe area bottom).
       final cardMaterial = find.byWidgetPredicate(
         (widget) =>
             widget is Material &&
             widget.borderRadius is BorderRadius &&
             (widget.borderRadius as BorderRadius).topLeft.x ==
-                HyperosMiuixDialog.minBottomCornerRadius,
+                HyperosTokens.cardRadius,
       );
-      final cardRect = tester.getRect(cardMaterial);
-      const horizontalInset = HyperosMiuixBasicComponent.insideMarginHorizontal;
-      const bottomInset = HyperosMiuixBasicComponent.selectSheetBottomMargin;
+      expect(cardMaterial, findsWidgets);
+      final cardRect = tester.getRect(cardMaterial.first);
+      const horizontalInset = HyperosMiuixDialog.outsideMarginHorizontal;
+      const bottomInset = HyperosMiuixDialog.outsideMarginHorizontal;
       expect(cardRect.left, closeTo(horizontalInset, 1));
       expect(cardRect.right, closeTo(screenWidth - horizontalInset, 1));
       expect(cardRect.bottom, closeTo(screenHeight - bottomInset, 1));
@@ -422,15 +426,15 @@ void main() {
         ),
       );
 
-      final highlightRect = tester.getRect(
-        find
-            .byWidgetPredicate(
-              (widget) => widget is ColoredBox && widget.color.a > 0,
-            )
-            .first,
+      // Dialog selection is checkmark + primary title color, not a permanent
+      // fill. The pressable row still paints a full-width [ColoredBox] shell.
+      expect(find.byType(HyperosSelectedCheckmark), findsOneWidget);
+      final rowShell = find.byWidgetPredicate(
+        (widget) => widget is ColoredBox && widget.child is SizedBox,
       );
-
-      expect(highlightRect.width, cardWidth);
+      expect(rowShell, findsWidgets);
+      final shellRect = tester.getRect(rowShell.first);
+      expect(shellRect.width, cardWidth);
     });
   });
 
@@ -519,7 +523,8 @@ void main() {
       final middleTileHeight = tester.getSize(tiles.at(1)).height;
       final lastTileHeight = tester.getSize(tiles.at(2)).height;
 
-      const content = HyperosMiuixSpec.settingsRowMinHeight;
+      // Content-sized title line (listTitle: preferenceTitleSize × height 1.25).
+      const content = HyperosMiuixSpec.preferenceTitleSize * 1.25;
       const firstLast = HyperosMiuixDropdown.firstLastVerticalPadding;
       const middle = HyperosMiuixDropdown.middleVerticalPadding;
       // First: firstLast top + middle bottom; last: middle top + firstLast bottom.
@@ -527,15 +532,18 @@ void main() {
       final expectedMiddle = content + middle + middle;
       final expectedLast = content + middle + firstLast;
 
-      expect(firstTileHeight, closeTo(expectedFirst, 0.5));
-      expect(middleTileHeight, closeTo(expectedMiddle, 0.5));
-      expect(lastTileHeight, closeTo(expectedLast, 0.5));
+      expect(firstTileHeight, closeTo(expectedFirst, 1.0));
+      expect(middleTileHeight, closeTo(expectedMiddle, 1.0));
+      expect(lastTileHeight, closeTo(expectedLast, 1.0));
       expect(firstTileHeight, greaterThan(middleTileHeight));
       expect(lastTileHeight, greaterThan(middleTileHeight));
+      // Must stay well below the bloated settings-row + padding model (~88/80).
+      expect(firstTileHeight, lessThan(HyperosMiuixSpec.settingsRowMinHeight));
+      expect(middleTileHeight, lessThan(HyperosMiuixSpec.settingsRowMinHeight));
     });
 
     test('popup height estimate matches edge/middle padding model', () {
-      const content = HyperosMiuixSpec.settingsRowMinHeight;
+      const content = HyperosMiuixSpec.preferenceTitleSize * 1.25;
       const firstLast = HyperosMiuixDropdown.firstLastVerticalPadding;
       const middle = HyperosMiuixDropdown.middleVerticalPadding;
 

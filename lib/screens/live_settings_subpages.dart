@@ -115,10 +115,15 @@ class _LiveReminderTimingScreenState extends State<LiveReminderTimingScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final duringClassEnabled =
+        _draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd;
     final timeCorrectionText = _formatLiveTimeCorrection(
       l10n,
       _draft.liveTimeCorrectionSeconds,
     );
+    // HyperOS list style: section label + one list group of equal-height rows.
+    // Avoid ControlCard wrappers and long footnotes so the page scans like
+    // system settings (title / one-line subtitle / trailing control).
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
       title: Text(l10n.liveReminderTimingTitle),
@@ -139,8 +144,7 @@ class _LiveReminderTimingScreenState extends State<LiveReminderTimingScreen> {
               HyperosSwitchTile(
                 title: l10n.duringClassReminderTitle,
                 subtitle: l10n.duringClassReminderSubtitle,
-                value:
-                    _draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd,
+                value: duringClassEnabled,
                 onChanged: (value) => _updateDraft(
                   _draft.copyWith(
                     liveEnableDuringClass: value,
@@ -148,31 +152,25 @@ class _LiveReminderTimingScreenState extends State<LiveReminderTimingScreen> {
                   ),
                 ),
               ),
+              if (duringClassEnabled)
+                HyperosSelectTile<int>(
+                  label: l10n.liveClassReminderLeadTitle,
+                  subtitle: _buildLiveClassReminderLeadSummary(l10n, _draft),
+                  items: {
+                    l10n.liveClassReminderLeadOptionImmediate: 0,
+                    l10n.liveClassReminderLeadOptionMinutes(5): 5,
+                    l10n.liveClassReminderLeadOptionMinutes(10): 10,
+                    l10n.liveClassReminderLeadOptionMinutes(15): 15,
+                    l10n.liveClassReminderLeadOptionMinutes(20): 20,
+                    l10n.liveClassReminderLeadOptionMinutes(30): 30,
+                  },
+                  value: _draft.liveClassReminderStartMinutes,
+                  onChanged: (value) => _updateDraft(
+                    _draft.copyWith(liveClassReminderStartMinutes: value),
+                  ),
+                ),
             ],
           ),
-          HyperosSectionDescription(text: l10n.liveReminderSwitchesSubtitle),
-          if (_draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd) ...[
-            const HyperosSectionGap(),
-            HyperosControlCard(
-              title: l10n.liveClassReminderLeadTitle,
-              subtitle: _buildLiveClassReminderLeadSummary(l10n, _draft),
-              child: HyperosSelectTile<int>(
-                label: l10n.liveClassReminderLeadTitle,
-                items: {
-                  l10n.liveClassReminderLeadOptionImmediate: 0,
-                  l10n.liveClassReminderLeadOptionMinutes(5): 5,
-                  l10n.liveClassReminderLeadOptionMinutes(10): 10,
-                  l10n.liveClassReminderLeadOptionMinutes(15): 15,
-                  l10n.liveClassReminderLeadOptionMinutes(20): 20,
-                  l10n.liveClassReminderLeadOptionMinutes(30): 30,
-                },
-                value: _draft.liveClassReminderStartMinutes,
-                onChanged: (value) => _updateDraft(
-                  _draft.copyWith(liveClassReminderStartMinutes: value),
-                ),
-              ),
-            ),
-          ],
           const HyperosSectionGap(),
           HyperosSectionLabel(text: l10n.liveDisplayModeTitle),
           HyperosListGroup(
@@ -199,87 +197,64 @@ class _LiveReminderTimingScreenState extends State<LiveReminderTimingScreen> {
               ),
             ],
           ),
-          HyperosSectionDescription(text: l10n.liveDisplayModeSubtitle),
           const HyperosSectionGap(),
-          HyperosControlCard(
-            title: l10n.liveTimeThresholdTitle,
-            subtitle: l10n.liveTimeThresholdSubtitle,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                HyperosSelectTile<int>(
-                  label: l10n.beforeClassPopupLabel,
-                  items: {
-                    for (final value in _beforeClassMinutesOptions)
-                      l10n.beforeClassMinutesOption(value): value,
-                  },
-                  value: _draft.liveShowBeforeClassMinutes,
-                  onChanged: (value) => _updateDraft(
-                    _draft.copyWith(liveShowBeforeClassMinutes: value),
-                  ),
+          HyperosSectionLabel(text: l10n.liveTimeThresholdTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSelectTile<int>(
+                label: l10n.beforeClassPopupLabel,
+                items: {
+                  for (final value in _beforeClassMinutesOptions)
+                    l10n.beforeClassMinutesOption(value): value,
+                },
+                value: _draft.liveShowBeforeClassMinutes,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveShowBeforeClassMinutes: value),
                 ),
-                const SizedBox(height: 12),
-                HyperosSelectTile<int>(
-                  label: l10n.beforeEndSecondsLabel,
-                  items: {
-                    for (final value in _endSecondsOptions)
-                      l10n.beforeEndSecondsOption(value): value,
-                  },
-                  value: _draft.liveEndSecondsCountdownThreshold,
-                  onChanged: (value) => _updateDraft(
-                    _draft.copyWith(liveEndSecondsCountdownThreshold: value),
-                  ),
+              ),
+              HyperosSelectTile<int>(
+                label: l10n.beforeEndSecondsLabel,
+                items: {
+                  for (final value in _endSecondsOptions)
+                    l10n.beforeEndSecondsOption(value): value,
+                },
+                value: _draft.liveEndSecondsCountdownThreshold,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveEndSecondsCountdownThreshold: value),
                 ),
-                const SizedBox(height: 12),
-                HyperosSliderTile(
-                  title: l10n.timeCorrectionLabel(timeCorrectionText),
-                  value: _draft.liveTimeCorrectionSeconds.toDouble(),
-                  min: _timeCorrectionMin,
-                  max: _timeCorrectionMax,
-                  divisions: (_timeCorrectionMax - _timeCorrectionMin).round(),
-                  onChanged: (value) => _updateDraft(
-                    _draft.copyWith(liveTimeCorrectionSeconds: value.round()),
-                    debounce: true,
-                  ),
+              ),
+              HyperosSelectTile<LiveDuringClassTimeDisplayMode>(
+                label: l10n.duringEndTimeDisplayLabel,
+                subtitle: l10n.duringEndTimeDisplayHelp,
+                items: {
+                  for (final value in LiveDuringClassTimeDisplayMode.values)
+                    liveDuringClassTimeDisplayModeLabel(l10n, value): value,
+                },
+                value: _draft.liveDuringEndTimeDisplayMode,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveDuringEndTimeDisplayMode: value),
                 ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal:
-                        HyperosControlCardScope.defaultHorizontalPadding,
-                  ),
-                  child: Text(
-                    l10n.timeCorrectionHelp,
-                    style: HyperosTypography.listDetail(context),
-                  ),
+              ),
+            ],
+          ),
+          const HyperosSectionGap(),
+          HyperosSectionLabel(text: l10n.timeCorrectionTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSliderTile(
+                title: l10n.timeCorrectionLabel(timeCorrectionText),
+                dialogTitle: l10n.timeCorrectionTitle,
+                dialogHelper: l10n.timeCorrectionHelp,
+                value: _draft.liveTimeCorrectionSeconds.toDouble(),
+                min: _timeCorrectionMin,
+                max: _timeCorrectionMax,
+                divisions: (_timeCorrectionMax - _timeCorrectionMin).round(),
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveTimeCorrectionSeconds: value.round()),
+                  debounce: true,
                 ),
-                const SizedBox(height: 12),
-                HyperosSelectTile<LiveDuringClassTimeDisplayMode>(
-                  label: l10n.duringEndTimeDisplayLabel,
-                  items: {
-                    for (final value in LiveDuringClassTimeDisplayMode.values)
-                      liveDuringClassTimeDisplayModeLabel(l10n, value): value,
-                  },
-                  value: _draft.liveDuringEndTimeDisplayMode,
-                  onChanged: (value) => _updateDraft(
-                    _draft.copyWith(liveDuringEndTimeDisplayMode: value),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    HyperosControlCardScope.defaultHorizontalPadding,
-                    0,
-                    HyperosControlCardScope.defaultHorizontalPadding,
-                    HyperosControlCardScope.defaultBodyBottomInset,
-                  ),
-                  child: Text(
-                    l10n.duringEndTimeDisplayHelp,
-                    style: HyperosTypography.listDetail(context),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -412,57 +387,41 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
           ),
         ],
       ),
-      HyperosSectionDescription(text: l10n.liveDisplayContentSubtitle),
       if (display.showCountdown) ...[
         const HyperosSectionGap(),
-        HyperosControlCard(
-          edgeToEdge: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              HyperosSelectTile<LiveCountdownTextStyle>(
-                label: l10n.countdownFormatLabel,
-                items: {
-                  for (final value in LiveCountdownTextStyle.values)
-                    liveCountdownTextStyleLabel(l10n, value): value,
-                },
-                value: display.countdownTextStyle,
-                onChanged: (value) =>
-                    _updateDisplay(display.copyWith(countdownTextStyle: value)),
-              ),
-              const SizedBox(height: 4),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  HyperosControlCardScope.defaultHorizontalPadding,
-                  0,
-                  HyperosControlCardScope.defaultHorizontalPadding,
-                  HyperosControlCardScope.defaultBodyBottomInset,
-                ),
-                child: Text(
-                  l10n.countdownFormatHelp,
-                  style: HyperosTypography.listDetail(context),
-                ),
-              ),
-            ],
-          ),
+        HyperosSectionLabel(text: l10n.countdownFormatLabel),
+        HyperosListGroup(
+          children: [
+            HyperosSelectTile<LiveCountdownTextStyle>(
+              label: l10n.countdownFormatLabel,
+              items: {
+                for (final value in LiveCountdownTextStyle.values)
+                  liveCountdownTextStyleLabel(l10n, value): value,
+              },
+              value: display.countdownTextStyle,
+              onChanged: (value) =>
+                  _updateDisplay(display.copyWith(countdownTextStyle: value)),
+            ),
+          ],
         ),
       ],
       if (!widget.forDuringEnd) ...[
         const HyperosSectionGap(),
-        HyperosControlCard(
-          title: l10n.beforeClassQuickActionTitle,
-          subtitle: l10n.beforeClassQuickActionSubtitle,
-          child: HyperosSelectTile<LiveBeforeClassQuickAction>(
-            label: l10n.beforeClassQuickActionTitle,
-            items: {
-              for (final value in LiveBeforeClassQuickAction.values)
-                liveBeforeClassQuickActionLabel(l10n, value): value,
-            },
-            value: _draft.liveBeforeClassQuickAction,
-            onChanged: (value) => _updateDraft(
-              _draft.copyWith(liveBeforeClassQuickAction: value),
+        HyperosSectionLabel(text: l10n.beforeClassQuickActionTitle),
+        HyperosListGroup(
+          children: [
+            HyperosSelectTile<LiveBeforeClassQuickAction>(
+              label: l10n.beforeClassQuickActionTitle,
+              items: {
+                for (final value in LiveBeforeClassQuickAction.values)
+                  liveBeforeClassQuickActionLabel(l10n, value): value,
+              },
+              value: _draft.liveBeforeClassQuickAction,
+              onChanged: (value) => _updateDraft(
+                _draft.copyWith(liveBeforeClassQuickAction: value),
+              ),
             ),
-          ),
+          ],
         ),
       ],
       const HyperosSectionGap(),
@@ -479,13 +438,11 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
           ),
         ],
       ),
-      HyperosSectionDescription(text: l10n.liveIslandVisualSubtitle),
       if (display.enableMiuiIslandLabelImage) ...[
         const HyperosSectionGap(),
         HyperosControlCard(
           edgeToEdge: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: HyperosControlCardRows(
             children: [
               HyperosSelectTile<MiuiIslandLabelContent>(
                 label: l10n.liveMiuiLabelContentLabel,
@@ -498,7 +455,6 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                   display.copyWith(miuiIslandLabelContent: value),
                 ),
               ),
-              const SizedBox(height: 12),
               HyperosSelectTile<MiuiIslandLabelStyle>(
                 label: l10n.liveMiuiLabelStyleLabel,
                 items: {
@@ -511,104 +467,95 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                 ),
               ),
               if (display.miuiIslandLabelStyle ==
-                  MiuiIslandLabelStyle.iconAndText) ...[
-                const SizedBox(height: 12),
+                  MiuiIslandLabelStyle.iconAndText)
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: HyperosControlCardScope.defaultHorizontalPadding,
+                  padding: const EdgeInsets.fromLTRB(
+                    HyperosControlCardScope.defaultHorizontalPadding,
+                    4,
+                    HyperosControlCardScope.defaultHorizontalPadding,
+                    8,
                   ),
-                  child: Text(
-                    l10n.liveMiuiLabelLogoTitle,
-                    style: HyperosTypography.listTitle(context),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: HyperosControlCardScope.defaultHorizontalPadding,
-                  ),
-                  child: Text(
-                    l10n.liveMiuiLabelLogoSubtitle,
-                    style: HyperosTypography.listDetail(context),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: HyperosControlCardScope.defaultHorizontalPadding,
-                  ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: HyperosButton(
-                          label: display.miuiIslandLabelLogoPath == null
-                              ? l10n.selectImageAction
-                              : l10n.replaceImageAction,
-                          variant: HyperosButtonVariant.secondary,
-                          expand: true,
-                          onPressed: () => _pickLabelLogoImage(display),
-                        ),
+                      Text(
+                        l10n.liveMiuiLabelLogoTitle,
+                        style: HyperosTypography.listTitle(context),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.liveMiuiLabelLogoSubtitle,
+                        style: HyperosTypography.listDetail(context),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: HyperosButton(
+                              label: display.miuiIslandLabelLogoPath == null
+                                  ? l10n.selectImageAction
+                                  : l10n.replaceImageAction,
+                              variant: HyperosButtonVariant.secondary,
+                              expand: true,
+                              onPressed: () => _pickLabelLogoImage(display),
+                            ),
+                          ),
+                          if (display.miuiIslandLabelLogoPath != null) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: HyperosButton(
+                                label: l10n.deleteAction,
+                                variant: HyperosButtonVariant.destructive,
+                                expand: true,
+                                onPressed: () async {
+                                  await _deleteManagedImageArtifacts(
+                                    directoryName: _labelLogoDir,
+                                    filePrefix: widget.forDuringEnd
+                                        ? 'during_end_label_logo'
+                                        : 'before_class_label_logo',
+                                  );
+                                  _updateDisplay(
+                                    display.copyWith(
+                                      clearMiuiIslandLabelLogoPath: true,
+                                    ),
+                                    clearLabelLogoPath: true,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       if (display.miuiIslandLabelLogoPath != null) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: HyperosButton(
-                            label: l10n.deleteAction,
-                            variant: HyperosButtonVariant.destructive,
-                            expand: true,
-                            onPressed: () async {
-                              await _deleteManagedImageArtifacts(
-                                directoryName: _labelLogoDir,
-                                filePrefix: widget.forDuringEnd
-                                    ? 'during_end_label_logo'
-                                    : 'before_class_label_logo',
-                              );
-                              _updateDisplay(
-                                display.copyWith(
-                                  clearMiuiIslandLabelLogoPath: true,
-                                ),
-                                clearLabelLogoPath: true,
-                              );
-                            },
-                          ),
+                        const SizedBox(height: 12),
+                        _ImagePreview(
+                          path: display.miuiIslandLabelLogoPath!,
+                          imageCornerRadius:
+                              display.miuiIslandLabelLogoCornerRadius,
                         ),
                       ],
                     ],
                   ),
                 ),
-                if (display.miuiIslandLabelLogoPath != null) ...[
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: HyperosControlCardScope.defaultHorizontalPadding,
-                    ),
-                    child: _ImagePreview(
-                      path: display.miuiIslandLabelLogoPath!,
-                      imageCornerRadius: display.miuiIslandLabelLogoCornerRadius,
-                    ),
+              if (display.miuiIslandLabelStyle ==
+                      MiuiIslandLabelStyle.iconAndText &&
+                  display.miuiIslandLabelLogoPath != null)
+                HyperosSliderTile(
+                  title: l10n.liveMiuiLabelLogoCornerRadiusLabel(
+                    display.miuiIslandLabelLogoCornerRadius.toStringAsFixed(0),
                   ),
-                  const SizedBox(height: 12),
-                  HyperosSliderTile(
-                    title: l10n.liveMiuiLabelLogoCornerRadiusLabel(
-                      display.miuiIslandLabelLogoCornerRadius.toStringAsFixed(
-                        0,
-                      ),
-                    ),
-                    value: display.miuiIslandLabelLogoCornerRadius.clamp(
-                      0.0,
-                      12.0,
-                    ),
-                    min: 0,
-                    max: 12,
-                    divisions: 12,
-                    onChanged: (value) => _updateDisplay(
-                      display.copyWith(miuiIslandLabelLogoCornerRadius: value),
-                      debounce: true,
-                    ),
+                  value: display.miuiIslandLabelLogoCornerRadius.clamp(
+                    0.0,
+                    12.0,
                   ),
-                ],
-                const SizedBox(height: 12),
-              ],
+                  min: 0,
+                  max: 12,
+                  divisions: 12,
+                  onChanged: (value) => _updateDisplay(
+                    display.copyWith(miuiIslandLabelLogoCornerRadius: value),
+                    debounce: true,
+                  ),
+                ),
               HyperosSliderTile(
                 title: l10n.liveMiuiLabelFontSizeLabel(
                   display.miuiIslandLabelFontSize.toStringAsFixed(0),
@@ -622,7 +569,6 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                   debounce: true,
                 ),
               ),
-              const SizedBox(height: 12),
               HyperosSliderTile(
                 title: l10n.liveMiuiLabelOffsetXLabel(
                   display.miuiIslandLabelOffsetX.toStringAsFixed(1),
@@ -636,7 +582,6 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                   debounce: true,
                 ),
               ),
-              const SizedBox(height: 12),
               HyperosSliderTile(
                 title: l10n.liveMiuiLabelOffsetYLabel(
                   display.miuiIslandLabelOffsetY.toStringAsFixed(1),
@@ -650,7 +595,6 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                   debounce: true,
                 ),
               ),
-              const SizedBox(height: 12),
               HyperosSelectTile<MiuiIslandLabelFontWeight>(
                 label: l10n.liveMiuiLabelFontWeightLabel,
                 items: {
@@ -662,7 +606,6 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                   display.copyWith(miuiIslandLabelFontWeight: value),
                 ),
               ),
-              const SizedBox(height: 12),
               HyperosSelectTile<MiuiIslandLabelRenderQuality>(
                 label: l10n.liveMiuiLabelRenderQualityLabel,
                 items: {
@@ -674,13 +617,12 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                   display.copyWith(miuiIslandLabelRenderQuality: value),
                 ),
               ),
-              const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   HyperosControlCardScope.defaultHorizontalPadding,
-                  0,
+                  4,
                   HyperosControlCardScope.defaultHorizontalPadding,
-                  HyperosControlCardScope.defaultBodyBottomInset,
+                  13,
                 ),
                 child: Wrap(
                   spacing: 12,
@@ -705,104 +647,95 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
       const HyperosSectionGap(),
       HyperosControlCard(
         edgeToEdge: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: HyperosControlCardRows(
           children: [
-            HyperosControlCardRowScope(
-              isFirst: true,
-              isLast: false,
-              child: HyperosSelectTile<MiuiIslandExpandedIconMode>(
-                label: l10n.liveMiuiExpandedIconLabel,
-                items: {
-                  for (final value in MiuiIslandExpandedIconMode.values)
-                    miuiIslandExpandedIconModeLabel(l10n, value): value,
-                },
-                value: display.miuiIslandExpandedIconMode,
-                onChanged: (value) {
-                  () async {
-                    if (value != MiuiIslandExpandedIconMode.customImage) {
-                      await _deleteManagedImageArtifacts(
-                        directoryName: _expandedIconDir,
-                        filePrefix: widget.forDuringEnd
-                            ? 'during_end_expanded_icon'
-                            : 'before_class_expanded_icon',
-                      );
-                    }
-                    _updateDisplay(
-                      display.copyWith(
-                        miuiIslandExpandedIconMode: value,
-                        clearMiuiIslandExpandedIconPath:
-                            value != MiuiIslandExpandedIconMode.customImage,
-                      ),
-                      clearExpandedIconPath:
-                          value != MiuiIslandExpandedIconMode.customImage,
+            HyperosSelectTile<MiuiIslandExpandedIconMode>(
+              label: l10n.liveMiuiExpandedIconLabel,
+              items: {
+                for (final value in MiuiIslandExpandedIconMode.values)
+                  miuiIslandExpandedIconModeLabel(l10n, value): value,
+              },
+              value: display.miuiIslandExpandedIconMode,
+              onChanged: (value) {
+                () async {
+                  if (value != MiuiIslandExpandedIconMode.customImage) {
+                    await _deleteManagedImageArtifacts(
+                      directoryName: _expandedIconDir,
+                      filePrefix: widget.forDuringEnd
+                          ? 'during_end_expanded_icon'
+                          : 'before_class_expanded_icon',
                     );
-                  }();
-                },
-              ),
+                  }
+                  _updateDisplay(
+                    display.copyWith(
+                      miuiIslandExpandedIconMode: value,
+                      clearMiuiIslandExpandedIconPath:
+                          value != MiuiIslandExpandedIconMode.customImage,
+                    ),
+                    clearExpandedIconPath:
+                        value != MiuiIslandExpandedIconMode.customImage,
+                  );
+                }();
+              },
             ),
             if (display.miuiIslandExpandedIconMode ==
-                MiuiIslandExpandedIconMode.customImage) ...[
-              const SizedBox(height: 12),
+                MiuiIslandExpandedIconMode.customImage)
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: HyperosControlCardScope.defaultHorizontalPadding,
+                padding: const EdgeInsets.fromLTRB(
+                  HyperosControlCardScope.defaultHorizontalPadding,
+                  4,
+                  HyperosControlCardScope.defaultHorizontalPadding,
+                  // Match last-row bottom of preference tiles (not card bleed).
+                  13,
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: HyperosButton(
-                        label: display.miuiIslandExpandedIconPath == null
-                            ? l10n.selectImageAction
-                            : l10n.replaceImageAction,
-                        variant: HyperosButtonVariant.secondary,
-                        expand: true,
-                        onPressed: () => _pickExpandedIconImage(display),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: HyperosButton(
+                            label: display.miuiIslandExpandedIconPath == null
+                                ? l10n.selectImageAction
+                                : l10n.replaceImageAction,
+                            variant: HyperosButtonVariant.secondary,
+                            expand: true,
+                            onPressed: () => _pickExpandedIconImage(display),
+                          ),
+                        ),
+                        if (display.miuiIslandExpandedIconPath != null) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: HyperosButton(
+                              label: l10n.deleteAction,
+                              variant: HyperosButtonVariant.destructive,
+                              expand: true,
+                              onPressed: () async {
+                                await _deleteManagedImageArtifacts(
+                                  directoryName: _expandedIconDir,
+                                  filePrefix: widget.forDuringEnd
+                                      ? 'during_end_expanded_icon'
+                                      : 'before_class_expanded_icon',
+                                );
+                                _updateDisplay(
+                                  display.copyWith(
+                                    clearMiuiIslandExpandedIconPath: true,
+                                  ),
+                                  clearExpandedIconPath: true,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (display.miuiIslandExpandedIconPath != null) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: HyperosButton(
-                          label: l10n.deleteAction,
-                          variant: HyperosButtonVariant.destructive,
-                          expand: true,
-                          onPressed: () async {
-                            await _deleteManagedImageArtifacts(
-                              directoryName: _expandedIconDir,
-                              filePrefix: widget.forDuringEnd
-                                  ? 'during_end_expanded_icon'
-                                  : 'before_class_expanded_icon',
-                            );
-                            _updateDisplay(
-                              display.copyWith(
-                                clearMiuiIslandExpandedIconPath: true,
-                              ),
-                              clearExpandedIconPath: true,
-                            );
-                          },
-                        ),
-                      ),
+                      const SizedBox(height: 12),
+                      _ImagePreview(path: display.miuiIslandExpandedIconPath!),
                     ],
                   ],
                 ),
               ),
-              if (display.miuiIslandExpandedIconPath != null) ...[
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    HyperosControlCardScope.defaultHorizontalPadding,
-                    0,
-                    HyperosControlCardScope.defaultHorizontalPadding,
-                    HyperosControlCardScope.defaultBodyBottomInset,
-                  ),
-                  child: _ImagePreview(path: display.miuiIslandExpandedIconPath!),
-                ),
-              ] else
-                const SizedBox(
-                  height: HyperosControlCardScope.defaultBodyBottomInset,
-                ),
-            ],
           ],
         ),
       ),
@@ -825,7 +758,6 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
                 ),
               ],
             ),
-            HyperosSectionDescription(text: l10n.liveDisplayConfigModeSubtitle),
             const HyperosSectionGap(),
           ],
           if (_followBeforeClass)
@@ -1063,7 +995,6 @@ class _LiveKeepAliveSettingsScreenState
               ),
             ],
           ),
-          HyperosSectionDescription(text: l10n.liveKeepAliveOptionsSubtitle),
         ],
       ),
     );

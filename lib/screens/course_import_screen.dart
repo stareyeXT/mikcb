@@ -161,8 +161,9 @@ class CourseImportScreen extends StatelessWidget {
           child: HyperosListView(
             includeHeaderInset: false,
             children: [
+              const ImportRandomColorToggle(),
+              const HyperosSectionGap(),
               HyperosSectionLabel(text: l10n.chooseImportMethodTitle),
-              HyperosSectionDescription(text: l10n.chooseImportMethodSubtitle),
               const HyperosSectionGap(),
               HyperosChoiceGroup(
                 children: [
@@ -282,8 +283,6 @@ class _IcsCourseImportScreenState extends State<IcsCourseImportScreen> {
                 child: HyperosListView(
                   includeHeaderInset: false,
                   children: [
-                    const ImportRandomColorToggle(),
-                    const HyperosSectionGap(),
                     _ImportGuidePanel(
                       scenarioIntro: l10n.icsScenarioIntro,
                       step1Subtitle: l10n.icsStep1Subtitle,
@@ -528,8 +527,6 @@ class _SpreadsheetCourseImportScreenState
                 child: HyperosListView(
                   includeHeaderInset: false,
                   children: [
-                    const ImportRandomColorToggle(),
-                    const HyperosSectionGap(),
                     _ImportGuidePanel(
                       scenarioIntro: l10n.spreadsheetScenarioIntro,
                       step1Subtitle: l10n.spreadsheetStep1Subtitle,
@@ -1024,8 +1021,6 @@ class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
                   child: HyperosListView(
                     includeHeaderInset: false,
                     children: [
-                      const ImportRandomColorToggle(),
-                      const HyperosSectionGap(),
                       _AiWorkflowGuideCard(l10n: l10n),
                       const HyperosSectionGap(),
                       HyperosControlCard(
@@ -1776,11 +1771,6 @@ class _WarehouseCourseImportScreenState
         child: HyperosBlurredBodyInset(
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child: ImportRandomColorToggle(),
-              ),
-              const HyperosSectionGap(),
               Expanded(
                 child: FutureBuilder<WarehouseRootIndex>(
                   future: _rootIndexFuture,
@@ -2363,7 +2353,6 @@ class _WarehouseCustomDebugEditScreenState
             includeHeaderInset: false,
             children: [
               HyperosSectionLabel(text: l10n.debugRecordFormula),
-              HyperosSectionDescription(text: l10n.debugRecordFormulaSubtitle),
               const HyperosSectionGap(),
               HyperosTextField(
                 controller: _nameController,
@@ -3436,7 +3425,10 @@ class _WarehouseAdapterWebLoginScreenState
         sections: sections,
         applyToActiveProfile: true,
       );
-      await provider.applyTimeScheme(created.id);
+      final applyError = await provider.applyTimeScheme(created.id);
+      if (applyError != null) {
+        throw FormatException(applyError);
+      }
       return;
     }
     final result = await provider.updateTimeScheme(
@@ -3447,7 +3439,10 @@ class _WarehouseAdapterWebLoginScreenState
     if (result != null) {
       throw FormatException(result);
     }
-    await provider.applyTimeScheme(existingScheme.id);
+    final applyError = await provider.applyTimeScheme(existingScheme.id);
+    if (applyError != null) {
+      throw FormatException(applyError);
+    }
   }
 
   Future<void> _applyPendingImportedSectionsIfNeeded() async {
@@ -5857,7 +5852,7 @@ Future<bool?> _askReplaceExisting(
   return showAppTripleActionDialog(
     context,
     title: title,
-    message: '$content\n\n建议日常更新课表时优先使用「更新课表」：会保留本地独有课程，并合并导入文件中的课程。',
+    message: '$content\n\n建议日常更新课表时优先使用「更新课表」：会保留本地独有课程，并合并导入文件中的课程',
     cancelLabel: l10n.cancelAction,
     secondaryLabel: l10n.courseImportUpdateRecommendedAction,
     primaryLabel: l10n.courseImportOverwriteAction,

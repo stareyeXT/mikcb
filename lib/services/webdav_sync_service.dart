@@ -27,6 +27,15 @@ enum WebdavSyncResultKind {
   backupDeleted,
 }
 
+/// Controls whether [WebdavSyncService.uploadSnapshot] may overwrite remote.
+enum WebdavUploadConflictPolicy {
+  /// Manual sync / keep-local: always PUT.
+  force,
+
+  /// Auto upload: only PUT when remote is missing or still our baseline.
+  requireUnchangedRemote,
+}
+
 class WebdavSyncResult {
   final WebdavSyncResultKind kind;
   final String? message;
@@ -38,10 +47,7 @@ class WebdavBackupListResult {
   final List<CloudBackupEntry> entries;
   final String? errorMessage;
 
-  const WebdavBackupListResult({
-    required this.entries,
-    this.errorMessage,
-  });
+  const WebdavBackupListResult({required this.entries, this.errorMessage});
 
   bool get hasError => errorMessage != null;
 }
@@ -85,10 +91,13 @@ class WebdavSyncService {
         password.isEmpty) {
       return null;
     }
+
+    final baseUrl = config.baseUrl.trim().isEmpty
+        ? WebdavSyncConfig.defaultJianguoyunBaseUrl
+        : config.baseUrl.trim();
+
     return WebdavConnectionParams(
-      baseUrl: config.baseUrl.trim().isEmpty
-          ? WebdavSyncConfig.defaultJianguoyunBaseUrl
-          : config.baseUrl.trim(),
+      baseUrl: baseUrl,
       username: config.username.trim(),
       password: password,
     );
@@ -104,11 +113,14 @@ class WebdavSyncService {
         password.isEmpty) {
       throw StateError('missing_credentials');
     }
+
+    final baseUrl = config.baseUrl.trim().isEmpty
+        ? WebdavSyncConfig.defaultJianguoyunBaseUrl
+        : config.baseUrl.trim();
+
     await _clientService.testConnection(
       WebdavConnectionParams(
-        baseUrl: config.baseUrl.trim().isEmpty
-            ? WebdavSyncConfig.defaultJianguoyunBaseUrl
-            : config.baseUrl.trim(),
+        baseUrl: baseUrl,
         username: config.username.trim(),
         password: password,
       ),
@@ -135,6 +147,10 @@ class WebdavSyncService {
     CloudBackupSource backupSource = CloudBackupSource.auto,
     bool writeHistory = true,
     bool updateSyncTimestamps = true,
+    /// Auto upload must not silently overwrite a drifted remote.
+    /// Manual keep-local / force paths pass [force].
+    WebdavUploadConflictPolicy conflictPolicy =
+        WebdavUploadConflictPolicy.force,
   }) async {
     final config = configOverride ?? await _configStore.load();
     if (!config.enabled) {
@@ -174,6 +190,38 @@ class WebdavSyncService {
         client: client,
         remoteFolder: config.normalizedRemoteFolder,
       );
+
+      if (conflictPolicy == WebdavUploadConflictPolicy.requireUnchangedRemote) {
+        final remoteMetaResult = await _clientService.getRemoteMetaResult(
+          client: client,
+          remotePath: config.metaRemotePath,
+        );
+        if (remoteMetaResult.isFailed) {
+          return WebdavSyncResult(
+            kind: WebdavSyncResultKind.failed,
+            message: remoteMetaResult.errorMessage ?? 'remote_meta_unavailable',
+          );
+        }
+        final remoteMeta = remoteMetaResult.meta;
+        final decision = decideWebdavAutoUpload(
+          remoteContentSha256: remoteMeta?.contentSha256,
+          lastAppliedRemoteHash: config.lastAppliedRemoteHash,
+          lastUploadedLocalHash: config.lastUploadedLocalHash,
+          localContentSha256: snapshot.contentSha256,
+        );
+        switch (decision) {
+          case WebdavAutoUploadDecision.allow:
+            break;
+          case WebdavAutoUploadDecision.upToDate:
+            return const WebdavSyncResult(kind: WebdavSyncResultKind.upToDate);
+          case WebdavAutoUploadDecision.remoteDrifted:
+            return const WebdavSyncResult(
+              kind: WebdavSyncResultKind.cancelled,
+              message: 'remote_drifted_manual_sync_required',
+            );
+        }
+      }
+
       await _clientService.putBytes(
         client: client,
         remotePath: config.snapshotRemotePath,
@@ -266,7 +314,10 @@ class WebdavSyncService {
 
     try {
       final client = _clientService.createClient(params);
-      final index = await _loadRemoteBackupIndex(client: client, config: config);
+      final index = await _loadRemoteBackupIndex(
+        client: client,
+        config: config,
+      );
       final sorted = [...index.entries]
         ..sort((a, b) => b.exportedAt.compareTo(a.exportedAt));
       return WebdavBackupListResult(entries: sorted);
@@ -294,7 +345,10 @@ class WebdavSyncService {
 
     try {
       final client = _clientService.createClient(params);
-      final index = await _loadRemoteBackupIndex(client: client, config: config);
+      final index = await _loadRemoteBackupIndex(
+        client: client,
+        config: config,
+      );
       final entry = index.entries.firstWhere(
         (item) => item.id == entryId,
         orElse: () => throw StateError('backup_not_found'),
@@ -366,7 +420,10 @@ class WebdavSyncService {
 
     try {
       final client = _clientService.createClient(params);
-      final index = await _loadRemoteBackupIndex(client: client, config: config);
+      final index = await _loadRemoteBackupIndex(
+        client: client,
+        config: config,
+      );
       final entry = index.entries.firstWhere(
         (item) => item.id == entryId,
         orElse: () => throw StateError('backup_not_found'),

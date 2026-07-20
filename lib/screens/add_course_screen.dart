@@ -543,7 +543,11 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
           color: colorHex == null
               ? theme.colors.secondary
               : _parseColor(colorHex),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(
+            // Color chips are short squares — keep radius << size/2 so corners
+            // stay distinct (Miuix icon-badge proportion, not settings card 24).
+            size * HyperosTokens.iconBadgeRadius / HyperosTokens.iconBadgeSize,
+          ),
           border: Border.all(
             color: isSelected ? selectionBorder : theme.colors.border,
             width: isSelected ? 2 : 1,
@@ -694,6 +698,55 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     );
   }
 
+  Widget _buildScheduleConflictLinks(int index, AppLocalizations l10n) {
+    final entry = _scheduleEntries[index];
+    final provider = context.read<TimetableProvider>();
+    final partners = provider.courseConflictMap[entry.id] ?? const <Course>[];
+    if (partners.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // HyperOS preference-row style (not a custom alert banner):
+    // title + optional tag + detail + chevron; whole row is the action.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (
+          var partnerIndex = 0;
+          partnerIndex < partners.length;
+          partnerIndex++
+        )
+          Padding(
+            padding: EdgeInsets.only(top: partnerIndex == 0 ? 4 : 8),
+            child: _ScheduleConflictPartnerRow(
+              partner: partners[partnerIndex],
+              onOpen: () => _openPartnerSchedule(partners[partnerIndex]),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _openPartnerSchedule(Course partner) {
+    CourseGroup? group;
+    for (final candidate in context.read<TimetableProvider>().courseGroups) {
+      if (candidate.courses.any((course) => course.id == partner.id)) {
+        group = candidate;
+        break;
+      }
+    }
+    if (group == null || !mounted) {
+      return;
+    }
+    Navigator.of(context).push(
+      HyperosPageRoute(
+        settings: const RouteSettings(name: '/course/edit-partner'),
+        builder: (_) =>
+            AddCourseScreen(courseGroup: group, initialCourse: partner),
+      ),
+    );
+  }
+
   Widget _buildScheduleEntriesSection(
     TimetableProvider provider,
     TimetableSettings settings,
@@ -802,6 +855,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
           l10n: l10n,
           onTap: () => _removeScheduleEntry(index),
         ),
+      _buildScheduleConflictLinks(index, l10n),
     ], spacing: 8);
 
     if (!hasMultipleEntries) {
@@ -827,7 +881,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(HyperosTokens.cardRadius),
         border: Border.all(color: colors.border),
       ),
       child: Column(
@@ -837,11 +891,13 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: HyperosTokens.iconBadgeSize,
+                height: HyperosTokens.iconBadgeSize,
                 decoration: BoxDecoration(
                   color: courseColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(
+                    HyperosTokens.iconBadgeRadius,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -970,17 +1026,22 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     bool isPlaceholder = false,
   }) {
     final theme = context.theme;
+    final fieldRadius = BorderRadius.circular(HyperosTokens.controlRadius);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: fieldRadius,
         onTap: onPress,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          constraints: const BoxConstraints(
+            minHeight: HyperosTokens.controlMinHeight,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: fieldRadius,
             border: Border.all(color: theme.colors.border),
           ),
+          alignment: Alignment.centerLeft,
           child: Row(
             children: [
               Expanded(
@@ -1023,18 +1084,23 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     required VoidCallback onTap,
   }) {
     final theme = context.theme;
+    final fieldRadius = BorderRadius.circular(HyperosTokens.controlRadius);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: fieldRadius,
         onTap: onTap,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          constraints: const BoxConstraints(
+            minHeight: HyperosTokens.controlMinHeight,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: fieldRadius,
             border: Border.all(color: theme.colors.border),
           ),
+          alignment: Alignment.centerLeft,
           child: Row(
             children: [
               Icon(
@@ -1062,18 +1128,23 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     required VoidCallback onTap,
   }) {
     final theme = context.theme;
+    final fieldRadius = BorderRadius.circular(HyperosTokens.controlRadius);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: fieldRadius,
         onTap: onTap,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          constraints: const BoxConstraints(
+            minHeight: HyperosTokens.controlMinHeight,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: fieldRadius,
             border: Border.all(color: theme.colors.border),
           ),
+          alignment: Alignment.centerLeft,
           child: Row(
             children: [
               Expanded(
@@ -1887,5 +1958,110 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       }
     }
     return null;
+  }
+}
+
+/// Compact HyperOS list row for a conflicting partner schedule.
+///
+/// Matches preference navigation chrome: title + status tag + detail + chevron.
+/// Avoids custom red banners and trailing text-as-button.
+class _ScheduleConflictPartnerRow extends StatelessWidget {
+  const _ScheduleConflictPartnerRow({
+    required this.partner,
+    required this.onOpen,
+  });
+
+  final Course partner;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = context.theme;
+    final dayLabel = _weekdayShort(l10n, partner.dayOfWeek);
+    final schedule = l10n.weekdaySectionSummary(
+      dayLabel,
+      partner.startSection,
+      partner.endSection,
+    );
+
+    return Material(
+      color: HyperosColors.secondaryVariant(context),
+      // Nested compact row — use control radius, not settings-group 24.
+      borderRadius: BorderRadius.circular(HyperosTokens.controlRadius),
+      clipBehavior: Clip.antiAlias,
+      child: HyperosPressableRow(
+        onTap: onOpen,
+        backgroundColor: HyperosColors.secondaryVariant(context),
+        highlightColor: HyperosColors.rowHighlight(context),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: HyperosTokens.controlMinHeight,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              partner.name,
+                              style: HyperosTypography.listTitle(context),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          HyperosTag(
+                            label: l10n.conflictLabel,
+                            backgroundColor: theme.colors.destructive
+                                .withValues(alpha: 0.12),
+                            textStyle: HyperosTypography.listDetail(context)
+                                .copyWith(
+                                  color: theme.colors.destructive,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 11,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        schedule,
+                        style: HyperosTypography.listDetail(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: HyperosTokens.titleChevronGap),
+                const HyperosChevron(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _weekdayShort(AppLocalizations l10n, int dayOfWeek) {
+    return switch (dayOfWeek) {
+      1 => l10n.weekdayShortMonday,
+      2 => l10n.weekdayShortTuesday,
+      3 => l10n.weekdayShortWednesday,
+      4 => l10n.weekdayShortThursday,
+      5 => l10n.weekdayShortFriday,
+      6 => l10n.weekdayShortSaturday,
+      7 => l10n.weekdayShortSunday,
+      _ => dayOfWeek.toString(),
+    };
   }
 }

@@ -124,6 +124,8 @@ object TodayWidgetSupport {
     private const val FLUTTER_PREFS_NAME = "FlutterSharedPreferences"
     private const val KEY_TIMETABLE_PROFILES = "flutter.timetable_profiles"
     private const val KEY_ACTIVE_PROFILE_ID = "flutter.active_timetable_profile_id"
+    private const val KEY_CUSTOM_HOLIDAYS = "flutter.custom_holidays"
+    private const val KEY_HOLIDAY_DATA_PREFIX = "flutter.holiday_data_"
 
     fun readSnapshot(context: Context): TodayWidgetSnapshotInfo? {
         // Prefer real-time computed snapshot (state reflects current time).
@@ -159,8 +161,34 @@ object TodayWidgetSupport {
     ): TodayWidgetSnapshotInfo? {
         val profileJson = readActiveProfileJson(context) ?: return null
         val settingsJson = profileJson.optJSONObject("settings") ?: JSONObject()
-        val isHoliday = profileJson.optBoolean("isHoliday", false)
-            || settingsJson.optBoolean("holidayOverrideEnabled", false)
+        val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        val todayDateStr = widgetFormatDate(
+            year = nowCalendar.get(Calendar.YEAR),
+            month = nowCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = nowCalendar.get(Calendar.DAY_OF_MONTH),
+        )
+        val holidayEntries = loadHolidayEntriesForDate(context, nowCalendar)
+        val enableHolidayMarking = settingsJson.optBoolean("enableHolidayMarking", true)
+        val holidayOverrideEnabled = settingsJson.optBoolean("holidayOverrideEnabled", false)
+        // Prefer full holiday resolution from Flutter prefs. The legacy profile-level
+        // isHoliday flag is only a same-day hint and is usually missing entirely.
+        val isHoliday = widgetResolveIsHoliday(
+            entries = holidayEntries,
+            dateStr = todayDateStr,
+            enableHolidayMarking = enableHolidayMarking,
+            holidayOverrideEnabled = holidayOverrideEnabled,
+        ) || liveSchedulerIsLegacyHolidayFlagActive(
+            isHoliday = profileJson.optBoolean("isHoliday", false),
+            isHolidayDate = profileJson.optString("isHolidayDate").takeIf { it.isNotBlank() },
+            year = nowCalendar.get(Calendar.YEAR),
+            month = nowCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = nowCalendar.get(Calendar.DAY_OF_MONTH),
+        )
+        val holidayName = if (isHoliday) {
+            widgetResolveHolidayName(holidayEntries, todayDateStr)
+        } else {
+            null
+        }
         val semesterWeekCount = settingsJson.optInt("semesterWeekCount", 20).coerceAtLeast(1)
         val currentWeek = calculateWeekForDate(
             semesterStartMillis = settingsJson.optLong("semesterStartDate").takeIf { it > 0L },
@@ -168,9 +196,7 @@ object TodayWidgetSupport {
             semesterWeekCount = semesterWeekCount,
             nowMillis = nowMillis,
         )
-        val todayWeekday = Calendar.getInstance().apply {
-            timeInMillis = nowMillis
-        }.get(Calendar.DAY_OF_WEEK).let(::calendarDayToWeekday)
+        val todayWeekday = nowCalendar.get(Calendar.DAY_OF_WEEK).let(::calendarDayToWeekday)
         val allCourses = parseSourceCourses(profileJson.optJSONArray("courses"))
         // 含停课的原始课程数（用于区分"没课"和"课都停了"）
         val originalTodayCourseCount = if (isHoliday) 0 else {
@@ -236,12 +262,6 @@ object TodayWidgetSupport {
             else -> false
         }
         // Find next upcoming exam
-        val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
-        val todayDateStr = String.format("%04d-%02d-%02d",
-            nowCalendar.get(Calendar.YEAR),
-            nowCalendar.get(Calendar.MONTH) + 1,
-            nowCalendar.get(Calendar.DAY_OF_MONTH),
-        )
         val examsArray = profileJson.optJSONArray("exams")
         var nextExamName: String? = null
         var nextExamDate: String? = null
@@ -251,18 +271,41 @@ object TodayWidgetSupport {
         var nextExamEndTime: String? = null
         if (examsArray != null) {
             var bestDate: String? = null
+            var bestStartTime: String? = null
             for (i in 0 until examsArray.length()) {
                 val exam = examsArray.optJSONObject(i) ?: continue
                 val dateStr = exam.optString("dateTime").takeIf { it.isNotBlank() } ?: continue
                 val dateOnly = dateStr.take(10) // "yyyy-MM-dd"
-                if (dateOnly < todayDateStr) continue // expired
-                if (bestDate == null || dateOnly < bestDate) {
+                if (dateOnly < todayDateStr) continue // fully past days
+                val startTime = sanitizeNullableField(exam.optString("startTime"))
+                val endTime = sanitizeNullableField(exam.optString("endTime"))
+                // Same calendar day: hide after exam end (match Flutter Exam.isExpired).
+                if (dateOnly == todayDateStr && !endTime.isNullOrBlank()) {
+                    val endMillis = buildCourseDateTimeMillis(nowMillis, endTime)
+                    if (endMillis != null && nowMillis >= endMillis) {
+                        continue
+                    }
+                }
+                val isBetter = when {
+                    bestDate == null -> true
+                    dateOnly < bestDate!! -> true
+                    dateOnly == bestDate -> {
+                        // Prefer earlier start time on the same day.
+                        val candidate = startTime.orEmpty()
+                        val current = bestStartTime.orEmpty()
+                        candidate.isNotEmpty() && (current.isEmpty() || candidate < current)
+                    }
+                    else -> false
+                }
+                if (isBetter) {
                     bestDate = dateOnly
+                    bestStartTime = startTime
                     nextExamName = sanitizeNullableField(exam.optString("name"))
+                        ?: context.getString(R.string.widget_exam_fallback_name)
                     nextExamDate = dateOnly
                     nextExamLocation = sanitizeNullableField(exam.optString("location"))
-                    nextExamStartTime = sanitizeNullableField(exam.optString("startTime"))
-                    nextExamEndTime = sanitizeNullableField(exam.optString("endTime"))
+                    nextExamStartTime = startTime
+                    nextExamEndTime = endTime
                 }
             }
             if (bestDate != null) {
@@ -313,7 +356,18 @@ object TodayWidgetSupport {
                 semesterWeekCount = semesterWeekCount,
                 nowMillis = tomorrowCal.timeInMillis,
             )
-            val isTomorrowHoliday = profileJson.optBoolean("isHoliday", false)
+            val tomorrowDateStr = widgetFormatDate(
+                year = tomorrowCal.get(Calendar.YEAR),
+                month = tomorrowCal.get(Calendar.MONTH) + 1,
+                dayOfMonth = tomorrowCal.get(Calendar.DAY_OF_MONTH),
+            )
+            val tomorrowHolidayEntries = loadHolidayEntriesForDate(context, tomorrowCal)
+            val isTomorrowHoliday = widgetResolveIsHoliday(
+                entries = tomorrowHolidayEntries,
+                dateStr = tomorrowDateStr,
+                enableHolidayMarking = enableHolidayMarking,
+                holidayOverrideEnabled = holidayOverrideEnabled,
+            )
             tomorrowCourses = if (isTomorrowHoliday) {
                 emptyList()
             } else {
@@ -346,6 +400,7 @@ object TodayWidgetSupport {
             nextExamLocation = nextExamLocation,
             nextExamStartTime = nextExamStartTime,
             nextExamEndTime = nextExamEndTime,
+            holidayName = holidayName,
             tomorrowCourses = tomorrowCourses,
             tomorrowWeek = tomorrowWeek,
             tomorrowDayOfWeek = tomorrowDayOfWeek,
@@ -358,8 +413,24 @@ object TodayWidgetSupport {
     ): Long? {
         val profileJson = readActiveProfileJson(context) ?: return null
         val settingsJson = profileJson.optJSONObject("settings") ?: JSONObject()
-        val isHoliday = profileJson.optBoolean("isHoliday", false)
-            || settingsJson.optBoolean("holidayOverrideEnabled", false)
+        val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        val todayDateStr = widgetFormatDate(
+            year = nowCalendar.get(Calendar.YEAR),
+            month = nowCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = nowCalendar.get(Calendar.DAY_OF_MONTH),
+        )
+        val isHoliday = widgetResolveIsHoliday(
+            entries = loadHolidayEntriesForDate(context, nowCalendar),
+            dateStr = todayDateStr,
+            enableHolidayMarking = settingsJson.optBoolean("enableHolidayMarking", true),
+            holidayOverrideEnabled = settingsJson.optBoolean("holidayOverrideEnabled", false),
+        ) || liveSchedulerIsLegacyHolidayFlagActive(
+            isHoliday = profileJson.optBoolean("isHoliday", false),
+            isHolidayDate = profileJson.optString("isHolidayDate").takeIf { it.isNotBlank() },
+            year = nowCalendar.get(Calendar.YEAR),
+            month = nowCalendar.get(Calendar.MONTH) + 1,
+            dayOfMonth = nowCalendar.get(Calendar.DAY_OF_MONTH),
+        )
         if (isHoliday) return null
         val semesterWeekCount = settingsJson.optInt("semesterWeekCount", 20).coerceAtLeast(1)
         val currentWeek = calculateWeekForDate(
@@ -393,8 +464,22 @@ object TodayWidgetSupport {
                 triggers += endMillis + 1000L
             }
         }
+        // Refresh at next exam start/end so "今天考试" flips to "考试中" on time.
+        val snapshotForExam = buildSnapshotFromFlutterState(context, nowMillis)
+        val examStart = snapshotForExam?.nextExamStartTime
+            ?.takeIf { it.isNotBlank() }
+            ?.let { buildCourseDateTimeMillis(nowMillis, it) }
+        val examEnd = snapshotForExam?.nextExamEndTime
+            ?.takeIf { it.isNotBlank() }
+            ?.let { buildCourseDateTimeMillis(nowMillis, it) }
+        if (examStart != null && examStart > nowMillis) {
+            triggers += examStart
+        }
+        if (examEnd != null && examEnd > nowMillis) {
+            triggers += examEnd + 1000L
+        }
         // 倒计时激活时每 60 秒刷新
-        val snapshot = buildSnapshotFromFlutterState(context, nowMillis)
+        val snapshot = snapshotForExam
         if (snapshot != null
             && snapshot.showCountdown
             && (snapshot.state == "ongoing" || snapshot.state == "upcoming")) {
@@ -507,14 +592,126 @@ object TodayWidgetSupport {
         }
     }
 
+    /**
+     * Course [state] alone can be "completed" while an exam is still in progress.
+     * When the next exam is live, elevate chrome to exam-first so chips don't say "今日已结束".
+     */
+    enum class ExamWidgetPhase {
+        NONE,
+        FUTURE_DAYS,
+        TODAY_BEFORE,
+        ONGOING,
+        ENDED_TODAY,
+    }
+
+    fun resolveExamPhase(
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): ExamWidgetPhase {
+        if (snapshot.nextExamName.isNullOrBlank()) {
+            return ExamWidgetPhase.NONE
+        }
+        val daysUntil = snapshot.nextExamDaysUntil ?: return ExamWidgetPhase.NONE
+        if (daysUntil < 0) {
+            return ExamWidgetPhase.NONE
+        }
+        if (daysUntil > 0) {
+            return ExamWidgetPhase.FUTURE_DAYS
+        }
+
+        val startMillis = snapshot.nextExamStartTime
+            ?.takeIf { it.isNotBlank() }
+            ?.let { buildCourseDateTimeMillis(nowMillis, it) }
+        val endMillis = snapshot.nextExamEndTime
+            ?.takeIf { it.isNotBlank() }
+            ?.let { buildCourseDateTimeMillis(nowMillis, it) }
+
+        return when {
+            startMillis != null && endMillis != null &&
+                nowMillis >= startMillis && nowMillis < endMillis -> ExamWidgetPhase.ONGOING
+            endMillis != null && nowMillis >= endMillis -> ExamWidgetPhase.ENDED_TODAY
+            startMillis != null && nowMillis < startMillis -> ExamWidgetPhase.TODAY_BEFORE
+            // Missing end time but already past start: treat as ongoing until day rolls.
+            startMillis != null && nowMillis >= startMillis -> ExamWidgetPhase.ONGOING
+            else -> ExamWidgetPhase.TODAY_BEFORE
+        }
+    }
+
+    fun isExamOngoing(
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Boolean = resolveExamPhase(snapshot, nowMillis) == ExamWidgetPhase.ONGOING
+
+    fun examDisplayName(snapshot: TodayWidgetSnapshotInfo): String? {
+        return snapshot.nextExamName?.takeIf { it.isNotBlank() }
+    }
+
+    fun examOngoingMetaText(
+        context: Context,
+        snapshot: TodayWidgetSnapshotInfo,
+    ): String {
+        val endTimeText = snapshot.nextExamEndTime.orEmpty()
+        val rawLocation = snapshot.nextExamLocation.orEmpty()
+        val location = if (rawLocation.isNotBlank() && !rawLocation.equals("null", ignoreCase = true)) {
+            " · $rawLocation"
+        } else {
+            ""
+        }
+        return if (endTimeText.isNotBlank()) {
+            context.getString(R.string.widget_exam_until, endTimeText) + location
+        } else {
+            context.getString(R.string.widget_status_exam_ongoing) + location
+        }
+    }
+
+    /** Status chip / label text, exam-first when an exam is in progress. */
+    fun displayStatusText(
+        context: Context,
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String {
+        if (isExamOngoing(snapshot, nowMillis)) {
+            return context.getString(R.string.widget_status_exam_ongoing)
+        }
+        if (isShowingTomorrowCourses(snapshot, nowMillis)) {
+            return context.getString(R.string.widget_tomorrow_courses)
+        }
+        return statusText(context, snapshot.state)
+    }
+
+    /** Chip visual state; map live exam to "ongoing" styling. */
+    fun displayStatusState(
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String {
+        if (isExamOngoing(snapshot, nowMillis)) {
+            return "ongoing"
+        }
+        return snapshot.state
+    }
+
     /** Returns true when today is done or has no courses AND tomorrow has courses to show. */
-    fun isShowingTomorrowCourses(snapshot: TodayWidgetSnapshotInfo): Boolean {
+    fun isShowingTomorrowCourses(
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Boolean {
+        // Don't demote a live exam in favor of tomorrow's course preview.
+        if (isExamOngoing(snapshot, nowMillis)) {
+            return false
+        }
         return (snapshot.state == "completed" || snapshot.state == "no_course")
             && snapshot.tomorrowCourses.isNotEmpty()
     }
 
-    fun headingText(context: Context, snapshot: TodayWidgetSnapshotInfo): String {
-        return if (isShowingTomorrowCourses(snapshot)) {
+    fun headingText(
+        context: Context,
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String {
+        if (isExamOngoing(snapshot, nowMillis)) {
+            return context.getString(R.string.widget_status_exam_ongoing)
+        }
+        return if (isShowingTomorrowCourses(snapshot, nowMillis)) {
             context.getString(R.string.widget_tomorrow_courses)
         } else {
             context.getString(R.string.widget_today_courses)
@@ -642,11 +839,21 @@ object TodayWidgetSupport {
         }
     }
 
-    fun examCountdownText(context: Context, snapshot: TodayWidgetSnapshotInfo): String? {
-        val name = snapshot.nextExamName ?: return null
-        val daysUntil = snapshot.nextExamDaysUntil ?: return null
+    fun examCountdownText(
+        context: Context,
+        snapshot: TodayWidgetSnapshotInfo,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String? {
+        val name = snapshot.nextExamName?.takeIf { it.isNotBlank() } ?: return null
+        val phase = resolveExamPhase(snapshot, nowMillis)
+        if (phase == ExamWidgetPhase.NONE || phase == ExamWidgetPhase.ENDED_TODAY) {
+            return null
+        }
+
         val timeRange = if (!snapshot.nextExamStartTime.isNullOrBlank() && !snapshot.nextExamEndTime.isNullOrBlank()) {
             " ${snapshot.nextExamStartTime}-${snapshot.nextExamEndTime}"
+        } else if (!snapshot.nextExamStartTime.isNullOrBlank()) {
+            " ${snapshot.nextExamStartTime}"
         } else {
             ""
         }
@@ -656,16 +863,31 @@ object TodayWidgetSupport {
         } else {
             ""
         }
-        return when {
-            daysUntil == 0 -> context.getString(R.string.widget_exam_day, name, timeRange, location)
-            daysUntil <= 7 -> context.getString(
-                R.string.widget_exam_countdown,
-                name,
-                daysUntil,
-                timeRange,
-                location,
-            )
-            else -> null
+
+        return when (phase) {
+            ExamWidgetPhase.FUTURE_DAYS -> {
+                val daysUntil = snapshot.nextExamDaysUntil ?: return null
+                context.getString(
+                    R.string.widget_exam_countdown,
+                    name,
+                    daysUntil,
+                    timeRange,
+                    location,
+                )
+            }
+            ExamWidgetPhase.ONGOING -> {
+                val endTimeText = snapshot.nextExamEndTime.orEmpty()
+                context.getString(
+                    R.string.widget_exam_ongoing,
+                    name,
+                    endTimeText,
+                    location,
+                )
+            }
+            ExamWidgetPhase.TODAY_BEFORE -> {
+                context.getString(R.string.widget_exam_today, name, timeRange, location)
+            }
+            ExamWidgetPhase.NONE, ExamWidgetPhase.ENDED_TODAY -> null
         }
     }
 
@@ -841,6 +1063,35 @@ object TodayWidgetSupport {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * Load holiday entries for [calendar]'s year (and next year near year-end)
+     * from Flutter SharedPreferences, matching [HolidayService] cache keys.
+     */
+    private fun loadHolidayEntriesForDate(
+        context: Context,
+        calendar: Calendar,
+    ): List<WidgetHolidayEntry> {
+        val flutterPrefs = context.getSharedPreferences(FLUTTER_PREFS_NAME, Context.MODE_PRIVATE)
+        val year = calendar.get(Calendar.YEAR)
+        val years = buildList {
+            add(year)
+            // Semester / custom ranges near Dec 31 may need next year's cache.
+            if (calendar.get(Calendar.MONTH) >= Calendar.NOVEMBER) {
+                add(year + 1)
+            }
+        }
+        val entries = mutableListOf<WidgetHolidayEntry>()
+        for (targetYear in years) {
+            entries += widgetParseHolidayEntriesFromHolidayDataJson(
+                flutterPrefs.getString("$KEY_HOLIDAY_DATA_PREFIX$targetYear", null),
+            )
+        }
+        entries += widgetParseHolidayEntriesFromCustomJson(
+            flutterPrefs.getString(KEY_CUSTOM_HOLIDAYS, null),
+        )
+        return entries
     }
 
     private fun parseSourceCourses(json: JSONArray?): List<WidgetSourceCourse> {

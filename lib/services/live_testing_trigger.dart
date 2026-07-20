@@ -16,10 +16,7 @@ class LiveTestingTriggerResult {
   final LiveTestingTriggerStatus status;
   final String? message;
 
-  const LiveTestingTriggerResult({
-    required this.status,
-    this.message,
-  });
+  const LiveTestingTriggerResult({required this.status, this.message});
 }
 
 bool liveTestingTriggerInFlight = false;
@@ -30,7 +27,8 @@ Future<LiveTestingTriggerResult> triggerLiveUpdateTest({
   required Course testCourse,
   Course? previewNextCourse,
   Duration beforeClassLead = const Duration(minutes: 1),
-  Duration totalCourseDuration = LiveTestingFixtureService.defaultCourseDuration,
+  Duration totalCourseDuration =
+      LiveTestingFixtureService.defaultCourseDuration,
   String source = 'settings_screen',
 }) async {
   if (liveTestingTriggerInFlight) {
@@ -87,11 +85,12 @@ Future<LiveTestingTriggerResult> triggerLiveUpdateTest({
       startAtMillis: start.millisecondsSinceEpoch,
       endAtMillis: end.millisecondsSinceEpoch,
     );
-    final progressBreakOffsetsMillis = provider.buildLiveProgressBreakOffsetsMillis(
-      testCourse,
-      startAtMillis: start.millisecondsSinceEpoch,
-      endAtMillis: end.millisecondsSinceEpoch,
-    );
+    final progressBreakOffsetsMillis = provider
+        .buildLiveProgressBreakOffsetsMillis(
+          testCourse,
+          startAtMillis: start.millisecondsSinceEpoch,
+          endAtMillis: end.millisecondsSinceEpoch,
+        );
 
     await liveService.recordDiagnosticEvent(
       'live_update_test_starting',
@@ -131,7 +130,8 @@ Future<LiveTestingTriggerResult> triggerLiveUpdateTest({
       miuiIslandLabelContent: displaySettings.miuiIslandLabelContent,
       miuiIslandLabelFontColor: displaySettings.miuiIslandLabelFontColor,
       miuiIslandLabelFontWeight: displaySettings.miuiIslandLabelFontWeight,
-      miuiIslandLabelRenderQuality: displaySettings.miuiIslandLabelRenderQuality,
+      miuiIslandLabelRenderQuality:
+          displaySettings.miuiIslandLabelRenderQuality,
       miuiIslandLabelFontSize: displaySettings.miuiIslandLabelFontSize,
       miuiIslandLabelOffsetX: displaySettings.miuiIslandLabelOffsetX,
       miuiIslandLabelOffsetY: displaySettings.miuiIslandLabelOffsetY,
@@ -160,7 +160,7 @@ Future<LiveTestingTriggerResult> triggerLiveUpdateTest({
     );
 
     final homeHint = locale.languageCode == 'zh'
-        ? '请按 Home 键回到桌面查看超级岛（停留在应用内时系统通常不会弹出）。'
+        ? '请按 Home 键回到桌面查看超级岛（停留在应用内时系统通常不会弹出）'
         : 'Press Home and watch the island; it usually will not pop while the app stays open.';
     return LiveTestingTriggerResult(
       status: LiveTestingTriggerStatus.success,
@@ -187,17 +187,17 @@ Future<LiveTestingTriggerResult> triggerLiveUpdateTest({
   }
 }
 
-Future<LiveTestingTriggerResult> triggerLiveUpdateTestForHourSlot({
+Future<LiveTestingTriggerResult> triggerLiveUpdateTestForSectionSlot({
   required BuildContext context,
   required TimetableProvider provider,
-  required int hour,
+  required int sectionNumber,
   required Duration lead,
   String source = 'quick_fixture_grid',
 }) async {
   final now = DateTime.now();
   final timedCourse = await LiveTestingFixtureService.upsertTimedFixtureCourse(
     provider: provider,
-    hour: hour,
+    sectionNumber: sectionNumber,
     now: now,
     lead: lead,
   );
@@ -207,9 +207,15 @@ Future<LiveTestingTriggerResult> triggerLiveUpdateTestForHourSlot({
       message: null,
     );
   }
-  final nextHour = LiveTestingFixtureService.nextHourSlotFor(now);
-  final nextTemplate =
-      LiveTestingFixtureService.findFixtureForHour(provider, nextHour);
+  final sections = provider.settings.sections;
+  final nextSection = LiveTestingFixtureService.nextSectionNumberForTime(
+    now,
+    sections,
+  );
+  final nextTemplate = LiveTestingFixtureService.findFixtureForSection(
+    provider,
+    nextSection,
+  );
   return triggerLiveUpdateTest(
     context: context,
     provider: provider,

@@ -61,7 +61,9 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _textController.text = AppLocalizations.of(context)!.hyperosShowcaseSampleText;
+      _textController.text = AppLocalizations.of(
+        context,
+      )!.hyperosShowcaseSampleText;
     });
   }
 
@@ -253,8 +255,8 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
           HyperosControlCard(
             title: 'HyperosControlCard',
             subtitle: l10n.hyperosShowcaseControlsSubtitle,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            edgeToEdge: true,
+            child: HyperosControlCardRows(
               children: [
                 HyperosSliderTile(
                   title: 'HyperosSliderTile',
@@ -262,62 +264,77 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
                   valueLabel: '${(_sliderValue * 100).round()}%',
                   onChanged: (v) => setState(() => _sliderValue = v),
                 ),
-                const SizedBox(height: 12),
-                HyperosSlider(
-                  value: _sliderValue,
-                  onChanged: (v) => setState(() => _sliderValue = v),
-                ),
-                const SizedBox(height: 16),
-                HyperosTabRow(
-                  tabs: const ['Tab A', 'Tab B', 'Tab C'],
-                  selectedIndex: _tabIndex,
-                  onChanged: (i) => setState(() => _tabIndex = i),
-                ),
-                const SizedBox(height: 8),
-                HyperosTabRow(
-                  tabs: [l10n.hyperosShowcaseSegmentLeft, l10n.hyperosShowcaseSegmentRight],
-                  selectedIndex: _tabIndex.isEven ? 0 : 1,
-                  onChanged: (i) => setState(() => _tabIndex = i),
-                  style: HyperosTabRowStyle.bordered,
-                ),
-                const SizedBox(height: 8),
-                HyperosSegmentedControl(
-                  tabs: const ['Seg A', 'Seg B'],
-                  selectedIndex: _segmentIndex,
-                  onChanged: (i) => setState(() => _segmentIndex = i),
-                  style: HyperosTabRowStyle.bordered,
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    HyperosButton(
-                      label: 'Primary',
-                      onPressed: () => _demoSnackBar('Primary tapped'),
-                    ),
-                    HyperosButton(
-                      label: 'Secondary',
-                      variant: HyperosButtonVariant.secondary,
-                      onPressed: () {},
-                    ),
-                    HyperosButton(
-                      label: 'Destructive',
-                      variant: HyperosButtonVariant.destructive,
-                      onPressed: () {},
-                    ),
-                    HyperosButton(
-                      label: 'Loading',
-                      loading: _buttonLoading,
-                      onPressed: _toggleButtonLoading,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                HyperosButton(
-                  label: 'HyperosButton · expand',
-                  expand: true,
-                  onPressed: () {},
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    HyperosControlCardScope.defaultHorizontalPadding,
+                    0,
+                    HyperosControlCardScope.defaultHorizontalPadding,
+                    12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      HyperosSlider(
+                        value: _sliderValue,
+                        onChanged: (v) => setState(() => _sliderValue = v),
+                      ),
+                      const SizedBox(height: 16),
+                      HyperosTabRow(
+                        tabs: const ['Tab A', 'Tab B', 'Tab C'],
+                        selectedIndex: _tabIndex,
+                        onChanged: (i) => setState(() => _tabIndex = i),
+                      ),
+                      const SizedBox(height: 8),
+                      HyperosTabRow(
+                        tabs: [
+                          l10n.hyperosShowcaseSegmentLeft,
+                          l10n.hyperosShowcaseSegmentRight,
+                        ],
+                        selectedIndex: _tabIndex.isEven ? 0 : 1,
+                        onChanged: (i) => setState(() => _tabIndex = i),
+                        style: HyperosTabRowStyle.bordered,
+                      ),
+                      const SizedBox(height: 8),
+                      HyperosSegmentedControl(
+                        tabs: const ['Seg A', 'Seg B'],
+                        selectedIndex: _segmentIndex,
+                        onChanged: (i) => setState(() => _segmentIndex = i),
+                        style: HyperosTabRowStyle.bordered,
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          HyperosButton(
+                            label: 'Primary',
+                            onPressed: () => _demoSnackBar('Primary tapped'),
+                          ),
+                          HyperosButton(
+                            label: 'Secondary',
+                            variant: HyperosButtonVariant.secondary,
+                            onPressed: () {},
+                          ),
+                          HyperosButton(
+                            label: 'Destructive',
+                            variant: HyperosButtonVariant.destructive,
+                            onPressed: () {},
+                          ),
+                          HyperosButton(
+                            label: 'Loading',
+                            loading: _buttonLoading,
+                            onPressed: _toggleButtonLoading,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      HyperosButton(
+                        label: 'HyperosButton · expand',
+                        expand: true,
+                        onPressed: () {},
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -631,7 +648,10 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
             child: HyperosEmptyState(
               title: 'HyperosEmptyState',
               subtitle: l10n.hyperosShowcaseEmptySubtitle,
-              action: HyperosButton(label: l10n.hyperosShowcaseActionButton, onPressed: () {}),
+              action: HyperosButton(
+                label: l10n.hyperosShowcaseActionButton,
+                onPressed: () {},
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -714,7 +734,8 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
                 title: 'HyperosSubpage',
                 subtitle: l10n.hyperosShowcaseSubpageSubtitle,
                 details: '—',
-                onTap: () => _demoSnackBar(l10n.hyperosShowcaseAlreadyInSubpage),
+                onTap: () =>
+                    _demoSnackBar(l10n.hyperosShowcaseAlreadyInSubpage),
               ),
             ],
           ),
@@ -840,8 +861,15 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
                 icon: Icons.call_to_action_outlined,
                 iconAccent: HyperosIconColors.purple,
                 title: 'showHyperosSheet',
-                details: 'HyperosSheetFrame',
+                details: 'floating · 四边圆角+外边距',
                 onTap: _demoGenericSheet,
+              ),
+              HyperosListTile(
+                icon: Icons.vertical_align_bottom_outlined,
+                iconAccent: HyperosIconColors.indigo,
+                title: 'showHomeHyperosSheet',
+                details: 'edge · 贴边仅上圆角',
+                onTap: _demoEdgeSheet,
               ),
               HyperosListTile(
                 key: _selectPopupAnchorKey,
@@ -882,9 +910,7 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
           ),
           if (!kReleaseMode) ...[
             const HyperosSectionGap(),
-            HyperosSectionDescription(
-              text: l10n.hyperosShowcaseFooterNote,
-            ),
+            HyperosSectionDescription(text: l10n.hyperosShowcaseFooterNote),
           ],
           const HyperosSectionGap(),
         ],
@@ -950,9 +976,7 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
   }
 
   void _demoSnackBarWidget() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      HyperosSnackBar(context: context, message: 'HyperosSnackBar widget 类'),
-    );
+    showHyperosSnackBar(context, message: 'HyperosToastCapsule / system toast');
   }
 
   void _demoRootPage() {
@@ -981,8 +1005,25 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
     await showHyperosSheet<void>(
       context: context,
       builder: (sheetContext) => HyperosSheet(
-        title: 'showHyperosSheet',
-        description: 'HyperosSheetFrame 灰底圆角容器',
+        title: 'showHyperosSheet · floating',
+        description: '四边圆角 + 外边距（同 Dialog）',
+        child: HyperosButton(
+          label: l10n.closeAction,
+          expand: true,
+          onPressed: () => Navigator.pop(sheetContext),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _demoEdgeSheet() async {
+    final l10n = AppLocalizations.of(context)!;
+    await showHomeHyperosSheet<void>(
+      context: context,
+      builder: (sheetContext) => HyperosSheet(
+        frosted: true,
+        title: 'showHomeHyperosSheet · edge',
+        description: '贴边、仅上圆角（首页菜单同款）',
         child: HyperosButton(
           label: l10n.closeAction,
           expand: true,
@@ -1010,9 +1051,19 @@ class _HyperosShowcaseScreenState extends State<HyperosShowcaseScreen> {
       context: context,
       position: hyperosPopupPositionBelow(context, _popupAnchorKey),
       items: [
-        HyperosPopupMenuItem(label: l10n.hyperosShowcaseMenuCopy, value: 'copy'),
-        HyperosPopupMenuItem(label: l10n.hyperosShowcaseMenuShare, value: 'share'),
-        HyperosPopupMenuItem(label: l10n.hyperosShowcaseMenuDelete, value: 'delete', destructive: true),
+        HyperosPopupMenuItem(
+          label: l10n.hyperosShowcaseMenuCopy,
+          value: 'copy',
+        ),
+        HyperosPopupMenuItem(
+          label: l10n.hyperosShowcaseMenuShare,
+          value: 'share',
+        ),
+        HyperosPopupMenuItem(
+          label: l10n.hyperosShowcaseMenuDelete,
+          value: 'delete',
+          destructive: true,
+        ),
       ],
     );
     if (!mounted || picked == null) return;
@@ -1043,7 +1094,11 @@ class _HyperosRootPageDemo extends StatelessWidget {
     return HyperosRootPage(
       title: const Text('HyperosRootPage'),
       suffixes: [
-        HyperosIconButton(icon: Icons.search, tooltip: l10n.hyperosShowcaseSearchTooltip, onPressed: () {}),
+        HyperosIconButton(
+          icon: Icons.search,
+          tooltip: l10n.hyperosShowcaseSearchTooltip,
+          onPressed: () {},
+        ),
       ],
       child: HyperosListView(
         children: [

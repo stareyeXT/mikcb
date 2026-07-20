@@ -80,6 +80,10 @@ Future<bool?> showAppTripleActionDialog(
   );
 }
 
+/// Single-line name prompt — floating HyperOS bottom card.
+///
+/// Same shell as [showHyperosDialog]: outer inset, full rounded surface card,
+/// solid [HyperosButton]s (secondary cancel + primary confirm).
 Future<String?> showAppTextInputDialog(
   BuildContext context, {
   required String title,
@@ -92,11 +96,10 @@ Future<String?> showAppTextInputDialog(
 }) {
   final l10n = AppLocalizations.of(context)!;
 
-  return showDialog<String>(
+  return showHyperosSheet<String>(
     context: context,
     useRootNavigator: useRootNavigator,
-    barrierColor: HyperosColors.windowDimming(context),
-    builder: (ctx) => _AppTextInputDialog(
+    builder: (sheetContext) => _AppTextInputSheet(
       title: title,
       initialValue: initialValue,
       bodyBuilder: bodyBuilder,
@@ -107,8 +110,8 @@ Future<String?> showAppTextInputDialog(
   );
 }
 
-class _AppTextInputDialog extends StatefulWidget {
-  const _AppTextInputDialog({
+class _AppTextInputSheet extends StatefulWidget {
+  const _AppTextInputSheet({
     required this.title,
     required this.bodyBuilder,
     required this.cancelLabel,
@@ -125,10 +128,10 @@ class _AppTextInputDialog extends StatefulWidget {
   final bool Function(String value)? validate;
 
   @override
-  State<_AppTextInputDialog> createState() => _AppTextInputDialogState();
+  State<_AppTextInputSheet> createState() => _AppTextInputSheetState();
 }
 
-class _AppTextInputDialogState extends State<_AppTextInputDialog> {
+class _AppTextInputSheetState extends State<_AppTextInputSheet> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialValue,
   );
@@ -149,20 +152,40 @@ class _AppTextInputDialogState extends State<_AppTextInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return HyperosDialog(
-      title: widget.title,
-      body: widget.bodyBuilder(_controller),
-      actions: [
-        HyperosDialogAction(
-          label: widget.cancelLabel,
-          onPressed: () => Navigator.pop(context),
-        ),
-        HyperosDialogAction(
-          label: widget.confirmLabel,
-          isPrimary: true,
-          onPressed: _submit,
-        ),
-      ],
+    return HyperosSheetFrame(
+      chrome: HyperosSheetChrome.floating,
+      frosted: true,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: HyperosTypography.sheetTitle(context)),
+          const SizedBox(height: 16),
+          widget.bodyBuilder(_controller),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: HyperosButton(
+                  label: widget.cancelLabel,
+                  variant: HyperosButtonVariant.secondary,
+                  expand: true,
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: HyperosButton(
+                  label: widget.confirmLabel,
+                  expand: true,
+                  onPressed: _submit,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -181,10 +204,10 @@ Future<int?> showAppSingleChoiceDialog(
     options.isEmpty ? 0 : options.length - 1,
   );
 
-  return showDialog<int>(
+  return showHyperosSheet<int>(
     context: context,
     barrierColor: HyperosColors.windowDimming(context),
-    builder: (ctx) {
+    builder: (sheetContext) {
       return StatefulBuilder(
         builder: (context, setState) {
           return HyperosDialog(
@@ -203,12 +226,12 @@ Future<int?> showAppSingleChoiceDialog(
             actions: [
               HyperosDialogAction(
                 label: cancelLabel ?? l10n.cancelAction,
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () => Navigator.pop(sheetContext),
               ),
               HyperosDialogAction(
                 label: confirmLabel ?? l10n.saveAction,
                 isPrimary: true,
-                onPressed: () => Navigator.pop(ctx, selectedIndex),
+                onPressed: () => Navigator.pop(sheetContext, selectedIndex),
               ),
             ],
           );

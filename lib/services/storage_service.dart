@@ -35,6 +35,9 @@ class StorageService {
   factory StorageService() => _instance;
   StorageService._internal();
 
+  @visibleForTesting
+  StorageService.forTesting();
+
   SharedPreferences? _prefs;
   SharedPreferences? _ensuredForPrefs;
   bool _profilesEnsured = false;
@@ -55,6 +58,7 @@ class StorageService {
   bool _hidePrefixMigrated = false;
 
   Future<void>? _initFuture;
+  Future<void> _coursesWriteChain = Future<void>.value();
   Future<void> _profilesWriteChain = Future<void>.value();
 
   /// 仅用于测试：重置缓存的初始化状态
@@ -62,10 +66,13 @@ class StorageService {
   void resetForTesting() {
     _initFuture = null;
     _prefs = null;
+    _ensuredForPrefs = null;
     _profilesListCache = null;
     _timeSchemesListCache = null;
     _profilesEnsured = false;
     _timeSchemesEnsured = false;
+    _hidePrefixMigrated = false;
+    _coursesWriteChain = Future<void>.value();
     _profilesWriteChain = Future<void>.value();
   }
 
@@ -135,7 +142,9 @@ class StorageService {
   }
 
   // 课程存储
-  Future<List<Course>> getCourses() async {
+  Future<List<Course>> getCourses() => _readCoursesWithoutLock();
+
+  Future<List<Course>> _readCoursesWithoutLock() async {
     if (_prefs == null) await init();
     final coursesJson = _prefs?.getStringList(_coursesKey) ?? [];
     try {
@@ -146,31 +155,58 @@ class StorageService {
     }
   }
 
-  Future<void> saveCourses(List<Course> courses) async {
+  Future<void> saveCourses(List<Course> courses) {
+    final coursesSnapshot = List<Course>.from(courses);
+    return _runCoursesWrite(() => _writeCoursesWithoutLock(coursesSnapshot));
+  }
+
+  Future<void> _writeCoursesWithoutLock(List<Course> courses) async {
     if (_prefs == null) await init();
     final coursesJson = courses.map((course) => course.toJsonString()).toList();
     await _prefs?.setStringList(_coursesKey, coursesJson);
   }
 
-  Future<void> addCourse(Course course) async {
-    final courses = await getCourses();
-    courses.add(course);
-    await saveCourses(courses);
+  Future<void> addCourse(Course course) {
+    return _runCoursesWrite(() async {
+      final courses = await _readCoursesWithoutLock();
+      courses.add(course);
+      await _writeCoursesWithoutLock(courses);
+    });
   }
 
-  Future<void> updateCourse(Course updatedCourse) async {
-    final courses = await getCourses();
-    final index = courses.indexWhere((c) => c.id == updatedCourse.id);
-    if (index != -1) {
+  Future<void> updateCourse(Course updatedCourse) {
+    return _runCoursesWrite(() async {
+      final courses = await _readCoursesWithoutLock();
+      final index = courses.indexWhere(
+        (course) => course.id == updatedCourse.id,
+      );
+      if (index == -1) {
+        return;
+      }
       courses[index] = updatedCourse;
-      await saveCourses(courses);
-    }
+      await _writeCoursesWithoutLock(courses);
+    });
   }
 
-  Future<void> deleteCourse(String courseId) async {
-    final courses = await getCourses();
-    courses.removeWhere((c) => c.id == courseId);
-    await saveCourses(courses);
+  Future<void> deleteCourse(String courseId) {
+    return _runCoursesWrite(() async {
+      final courses = await _readCoursesWithoutLock();
+      courses.removeWhere((course) => course.id == courseId);
+      await _writeCoursesWithoutLock(courses);
+    });
+  }
+
+  Future<T> _runCoursesWrite<T>(Future<T> Function() operation) async {
+    final previousWrite = _coursesWriteChain;
+    final writeCompleter = Completer<void>();
+    _coursesWriteChain = writeCompleter.future;
+
+    await previousWrite.catchError((_) {});
+    try {
+      return await operation();
+    } finally {
+      writeCompleter.complete();
+    }
   }
 
   Future<TimetableSettings> getTimetableSettings() async {
@@ -439,59 +475,106 @@ class StorageService {
     await _migrateHidePrefixDefault();
     final cached = _profilesListCache;
     if (cached != null) {
-      return cached;
+      return List<TimetableProfile>.from(cached);
     }
 
+    final parseResult = await _parseProfilesFromDisk();
+    if (parseResult.didDrop && parseResult.profiles.isNotEmpty) {
+      // Self-heal under the write chain so concurrent puts cannot be clobbered
+      // by a stale cleaned snapshot.
+      await runProfilesWrite(() async {
+        final lockedResult = await _parseProfilesFromDisk();
+        if (lockedResult.didDrop && lockedResult.profiles.isNotEmpty) {
+          await _writeProfilesWithoutLock(lockedResult.profiles);
+        } else if (!lockedResult.didDrop) {
+          _profilesListCache = List<TimetableProfile>.from(
+            lockedResult.profiles,
+          );
+        }
+      });
+      final healed = _profilesListCache;
+      if (healed != null) {
+        return List<TimetableProfile>.from(healed);
+      }
+    }
+
+    _profilesListCache = parseResult.profiles;
+    return List<TimetableProfile>.from(parseResult.profiles);
+  }
+
+  /// Disk parse only (no write chain). Safe to call under [runProfilesWrite].
+  Future<({List<TimetableProfile> profiles, bool didDrop})>
+  _parseProfilesFromDisk() async {
+    if (_prefs == null) await init();
     final profilesJson = _prefs?.getString(_profilesKey);
     if (profilesJson == null || profilesJson.isEmpty) {
-      _profilesListCache = const [];
-      return const [];
+      return (profiles: const <TimetableProfile>[], didDrop: false);
     }
 
     final rawProfiles = await _readJsonListPreference(_profilesKey);
     if (rawProfiles == null) {
-      _profilesListCache = const [];
-      return const [];
+      return (profiles: const <TimetableProfile>[], didDrop: false);
     }
-    try {
-      final profiles = rawProfiles
-          .map(
-            (item) => TimetableProfile.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList();
-      _profilesListCache = profiles;
-      return profiles;
-    } catch (_) {
+
+    final parsed = TimetableProfile.parseProfilesPayload(rawProfiles);
+    if (parsed.profiles.isEmpty && rawProfiles.isNotEmpty) {
+      // No recoverable profile — only then wipe the key (top-level total loss).
       final raw = _prefs?.getString(_profilesKey);
       if (raw != null) {
         await _backupAndRemoveCorruptString(_profilesKey, raw);
       }
-      _profilesListCache = const [];
-      return const [];
+      return (profiles: const <TimetableProfile>[], didDrop: true);
     }
+
+    return (profiles: parsed.profiles, didDrop: parsed.didDrop);
   }
 
-  Future<void> saveProfiles(List<TimetableProfile> profiles) async {
-    // Serialize concurrent profile writes so a later read-modify-write cannot
-    // flush an older snapshot over a newer one.
+  Future<List<TimetableProfile>> _readProfilesWithoutLock() async {
+    final parsed = await _parseProfilesFromDisk();
+    return parsed.profiles;
+  }
+
+  Future<void> _writeProfilesWithoutLock(List<TimetableProfile> profiles) async {
+    if (_prefs == null) await init();
+    final payload = jsonEncode(
+      profiles.map((profile) => profile.toJson()).toList(),
+    );
+    await _prefs?.setString(_profilesKey, payload);
+    _profilesListCache = List<TimetableProfile>.from(profiles);
+  }
+
+  /// Serializes profile disk writes (full put and RMW) on one chain.
+  Future<T> runProfilesWrite<T>(Future<T> Function() operation) async {
     final previousWrite = _profilesWriteChain;
     final writeCompleter = Completer<void>();
     _profilesWriteChain = writeCompleter.future;
     await previousWrite.catchError((_) {});
     try {
-      if (_prefs == null) await init();
-      final payload = jsonEncode(
-        profiles.map((profile) => profile.toJson()).toList(),
-      );
-      await _prefs?.setString(_profilesKey, payload);
-      _profilesListCache = List<TimetableProfile>.from(profiles);
+      final result = await operation();
       writeCompleter.complete();
+      return result;
     } catch (error, stackTrace) {
       writeCompleter.completeError(error, stackTrace);
       rethrow;
     }
+  }
+
+  /// Atomically transforms the current profiles list under the write chain.
+  Future<List<TimetableProfile>> updateProfiles(
+    FutureOr<List<TimetableProfile>> Function(List<TimetableProfile> current)
+    transform,
+  ) {
+    return runProfilesWrite(() async {
+      final current = await _readProfilesWithoutLock();
+      final next = await transform(List<TimetableProfile>.from(current));
+      await _writeProfilesWithoutLock(next);
+      return List<TimetableProfile>.from(next);
+    });
+  }
+
+  Future<void> saveProfiles(List<TimetableProfile> profiles) {
+    final profilesSnapshot = List<TimetableProfile>.from(profiles);
+    return runProfilesWrite(() => _writeProfilesWithoutLock(profilesSnapshot));
   }
 
   Future<String?> getActiveProfileId() async {
@@ -596,19 +679,9 @@ class StorageService {
       } else {
         final activeProfileId = _prefs?.getString(_activeProfileIdKey);
         if (activeProfileId == null || activeProfileId.isEmpty) {
-          try {
-            final profiles = rawProfileList
-                .map(
-                  (item) => TimetableProfile.fromJson(
-                    Map<String, dynamic>.from(item as Map),
-                  ),
-                )
-                .toList();
-            if (profiles.isNotEmpty) {
-              await setActiveProfileId(profiles.first.id);
-            }
-          } catch (_) {
-            await _backupAndRemoveCorruptString(_profilesKey, rawProfiles);
+          final profiles = _parseStoredProfiles(rawProfileList);
+          if (profiles.isNotEmpty) {
+            await setActiveProfileId(profiles.first.id);
           }
         }
         _profilesEnsured = true;
@@ -676,11 +749,8 @@ class StorageService {
       _timeSchemesEnsured = true;
       return;
     }
-    List<TimetableProfile> profiles;
-    try {
-      profiles = _parseStoredProfiles(rawProfileList);
-    } catch (_) {
-      await _backupAndRemoveCorruptString(_profilesKey, rawProfiles);
+    final profiles = _parseStoredProfiles(rawProfileList);
+    if (profiles.isEmpty) {
       _timeSchemesEnsured = true;
       return;
     }
@@ -741,12 +811,7 @@ class StorageService {
   }
 
   List<TimetableProfile> _parseStoredProfiles(List<dynamic> rawProfiles) {
-    return rawProfiles
-        .map(
-          (item) =>
-              TimetableProfile.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
-        .toList();
+    return TimetableProfile.parseProfilesPayload(rawProfiles).profiles;
   }
 
   List<TimeScheme> _parseStoredTimeSchemes(List<dynamic> rawSchemes) {
@@ -778,11 +843,8 @@ class StorageService {
       _hidePrefixMigrated = true;
       return;
     }
-    late final List<TimetableProfile> profiles;
-    try {
-      profiles = _parseStoredProfiles(rawProfileList);
-    } catch (_) {
-      await _backupAndRemoveCorruptString(_profilesKey, rawProfiles);
+    final profiles = _parseStoredProfiles(rawProfileList);
+    if (profiles.isEmpty) {
       await _prefs?.setBool(_hidePrefixDefaultMigrationKey, true);
       _hidePrefixMigrated = true;
       return;

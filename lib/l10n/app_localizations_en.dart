@@ -30,7 +30,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get displayModeTitle => 'Display Mode';
 
   @override
-  String get displayModeSubtitle => 'Supports system, light, and dark mode.';
+  String get displayModeSubtitle => 'Supports system, light, and dark mode';
 
   @override
   String get themeModeLabel => 'Theme Mode';
@@ -49,11 +49,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fontSectionSubtitle =>
-      'Inter is built in; other options use fonts already on your phone.';
+      'Inter is built in; other options use fonts already on your phone';
 
   @override
   String get fontSectionFootnote =>
-      'Brand fonts aren\'t bundled; they work only if already on your system. On Xiaomi, usually only MiSans is obvious. No change means auto fallback—you usually don\'t need to install fonts.';
+      'Brand fonts aren\'t bundled; they work only if already on your system. On Xiaomi, usually only MiSans is obvious. No change means auto fallback—you usually don\'t need to install fonts';
 
   @override
   String get fontModeLabel => 'Font';
@@ -93,7 +93,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageSectionSubtitle =>
-      'Follow system or switch manually to supported locales.';
+      'Follow system or switch manually to supported locales';
 
   @override
   String get languageModeLabel => 'Language';
@@ -177,7 +177,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleTimetableIntro =>
-      'Export your timetable for your partner, or import their shared file. After binding, open the overlay view to compare schedules.';
+      'Export your timetable for your partner, or import their shared file. After binding, open the overlay view to compare schedules';
 
   @override
   String get coupleTimetableBoundTitle => 'Partner timetable linked';
@@ -217,14 +217,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleTimetableUnlinkConfirmMessage =>
-      'This removes the locally stored partner timetable and closes the overlay view.';
+      'This removes the locally stored partner timetable and closes the overlay view';
 
   @override
   String get coupleTimetableUnlinkSuccess => 'Partner timetable unlinked';
 
   @override
   String get coupleTimetablePrivacyHint =>
-      'Your partner only sees the timetable content included in the exported file.';
+      'Your partner only sees the timetable content included in the exported file';
 
   @override
   String get coupleTimetableOverlayTitle => 'Couple overlay';
@@ -253,7 +253,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleTimetableNotBoundMessage =>
-      'Import a partner timetable before opening the overlay view.';
+      'Import a partner timetable before opening the overlay view';
 
   @override
   String get coupleTimetableShareText =>
@@ -267,7 +267,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleTimetableWeekOffsetSubtitle =>
-      'When you view week N, partner courses are read from week N + offset. For example, +1 means their semester is one week ahead.';
+      'When you view week N, partner courses are read from week N + offset. For example, +1 means their semester is one week ahead';
 
   @override
   String get coupleTimetableWeekOffsetZero => 'No offset';
@@ -287,7 +287,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleTimetableColorsSubtitle =>
-      'Choose colors for your courses, partner courses, and shared classes in overlay view.';
+      'Choose colors for your courses, partner courses, and shared classes in overlay view';
 
   @override
   String get partnerImportRequiresSingleProfile =>
@@ -298,7 +298,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleWebdavSubtitle =>
-      'Sign in to your partner\'s (or shared) Nutstore account to download their uploaded timetable. Separate from Cloud Sync credentials.';
+      'Sign in to your partner\'s (or shared) Nutstore account to download their uploaded timetable. Separate from Cloud Sync credentials';
 
   @override
   String get coupleWebdavNotConnected => 'Not connected to Nutstore';
@@ -336,7 +336,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coupleWebdavLoginSheetSubtitle =>
-      'Use an app-specific password. Your partner must upload their timetable to the agreed path first, or upload from their device on the same account.';
+      'Use an app-specific password. Your partner must upload their timetable to the agreed path first, or upload from their device on the same account';
 
   @override
   String get coupleWebdavConfirmConnect => 'Connect and pull';
@@ -389,14 +389,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudSyncIntroSubtitle =>
-      'Configure Jianguoyun WEBDAV to sync timetables, warehouse accounts, and related settings across devices.';
+      'Configure Jianguoyun WEBDAV to sync timetables, warehouse accounts, and related settings across devices';
 
   @override
   String get cloudSyncSettingsSectionTitle => 'Sync settings';
 
   @override
   String get cloudSyncSettingsSectionSubtitle =>
-      'Switch between manual and automatic sync.';
+      'Switch between manual and automatic sync';
 
   @override
   String get cloudSyncEnabledTitle => 'Enable cloud sync';
@@ -428,7 +428,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudSyncAccountSubtitle =>
-      'Use a Jianguoyun app-specific password, not your login password. Snapshots include remembered school accounts.';
+      'Use a Jianguoyun app-specific password, not your login password. Snapshots include remembered school accounts';
 
   @override
   String get cloudSyncUsernameLabel => 'Email / username';
@@ -445,13 +445,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudSyncPasswordStoredHint =>
-      'Password saved; leave blank to keep the stored password.';
+      'Password saved; leave blank to keep the stored password';
 
   @override
   String get cloudSyncAdvancedTitle => 'Advanced';
 
   @override
   String get cloudSyncBaseUrlLabel => 'WEBDAV URL';
+
+  @override
+  String get cloudSyncBaseUrlSecurityNote =>
+      'Release builds only support HTTPS encrypted connections. HTTP cleartext protocol has been disabled for data security';
 
   @override
   String get cloudSyncRemoteFolderLabel => 'Remote folder';
@@ -537,7 +541,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudSyncNotConnectedHint =>
-      'Connect Jianguoyun to sync timetables and import data across devices.';
+      'Connect Jianguoyun to sync timetables and import data across devices';
 
   @override
   String get cloudSyncConnectAccount => 'Connect Jianguoyun';
@@ -562,7 +566,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudSyncLoginSheetSubtitle =>
-      'Use an app-specific password, not your Jianguoyun login password.';
+      'Use an app-specific password, not your Jianguoyun login password';
 
   @override
   String get cloudSyncConfirmConnect => 'Connect';
@@ -575,7 +579,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudBackupSectionSubtitle =>
-      'Saved automatically when you sync. Tap to restore a version.';
+      'Saved automatically when you sync. Tap to restore a version';
 
   @override
   String get cloudBackupCurrentLabel => 'Current version';
@@ -691,7 +695,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lanEditIntro =>
-      'While enabled, a computer on the same Wi-Fi or phone hotspot can edit the current timetable in a browser. Data stays on your LAN and access stops when you turn this off.';
+      'While enabled, a computer on the same Wi-Fi or phone hotspot can edit the current timetable in a browser. Data stays on your LAN and access stops when you turn this off';
 
   @override
   String get lanEditStart => 'Start LAN editing';
@@ -723,11 +727,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lanEditHotspotHint =>
-      'If dorm Wi-Fi blocks device-to-device access, try phone hotspot instead.';
+      'If dorm Wi-Fi blocks device-to-device access, try phone hotspot instead';
 
   @override
   String get lanEditQrHint =>
-      'Scan the QR code on a PC browser on the same LAN (link includes PIN).';
+      'Scan the QR code on a PC browser on the same LAN (link includes PIN)';
 
   @override
   String get lanEditStartFailed => 'Failed to start';
@@ -751,6 +755,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lanEditLastActivityLabel => 'Last activity';
+
+  @override
+  String get lanEditKeepAliveWhenLeavingTitle => 'Keep open after leaving';
+
+  @override
+  String get lanEditKeepAliveWhenLeavingSubtitle =>
+      'When on, leaving this page keeps LAN editing running; when off, leaving stops it';
 
   @override
   String get aboutSupportSectionTitle => 'About & Support';
@@ -788,14 +799,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectSemesterWeekCountSubtitle =>
-      'Adjust this based on your school’s actual teaching weeks.';
+      'Adjust this based on your school’s actual teaching weeks';
 
   @override
   String get unifiedCourseCardColorTitle => 'Use Unified Course Card Color';
 
   @override
   String get unifiedCourseCardColorSubtitle =>
-      'If disabled, each course keeps its own color.';
+      'If disabled, each course keeps its own color';
 
   @override
   String get importRandomCourseColorTitle => 'Random course colors';
@@ -812,14 +823,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chooseImportMethodSubtitle =>
-      'Supports traditional .ics calendar import, AI image import, and warehouse-based academic system import.';
+      'Supports traditional .ics calendar import, AI image import, and warehouse-based academic system import';
 
   @override
   String get importMethodIcsTitle => '.ics Calendar Import';
 
   @override
   String get importMethodIcsSubtitle =>
-      'Best for calendar files exported from apps like WakeUp.';
+      'Best for calendar files exported from apps like WakeUp';
 
   @override
   String get importMethodIcsFooter =>
@@ -830,7 +841,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importMethodAiSubtitle =>
-      'Best for direct timetable screenshots, including multiple continuous screenshots.';
+      'Best for direct timetable screenshots, including multiple continuous screenshots';
 
   @override
   String get importMethodAiFooter =>
@@ -841,7 +852,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importMethodWarehouseSubtitle =>
-      'Read schools and adapters from qingyu_warehouse and import through the web login flow.';
+      'Read schools and adapters from qingyu_warehouse and import through the web login flow';
 
   @override
   String get importMethodWarehouseFooter =>
@@ -852,7 +863,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importMethodSpreadsheetSubtitle =>
-      'Fill in the mikcb template in Excel/WPS and import without exporting .ics first.';
+      'Fill in the mikcb template in Excel/WPS and import without exporting .ics first';
 
   @override
   String get importMethodSpreadsheetFooter =>
@@ -936,19 +947,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spreadsheetScenarioIntro =>
-      'The mikcb template maps columns by header: required fields are course name, weekday, sections, and weeks; others are optional. Download the full template or keep only required columns. WakeUp 7-column layout is also supported.';
+      'The mikcb template maps columns by header: required fields are course name, weekday, sections, and weeks; others are optional. Download the full template or keep only required columns. WakeUp 7-column layout is also supported';
 
   @override
   String get spreadsheetStep1Subtitle =>
-      'Download the full template, or keep only required columns plus 上课周 (or 开始周+结束周) for minimal import.';
+      'Download the full template, or keep only required columns plus 上课周 (or 开始周+结束周) for minimal import';
 
   @override
   String get spreadsheetStep2Subtitle =>
-      'Save as .csv or keep .xlsx when finished.';
+      'Save as .csv or keep .xlsx when finished';
 
   @override
   String get spreadsheetStep3Subtitle =>
-      'Pick a file to import. Warnings are shown first, then choose append or replace.';
+      'Pick a file to import. Warnings are shown first, then choose append or replace';
 
   @override
   String get spreadsheetSupportedFilesSuffix =>
@@ -982,7 +993,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get icsScenarioIntro =>
-      'If you can already import courses into WakeUp or similar apps and export them as an .ics file, this path is the most stable.';
+      'If you can already import courses into WakeUp or similar apps and export them as an .ics file, this path is the most stable';
 
   @override
   String stepLabel(String step) {
@@ -991,15 +1002,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get icsStep1Subtitle =>
-      'Export an .ics calendar file from another timetable app first.';
+      'Export an .ics calendar file from another timetable app first';
 
   @override
   String get icsStep2Subtitle =>
-      'Come back here to pick the file and choose append or replace.';
+      'Come back here to pick the file and choose append or replace';
 
   @override
   String get icsStep3Subtitle =>
-      'Before importing, confirm the semester start date and which semester week your timetable week 1 maps to.';
+      'Before importing, confirm the semester start date and which semester week your timetable week 1 maps to';
 
   @override
   String get supportedFilesTitle => 'Supported Files';
@@ -1009,7 +1020,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get supportedFilesImageHint =>
-      'If you only have screenshots, go back and choose Image Import instead.';
+      'If you only have screenshots, go back and choose Image Import instead';
 
   @override
   String get chooseIcsFileAction => 'Choose .ics File';
@@ -1071,18 +1082,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get feedbackIntro =>
-      'If you encounter crashes, timetable display issues, import problems, or want to suggest features, you can use the channels below.';
+      'If you encounter crashes, timetable display issues, import problems, or want to suggest features, you can use the channels below';
 
   @override
   String get feedbackIssueHint =>
-      'For issues with reproduction steps, screenshots, app version, or logs, GitHub Issue is recommended first.';
+      'For issues with reproduction steps, screenshots, app version, or logs, GitHub Issue is recommended first';
 
   @override
   String get githubIssueTitle => 'GitHub Issue';
 
   @override
   String get githubIssueSubtitle =>
-      'Open the repository issue page to submit bugs, suggestions, or review existing reports.';
+      'Open the repository issue page to submit bugs, suggestions, or review existing reports';
 
   @override
   String get openIssuePage => 'Open Issues';
@@ -1110,6 +1121,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get copiedQqGroupId => 'QQ group ID copied';
+
+  @override
+  String get copiedWechatOaName => 'Official account name copied';
+
+  @override
+  String get feedbackWechatOaOpenHint =>
+      'Official account name copied. Paste and search in WeChat';
+
+  @override
+  String get feedbackOpeningChannel => 'Opening…';
+
+  @override
+  String get feedbackOpenChannelFailed => 'Could not open. Details copied.';
 
   @override
   String get timetableProfilesTitle => 'Timetable Profiles';
@@ -1178,7 +1202,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String clearCurrentTimetableMessage(String name) {
-    return 'Clear all courses in “$name”? Timetable settings will be kept.';
+    return 'Clear all courses in “$name”? Timetable settings will be kept';
   }
 
   @override
@@ -1216,7 +1240,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fullExportSubtitle =>
-      'Export the current timetable, or export all timetables, time schemes, and the current selection.';
+      'Export the current timetable, or export all timetables, time schemes, and the current selection';
 
   @override
   String get exportCurrentTimetable => 'Export Current Timetable';
@@ -1229,7 +1253,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fullImportSubtitle =>
-      'When importing, you can overwrite the current timetable or import it as a new timetable. Export your backup first if possible.';
+      'When importing, you can overwrite the current timetable or import it as a new timetable. Export your backup first if possible';
 
   @override
   String get chooseFileAndImport => 'Choose File and Import';
@@ -1280,7 +1304,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectImportModeMessage =>
-      'You can overwrite the current timetable, or import the backup as a new standalone timetable.';
+      'You can overwrite the current timetable, or import the backup as a new standalone timetable';
 
   @override
   String get replaceCurrentTimetable => 'Overwrite Current Timetable';
@@ -1307,7 +1331,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get welcomeSubtitle =>
-      'You can start using the app right away, or import courses / restore a backup first.';
+      'You can start using the app right away, or import courses / restore a backup first';
 
   @override
   String get thirdPartyDisclaimer =>
@@ -1349,35 +1373,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get migrationSafeSubtitle =>
-      'We changed the app package name, so you may temporarily see two app icons. This is normal. Your old data is still in the old app. Back it up there first, then import it here.';
+      'We changed the app package name, so you may temporarily see two app icons. This is normal. Your old data is still in the old app. Back it up there first, then import it here';
 
   @override
   String get migrationStep1Title => 'Open the old app';
 
   @override
   String get migrationStep1Subtitle =>
-      'Go to Backup & Migration and choose Export All Data. Do not export only the current timetable, and do not uninstall the old app first.';
+      'Go to Backup & Migration and choose Export All Data. Do not export only the current timetable, and do not uninstall the old app first';
 
   @override
   String get migrationStep2Title => 'Save the backup file';
 
   @override
   String get migrationStep2Subtitle =>
-      'After exporting, the old app will open the system share sheet. Prefer Save to Files, and store it in the Download folder.';
+      'After exporting, the old app will open the system share sheet. Prefer Save to Files, and store it in the Download folder';
 
   @override
   String get migrationStep3Title => 'Return to this version and import';
 
   @override
   String get migrationStep3Subtitle =>
-      'Return to the new version, choose the .mikcb backup file from Download, and restore it. Only uninstall the old app after confirming everything works here.';
+      'Return to the new version, choose the .mikcb backup file from Download, and restore it. Only uninstall the old app after confirming everything works here';
 
   @override
   String get migrationNoSaveToFilesTitle => 'If “Save to Files” is unavailable';
 
   @override
   String get migrationNoSaveToFilesSubtitle =>
-      'You can first share the backup to any WeChat chat, then open the file in WeChat and save it. It usually ends up in Download or the WeiXin folder. Then return here and import that .mikcb file.';
+      'You can first share the backup to any WeChat chat, then open the file in WeChat and save it. It usually ends up in Download or the WeiXin folder. Then return here and import that .mikcb file';
 
   @override
   String get openingOldApp => 'Opening old app...';
@@ -1403,7 +1427,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get supportHeroSubtitle =>
-      'Your support goes directly into timetable maintenance, academic adapter updates, and overall experience improvements.';
+      'Your support goes directly into timetable maintenance, academic adapter updates, and overall experience improvements';
 
   @override
   String get supportChipFixes => 'Bug Fixes';
@@ -1540,7 +1564,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String conflictDetectedMessage(int count) {
-    return '$count scheduled entries have actual conflicts. Conflicting items are highlighted below.';
+    return '$count scheduled entries have actual conflicts. Conflicting items are highlighted below';
   }
 
   @override
@@ -1601,7 +1625,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get currentScheduleSubtitle =>
-      'Weekday, sections, room, weeks, and odd/even settings here only affect this single schedule entry.';
+      'Weekday, sections, room, weeks, and odd/even settings here only affect this single schedule entry';
 
   @override
   String get timeSchemeLabel => 'Time Scheme';
@@ -1613,11 +1637,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get followCurrentTimetableDescription =>
-      'By default this course follows the timetable’s main time scheme, which suits most courses.';
+      'By default this course follows the timetable’s main time scheme, which suits most courses';
 
   @override
   String get overrideTimeSchemeDescription =>
-      'This course will use the selected scheme separately instead of following the timetable’s main schedule.';
+      'This course will use the selected scheme separately instead of following the timetable’s main schedule';
 
   @override
   String get weekdayLabel => 'Weekday';
@@ -1641,7 +1665,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singleLessonWeekSubtitle =>
-      'Single lessons only appear in one week, which is ideal for make-up or temporary classes.';
+      'Single lessons only appear in one week, which is ideal for make-up or temporary classes';
 
   @override
   String get selectWeekLabel => 'Select Week';
@@ -1672,14 +1696,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rangeWeeksAllHint =>
-      'Schedule continuously from the start week to the end week.';
+      'Schedule continuously from the start week to the end week';
 
   @override
-  String get rangeWeeksOddHint => 'Keep only odd weeks in the selected range.';
+  String get rangeWeeksOddHint => 'Keep only odd weeks in the selected range';
 
   @override
-  String get rangeWeeksEvenHint =>
-      'Keep only even weeks in the selected range.';
+  String get rangeWeeksEvenHint => 'Keep only even weeks in the selected range';
 
   @override
   String get selectAllAction => 'Select All';
@@ -1771,7 +1794,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutHeroSubtitle =>
-      'An open-source Android project focused on timetable viewing, course reminders, and the HyperOS island experience.';
+      'An open-source Android project focused on timetable viewing, course reminders, and the HyperOS island experience';
 
   @override
   String get platformLabel => 'Platform';
@@ -1793,7 +1816,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutUpdatesSubtitle =>
-      'Check for updates and download the latest release.';
+      'Check for updates and download the latest release';
 
   @override
   String get aboutChangelogTitle => 'Changelog';
@@ -1806,7 +1829,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutPositioningSubtitle =>
-      'What it is, who it is for, and its core capabilities.';
+      'What it is, who it is for, and its core capabilities';
 
   @override
   String get aboutPositioningBullet1 =>
@@ -1829,7 +1852,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutImportMigrationSubtitle =>
-      'Current import methods, backup restore, and migration advice.';
+      'Current import methods, backup restore, and migration advice';
 
   @override
   String get aboutImportMigrationBullet1 =>
@@ -1852,10 +1875,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutContributorsSubtitle =>
-      'Developers and academic system adapter contributors.';
+      'Developers and academic system adapter contributors';
 
   @override
   String get aboutRepositoryTitle => 'Open Source Repositories';
+
+  @override
+  String get aboutRepositorySubtitle =>
+      'GitHub source, releases, and feedback entry';
+
+  @override
+  String get aboutOpenSourceLicensesTitle => 'Open Source Licenses';
+
+  @override
+  String get aboutOpenSourceLicensesSubtitle =>
+      'App license and third-party component licenses';
+
+  @override
+  String get aboutOpenSourceLicensesSearchHint => 'Search package name';
+
+  @override
+  String get aboutOpenSourceLicensesAppSectionTitle => 'About these licenses';
+
+  @override
+  String get aboutOpenSourceLicensesAppLicenseLabel =>
+      'Qingyu Timetable source code is released under GPL-3.0-or-later.';
+
+  @override
+  String get aboutOpenSourceLicensesIntro =>
+      'The list below shows open-source components used by this app and their licenses. Tap an item to read the full text.';
+
+  @override
+  String get aboutOpenSourceLicensesExtraSectionTitle => 'About these licenses';
+
+  @override
+  String get aboutOpenSourceLicensesExtraUmeng =>
+      'Analytics services such as Umeng are enabled only after you accept the privacy policy, and are governed by their own terms and privacy policy.';
+
+  @override
+  String get aboutOpenSourceLicensesExtraNote => '';
+
+  @override
+  String aboutOpenSourceLicensesPackagesSectionTitle(int count) {
+    return 'Open-source components ($count)';
+  }
+
+  @override
+  String aboutOpenSourceLicensesPackageSubtitle(int count) {
+    return '$count license text(s)';
+  }
+
+  @override
+  String get aboutOpenSourceLicensesLoadFailed =>
+      'Failed to load licenses. Please try again later.';
+
+  @override
+  String get aboutOpenSourceLicensesEmpty => 'No matching packages';
 
   @override
   String get aboutAppLogsTitle => 'App logs';
@@ -1903,11 +1978,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appLogsRecordingPausedHint =>
-      'Recording is off. The entries below are historical logs only; no new logs will be added.';
-
-  @override
-  String get aboutRepositorySubtitle =>
-      'GitHub source, releases, and feedback entry.';
+      'Recording is off. The entries below are historical logs only; no new logs will be added';
 
   @override
   String get timeSchemeTitle => 'Time Schemes';
@@ -1956,7 +2027,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deleteTimeSchemeMessage(String name) {
-    return 'Delete “$name”? A scheme in use cannot be deleted.';
+    return 'Delete “$name”? A scheme in use cannot be deleted';
   }
 
   @override
@@ -1966,7 +2037,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get timeSchemeInUseMessage =>
-      'This scheme is currently used by a timetable.';
+      'This scheme is currently used by a timetable';
 
   @override
   String get copiedTimeSchemeMessage => 'Time scheme copied';
@@ -1983,7 +2054,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get timeSchemeUsageIntro =>
-      'Review the total impact first, then decide whether to edit this scheme directly or duplicate it before making changes.';
+      'Review the total impact first, then decide whether to edit this scheme directly or duplicate it before making changes';
 
   @override
   String get profileCountLabel => 'Profiles';
@@ -2004,7 +2075,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get directlyBoundProfilesSubtitle =>
-      'Timetables in this list use this scheme as their main time schedule.';
+      'Timetables in this list use this scheme as their main time schedule';
 
   @override
   String get followMainSchemeCoursesTitle =>
@@ -2016,7 +2087,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get followMainSchemeCoursesSubtitle =>
-      'These courses do not set an override time scheme and follow the timetable’s main schedule.';
+      'These courses do not set an override time scheme and follow the timetable’s main schedule';
 
   @override
   String get overrideSchemeCoursesTitle =>
@@ -2028,7 +2099,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overrideSchemeCoursesSubtitle =>
-      'These courses will continue using this scheme even if their timetable changes its main schedule.';
+      'These courses will continue using this scheme even if their timetable changes its main schedule';
 
   @override
   String get closeAction => 'Close';
@@ -2059,7 +2130,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sectionTimesSubtitle =>
-      'If the current timetable is using this scheme, the section count cannot be lower than the maximum section already in use.';
+      'If the current timetable is using this scheme, the section count cannot be lower than the maximum section already in use';
 
   @override
   String get schemeListCurrentLabel => 'Current';
@@ -2088,15 +2159,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get timeSchemeEditorActiveAndCoursesHint =>
-      'The current timetable and some courses are using this time scheme. Saving will update all related timetables and courses.';
+      'The current timetable and some courses are using this time scheme. Saving will update all related timetables and courses';
 
   @override
   String get timeSchemeEditorActiveHint =>
-      'The current timetable is using this time scheme. Saving will update every timetable that relies on it.';
+      'The current timetable is using this time scheme. Saving will update every timetable that relies on it';
 
   @override
   String get timeSchemeEditorOverrideHint =>
-      'Some courses are using this time scheme as an override. Saving will update every referenced course.';
+      'Some courses are using this time scheme as an override. Saving will update every referenced course';
 
   @override
   String get editTimeAction => 'Edit Time';
@@ -2163,7 +2234,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noLargeBreakRulesHint =>
-      'No long break rule has been set. The short break duration will be used everywhere.';
+      'No long break rule has been set. The short break duration will be used everywhere';
 
   @override
   String get deleteRuleTooltip => 'Delete Rule';
@@ -2179,28 +2250,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveReminderTimingEntrySubtitle =>
-      'Before class, during class / before end toggles, and when to switch into highlighted reminders.';
+      'Before class, during class and before-end reminders, plus highlight timing';
 
   @override
   String get liveBeforeClassDisplayEntryTitle => 'Before Class Display';
 
   @override
   String get liveDuringEndDisplayEntryTitle =>
-      'During Class / Before End Display';
+      'During Class and Before End Display';
 
   @override
   String get liveKeepAliveEntryTitle => 'Keep Alive';
 
   @override
   String get liveKeepAliveEntrySubtitle =>
-      'Hide from recents, accessibility keep-alive helper, and permission shortcuts.';
+      'Hide from recents, accessibility keep-alive helper, and permission shortcuts';
 
   @override
   String get liveTestingEntryTitle => 'Testing & Diagnostics';
 
   @override
   String get liveTestingEntrySubtitle =>
-      'Send test notifications and inspect island diagnostics logs.';
+      'Send test notifications and inspect island diagnostics logs';
 
   @override
   String get followBeforeClassSetting => 'Follow Before-class Settings';
@@ -2213,7 +2284,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveReminderSwitchesSubtitle =>
-      'Different reminder windows can be combined freely; these switches do not replace each other.';
+      'Different reminder windows can be combined freely; these switches do not replace each other';
 
   @override
   String get beforeClassReminderTitle => 'Before Class Reminder';
@@ -2224,19 +2295,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get duringClassReminderTitle => 'During Class / Before End Reminder';
+  String get duringClassReminderTitle => 'During Class and Before End Reminder';
 
   @override
   String get duringClassReminderSubtitle =>
       'Only affects the period after class starts and before it ends';
 
   @override
-  String get liveClassReminderLeadTitle =>
-      'When to switch to highlighted island reminders before class ends';
+  String get liveClassReminderLeadTitle => 'Highlight timing';
 
   @override
-  String get liveClassReminderLeadOptionImmediate =>
-      'Switch immediately when class starts';
+  String get liveClassReminderLeadOptionImmediate => 'As soon as class starts';
 
   @override
   String liveClassReminderLeadOptionMinutes(int minutes) {
@@ -2247,7 +2316,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveDisplayModeTitle => 'Display Style';
 
   @override
-  String get liveDisplayModeSubtitle => 'Applies to enabled reminder windows.';
+  String get liveDisplayModeSubtitle => 'Applies to enabled reminder windows';
 
   @override
   String get duringClassStatusNotificationTitle =>
@@ -2266,7 +2335,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Keep a regular during-class notification, then switch before class ends';
 
   @override
-  String get enableIslandDisplayTitle => 'Enable Island / Dynamic Presentation';
+  String get enableIslandDisplayTitle => 'Show Island';
 
   @override
   String get enableIslandDisplaySubtitle =>
@@ -2277,7 +2346,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTimeThresholdSubtitle =>
-      'Controls when reminders appear, when highlighted reminders start, and when to switch to second-level countdown.';
+      'Controls when reminders appear, when highlighted reminders start, and when to switch to second-level countdown';
 
   @override
   String get beforeClassPopupLabel => 'Before-class trigger';
@@ -2320,7 +2389,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveDisplayContentSubtitle =>
-      'These settings only affect the current stage and do not change the other reminder stage.';
+      'These settings only affect the current stage and do not change the other reminder stage';
 
   @override
   String get showCourseNameTitle => 'Show Course Name';
@@ -2330,7 +2399,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preferShortNameSubtitle =>
-      'Short names work best within 3 characters.';
+      'Short names work best within 3 characters';
 
   @override
   String get showLocationTitle => 'Show Location';
@@ -2350,21 +2419,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get showStageTextSubtitle =>
-      'If countdown is hidden, you can still show labels like before class / in class / before end.';
+      'If countdown is hidden, you can still show labels like before class / in class / before end';
 
   @override
   String get hidePrefixTextTitle => 'Hide Prefix Text';
 
   @override
   String get hidePrefixTextSubtitle =>
-      'For example, hide prefixes like “before class”.';
+      'For example, hide prefixes like “before class”';
 
   @override
   String get beforeClassQuickActionTitle => 'Before-class Quick Action';
 
   @override
   String get beforeClassQuickActionSubtitle =>
-      'Only appears in the expanded before-class reminder. Silent/DND restores after class ends and on reboot. Do Not Disturb may open a system permission page on first use.';
+      'Only appears in the expanded before-class reminder. Silent/DND restores after class ends and on reboot. Do Not Disturb may open a system permission page on first use';
 
   @override
   String liveMiuiLabelSizePreview(String value) {
@@ -2376,14 +2445,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveIslandVisualSubtitle =>
-      'The left text icon, expanded large icon, and custom image are all stored separately for the current stage.';
+      'The left text icon, expanded large icon, and custom image are all stored separately for the current stage';
 
   @override
   String get liveMiuiLabelImageTitle => 'Xiaomi Island Left Text Icon';
 
   @override
   String get liveMiuiLabelImageSubtitle =>
-      'Only effective on Xiaomi-style island layouts. It renders course name or location into the left icon slot.';
+      'Only effective on Xiaomi-style island layouts. It renders course name or location into the left icon slot';
 
   @override
   String get liveMiuiLabelContentLabel => 'Left Text Content';
@@ -2396,7 +2465,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveMiuiLabelLogoSubtitle =>
-      'Only applies to the icon + text style. If not selected, the app icon remains the fallback.';
+      'Only applies to the icon + text style. If not selected, the app icon remains the fallback';
 
   @override
   String liveMiuiLabelLogoCornerRadiusLabel(String value) {
@@ -2450,7 +2519,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveDisplayConfigModeSubtitle =>
-      'When enabled, during-class and before-end reminders fully follow the before-class display settings, and the controls below become read-only.';
+      'When enabled, during-class and before-end reminders fully follow the before-class display settings, and the controls below become read-only';
 
   @override
   String get followBeforeClassDisplayTitle =>
@@ -2464,25 +2533,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveKeepAliveOptionsSubtitle =>
-      'Used to improve island and reminder stability in background scenarios.';
+      'Used to improve island and reminder stability in background scenarios';
 
   @override
   String get hideFromRecentsTitle => 'Hide from Recents';
 
   @override
   String get hideFromRecentsSubtitle =>
-      'When enabled, the app will try not to appear in the recent tasks list.';
+      'When enabled, the app will try not to appear in the recent tasks list';
 
   @override
   String get keepAliveServiceTitle => 'Qingyu Timetable Keep-alive Service';
 
   @override
   String get keepAliveServiceEnabledSubtitle =>
-      'Currently enabled. The system will keep the accessibility-based keep-alive helper available.';
+      'Currently enabled. The system will keep the accessibility-based keep-alive helper available';
 
   @override
   String get keepAliveServiceDisabledSubtitle =>
-      'Currently disabled. You can open system accessibility settings and enable the Qingyu Timetable keep-alive service manually.';
+      'Currently disabled. You can open system accessibility settings and enable the Qingyu Timetable keep-alive service manually';
 
   @override
   String get goEnableAction => 'Enable Now';
@@ -2545,7 +2614,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pickSemesterWeekCountSubtitle =>
-      'Different schools may use different total teaching weeks.';
+      'Different schools may use different total teaching weeks';
 
   @override
   String weekCountItem(int count) {
@@ -2554,7 +2623,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsLogIntro =>
-      'Supports both Markdown and raw views so you can inspect full logs directly on your phone.';
+      'Supports both Markdown and raw views so you can inspect full logs directly on your phone';
 
   @override
   String get diagnosticsRawTab => 'Raw';
@@ -2593,14 +2662,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsNoMatchingSubtitle =>
-      'Switch back to \"All\" or check the raw view to continue debugging.';
+      'Switch back to \"All\" or check the raw view to continue debugging';
 
   @override
   String get diagnosticsLevelInferred => 'Inferred level';
 
   @override
   String get diagnosticsRawFilteredHint =>
-      'The raw view follows the current level filter and only shows matching log blocks.';
+      'The raw view follows the current level filter and only shows matching log blocks';
 
   @override
   String get diagnosticsTimeSortAscending => 'Oldest first';
@@ -2613,14 +2682,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsStreamingHint =>
-      'Live updates are on. New logs appear automatically.';
+      'Live updates are on. New logs appear automatically';
 
   @override
   String get diagnosticsEmptyTitle => 'No Logs Yet';
 
   @override
   String get diagnosticsEmptySubtitle =>
-      'There are currently no app logs to display.';
+      'There are currently no app logs to display';
 
   @override
   String get diagnosticsLogTitleFallback => 'Island Diagnostics Log';
@@ -2667,7 +2736,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideHeroSubtitle =>
-      'Authorize the essentials on the first screen. Below you’ll also see HyperOS support, short-name setup, and import guidance, so keep scrolling.';
+      'Authorize the essentials on the first screen. Below you’ll also see HyperOS support, short-name setup, and import guidance, so keep scrolling';
 
   @override
   String get guideChipPermissions => 'Permissions';
@@ -2685,11 +2754,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideBottomReachedHint =>
-      'You’ve reached the end. If everything looks right, you can start using the app now.';
+      'You’ve reached the end. If everything looks right, you can start using the app now';
 
   @override
   String get guideScrollHint =>
-      'Scroll down to continue. HyperOS support, the permission checklist, short-name setup, and import methods are all below.';
+      'Scroll down to continue. HyperOS support, the permission checklist, short-name setup, and import methods are all below';
 
   @override
   String get guideRequestNotificationFirst =>
@@ -2700,7 +2769,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quickSetupSubtitle =>
-      'Put the 5 most important entries first so you don’t need to search for them later.';
+      'Put the 5 most important entries first so you don’t need to search for them later';
 
   @override
   String get quickActionNotificationsTitle => 'Notification Settings';
@@ -2739,10 +2808,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideRequireConsentHint =>
-      'Please scroll to the end, review the notes, and check consent before starting.';
+      'Please scroll to the end, review the notes, and check consent before starting';
 
   @override
-  String get guideContinueHint => 'Keep scrolling to finish the guide.';
+  String get guideContinueHint => 'Keep scrolling to finish the guide';
 
   @override
   String get exitAppAction => 'Exit App';
@@ -2785,11 +2854,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singleLessonHint =>
-      'Best for make-up classes or temporary one-off lessons.';
+      'Best for make-up classes or temporary one-off lessons';
 
   @override
   String get recurringLessonHint =>
-      'Best for regular classes that repeat over many weeks.';
+      'Best for regular classes that repeat over many weeks';
 
   @override
   String get sharedInfoTitle => 'Shared Info';
@@ -2821,14 +2890,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noTemplateCoursesHint =>
-      'There are no existing courses yet. Add one manually first, then future temporary lessons can reuse it.';
+      'There are no existing courses yet. Add one manually first, then future temporary lessons can reuse it';
 
   @override
   String get courseNameLabel => 'Course Name';
 
   @override
   String get courseNameHelper =>
-      'Serves as the unique course identifier. Entries with the same name are grouped as one course. Enter the full official name; do not abbreviate for display.';
+      'Serves as the unique course identifier. Entries with the same name are grouped as one course. Enter the full official name; do not abbreviate for display';
 
   @override
   String get pleaseEnterCourseName => 'Please enter the course name';
@@ -2838,7 +2907,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get courseShortNameHelper =>
-      'Recommended for concise display in Super Island and similar surfaces. Short names are not generated automatically; enable Prefer course short name to apply. Limit to about 3 characters when possible.';
+      'Recommended for concise display in Super Island and similar surfaces. Short names are not generated automatically; enable Prefer course short name to apply. Limit to about 3 characters when possible';
 
   @override
   String get courseShortNameAutoFillAction => 'First 2 chars';
@@ -2854,7 +2923,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get currentScheduleHint =>
-      'Weekday, sections, room, week range, and odd/even settings here only affect this specific entry.';
+      'Weekday, sections, room, week range, and odd/even settings here only affect this specific entry';
 
   @override
   String followProfileTimeScheme(String name) {
@@ -2869,7 +2938,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singleLessonWeekHint =>
-      'A single lesson appears in only one week, ideal for temporary additions or make-up classes.';
+      'A single lesson appears in only one week, ideal for temporary additions or make-up classes';
 
   @override
   String get rangeWeekLabel => 'Continuous Weeks';
@@ -2888,13 +2957,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get allWeeksHint =>
-      'Schedule continuously from the start week to the end week.';
+      'Schedule continuously from the start week to the end week';
 
   @override
-  String get oddWeeksHint => 'Keep only odd weeks within the selected range.';
+  String get oddWeeksHint => 'Keep only odd weeks within the selected range';
 
   @override
-  String get evenWeeksHint => 'Keep only even weeks within the selected range.';
+  String get evenWeeksHint => 'Keep only even weeks within the selected range';
 
   @override
   String get customPaletteColor => 'Custom Color Picker';
@@ -2999,7 +3068,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String liveClassReminderLeadSummaryIsland(int minutes, int seconds) {
-    return 'Switch to the Island / focused reminder $minutes minutes before class ends, then show second-level countdown in the last ${seconds}s';
+    return 'Switch to the Island and focused reminder $minutes minutes before class ends, then show second-level countdown in the last ${seconds}s';
   }
 
   @override
@@ -3020,7 +3089,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeTitleSectionSubtitle =>
-      'Controls the style of the timetable switch entry at the top left of the home page.';
+      'Controls the style of the timetable switch entry at the top left of the home page';
 
   @override
   String get homeTitleStyleLabel => 'Title style';
@@ -3030,21 +3099,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeSeedSectionSubtitle =>
-      'Affects the top bar, accent color, and global primary tone.';
+      'Affects the top bar, accent color, and global primary tone';
 
   @override
   String get frostedSheetSectionTitle => 'Sheet frosted glass';
 
   @override
   String get frostedSheetSectionSubtitle =>
-      'Adjust home popup blur and milky frosted brightness. Further right = brighter white glass.';
+      'Adjust home popup blur and milky frosted brightness. Further right = brighter white glass';
 
   @override
   String get frostedBlurEnabledTitle => 'Gaussian blur';
 
   @override
   String get frostedBlurEnabledSubtitle =>
-      'When off, sheets and home frosted areas keep tint only, without backdrop blur.';
+      'When off, sheets and home frosted areas keep tint only, without backdrop blur';
 
   @override
   String get frostedSheetPreviewOpenAction => 'Open sheet preview';
@@ -3054,7 +3123,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get frostedSheetPreviewDemoSubtitle =>
-      'Same frosted glass as the home top-right menu.';
+      'Same frosted glass as the home top-right menu';
 
   @override
   String get frostedSheetBlurLabel => 'Blur strength';
@@ -3068,7 +3137,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get timetableBackgroundColorSectionSubtitle =>
-      'Used in solid-color mode for the selected display regions; can pair with a background image.';
+      'Used in solid-color mode for the selected display regions; can pair with a background image';
 
   @override
   String get homePageBackgroundFillLabel => 'Background fill';
@@ -3084,14 +3153,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homePageBackgroundImageSubtitle =>
-      'In image mode, applies to the display regions selected below.';
+      'In image mode, applies to the display regions selected below';
 
   @override
   String get homePageWallpaperTitle => 'Background image';
 
   @override
   String get homePageWallpaperSubtitle =>
-      'One full-screen image. Checked regions below show it through; others use the page color.';
+      'One full-screen image. Checked regions below show it through; others use the page color';
 
   @override
   String get homePageBackdropFollowsWeekPagerTitle =>
@@ -3099,14 +3168,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homePageBackdropFollowsWeekPagerSubtitle =>
-      'When swiping between weeks, the background image moves with the timetable page.';
+      'When swiping between weeks, the background image moves with the timetable page';
 
   @override
   String get homePageBackgroundScopeTitle => 'Background display area';
 
   @override
   String get homePageBackgroundScopeSubtitle =>
-      'Top to bottom: choose which regions show the image; others use the page color.';
+      'Top to bottom: choose which regions show the image; others use the page color';
 
   @override
   String get homePageBackgroundScopeStatusBar => 'Status bar';
@@ -3125,25 +3194,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homePageHeaderBlurSubtitle =>
-      'Frost the title row; includes the status bar when that scope is enabled.';
+      'Frost the title row; includes the status bar when that scope is enabled';
 
   @override
   String get homePageWeekdayBarBlurTitle => 'Info bar blur';
 
   @override
   String get homePageWeekdayBarBlurSubtitle =>
-      'Frost the week and weekday row over the background image.';
+      'Frost the week and weekday row over the background image';
 
   @override
   String get homePageTimeColumnBlurTitle => 'Time column blur';
 
   @override
   String get homePageTimeColumnBlurSubtitle =>
-      'Frost the left section/time column over the background image.';
+      'Frost the left section/time column over the background image';
 
   @override
   String get homePageRegionBlurSectionSubtitle =>
-      'Works with a background image. Blur strength follows sheet frosted-glass settings.';
+      'Works with a background image. Blur strength follows sheet frosted-glass settings';
 
   @override
   String get homePagePickImageAction => 'Choose image';
@@ -3159,7 +3228,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceTextColorsSectionSubtitle =>
-      'Customize course card, weekday bar, and time axis text colors.';
+      'Customize course card, weekday bar, and time axis text colors';
 
   @override
   String get defaultTimetablePreviewName => 'Default timetable';
@@ -3256,14 +3325,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideStatusIslandHint =>
-      'If you mainly want to use the Island, first make sure your system version is at least HyperOS 3.0.300, then complete the permission checklist below in order.';
+      'If you mainly want to use the Island, first make sure your system version is at least HyperOS 3.0.300, then complete the permission checklist below in order';
 
   @override
   String get guidePermissionChecklistTitle => 'Permission checklist';
 
   @override
   String get guidePermissionChecklistSubtitle =>
-      'Follow this order for the easiest setup and the lowest chance of missing anything.';
+      'Follow this order for the easiest setup and the lowest chance of missing anything';
 
   @override
   String get guideChecklistRequestNotificationTitle =>
@@ -3315,7 +3384,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideShortNameAdviceSubtitle =>
-      'The Island supports course short names. Short names are not generated automatically, so you need to fill them in on the course edit page yourself. Keeping them within 3 characters is usually the most stable.';
+      'The Island supports course short names. Short names are not generated automatically, so you need to fill them in on the course edit page yourself. Keeping them within 3 characters is usually the most stable';
 
   @override
   String get guideShortNameRecommended => 'Recommended';
@@ -3338,7 +3407,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideImportMethodsSubtitle =>
-      'This version already supports web login import for some school systems. If your school is not supported yet, there are still other migration options.';
+      'This version already supports web login import for some school systems. If your school is not supported yet, there are still other migration options';
 
   @override
   String get guideImportMethodStep1 =>
@@ -3365,7 +3434,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideFinalTip2 =>
-      '2. Adjust the before-class popup and in-class / near-end reminder thresholds in Settings first.';
+      '2. Adjust the before-class popup and in-class and near-end reminder thresholds in Settings first.';
 
   @override
   String get guideFinalTip3 =>
@@ -3373,11 +3442,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guidePrivacyHelperRequireConsent =>
-      'By checking the box, you confirm that you have read and agreed to the Umeng-related privacy notes, privacy content, and disclaimer above.';
+      'By checking the box, you confirm that you have read and agreed to the Umeng-related privacy notes, privacy content, and disclaimer above';
 
   @override
   String get guidePrivacyHelperViewOnly =>
-      'This page keeps the same privacy, third-party SDK, and disclaimer information shown during first launch so you can review it at any time. You do not need to agree again here.';
+      'This page keeps the same privacy, third-party SDK, and disclaimer information shown during first launch so you can review it at any time. You do not need to agree again here';
 
   @override
   String get guidePrivacySectionTitle =>
@@ -3461,14 +3530,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTestingNotificationSubtitle =>
-      'Used to verify the Island, notification bar, and course short-name display.';
+      'Used to verify the Island, notification bar, and course short-name display';
 
   @override
   String get liveTestingSendAction => 'Send test notification';
 
   @override
   String get liveTestingUmengHint =>
-      'The two buttons below are shown only in test builds and are used to verify Umeng U-APM crash and ANR reporting.';
+      'The two buttons below are shown only in test builds and are used to verify Umeng U-APM crash and ANR reporting';
 
   @override
   String get liveTestingCrashAction => 'Crash test';
@@ -3481,7 +3550,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTestingIslandStatusSubtitle =>
-      'This section shows the native live service status, notification build result, and the reason it is not appearing on the Island.';
+      'This section shows the native live service status, notification build result, and the reason it is not appearing on the Island';
 
   @override
   String get liveTestingServiceStatusRunning => 'Service running';
@@ -3554,7 +3623,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTestingRawDataSubtitle =>
-      'Collapsed by default. Expand it only when you need to verify the full native fields.';
+      'Collapsed by default. Expand it only when you need to verify the full native fields';
 
   @override
   String get liveTestingExpandRawJson => 'Expand raw JSON';
@@ -3568,7 +3637,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTestingLocalLogsSubtitle =>
-      'Export the log file with one tap and share it directly with the developer, or clear it and collect again.';
+      'Export the log file with one tap and share it directly with the developer, or clear it and collect again';
 
   @override
   String get liveTestingClearLogsAction => 'Clear logs';
@@ -3590,7 +3659,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTestingCurrentNativeFieldsSubtitle =>
-      'Shows the current native diagnostic fields.';
+      'Shows the current native diagnostic fields';
 
   @override
   String get liveTestingCrashSoon =>
@@ -3606,7 +3675,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveTestingTestCourseNote =>
-      'This note is shown here. You can edit it on the course edit page.';
+      'This note is shown here. You can edit it on the course edit page';
 
   @override
   String get liveTestingNotificationSent =>
@@ -3625,7 +3694,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeWidgetTodayCourseSubtitle =>
-      'The first batch supports 2×2, 2×4, and 4×4 sizes. Tapping a widget opens the home page directly, and it refreshes automatically when classes start and end.';
+      'The first batch supports 2×2, 2×4, and 4×4 sizes. Tapping a widget opens the home page directly, and it refreshes automatically when classes start and end';
 
   @override
   String get homeWidgetQuickAddTitle => 'Quick add to home screen';
@@ -3650,21 +3719,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeWidgetShowLocationSubtitle =>
-      'When turned off, the widget secondary info will prioritize week info and course count.';
+      'When turned off, the widget secondary info will prioritize week info and course count';
 
   @override
   String get homeWidgetShowCountdownTitle => 'Show countdown';
 
   @override
   String get homeWidgetShowCountdownSubtitle =>
-      'The refresh switch is kept for now and will later be used to show remaining time before the next class and during class.';
+      'The refresh switch is kept for now and will later be used to show remaining time before the next class and during class';
 
   @override
   String get homeWidgetCountdownLeadTitle => 'Countdown lead time';
 
   @override
   String get homeWidgetCountdownLeadSubtitle =>
-      'Set how many minutes before class to automatically switch to countdown mode.';
+      'Set how many minutes before class to automatically switch to countdown mode';
 
   @override
   String get homeWidgetCountdownLeadAlways => 'Always show';
@@ -3682,14 +3751,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeWidgetHideCompletedSubtitle =>
-      'When enabled, the 2×2, 2×4, and 4×4 course lists show only classes that have not finished yet.';
+      'When enabled, the 2×2, 2×4, and 4×4 course lists show only classes that have not finished yet';
 
   @override
   String get homeWidgetShowTomorrowTitle => 'Show tomorrow\'s classes';
 
   @override
   String get homeWidgetShowTomorrowSubtitle =>
-      'When enabled, the widget automatically switches to tomorrow\'s classes after today\'s classes end.';
+      'When enabled, the widget automatically switches to tomorrow\'s classes after today\'s classes end';
 
   @override
   String get homeWidgetHeightAdjustTitle => 'Card height adjustment';
@@ -3715,7 +3784,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeWidgetDescriptionText =>
-      'Widgets currently prioritize today\'s courses. On days without classes, the full card stays visible instead of turning blank. If you switch timetables or change styles, the home-screen widgets refresh as well.';
+      'Widgets currently prioritize today\'s courses. On days without classes, the full card stays visible instead of turning blank. If you switch timetables or change styles, the home-screen widgets refresh as well';
 
   @override
   String homeWidgetPinRequested(String label) {
@@ -3747,21 +3816,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get layoutAutoFitHeightSubtitle =>
-      'When enabled, the page automatically fills to the bottom based on the current section count instead of leaving blank space below.';
+      'When enabled, the page automatically fills to the bottom based on the current section count instead of leaving blank space below';
 
   @override
   String get layoutHideWeekendsTitle => 'Hide weekends';
 
   @override
   String get layoutHideWeekendsSubtitle =>
-      'When enabled, only Monday to Friday are shown on the home page and the remaining columns expand automatically.';
+      'When enabled, only Monday to Friday are shown on the home page and the remaining columns expand automatically';
 
   @override
   String get layoutEnableHapticsTitle => 'Enable in-app haptic feedback';
 
   @override
   String get layoutEnableHapticsSubtitle =>
-      'When off, interactions such as page switching no longer trigger light vibration.';
+      'When off, interactions such as page switching no longer trigger light vibration';
 
   @override
   String pageTransitionSpeedLabel(String speed) {
@@ -3773,7 +3842,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pageTransitionSpeedSubtitle =>
-      'Adjust how fast sub-pages slide in and out. Higher is faster, lower is slower. Multiplied by the system transition animation scale on Android.';
+      'Adjust how fast sub-pages slide in and out. Higher is faster, lower is slower. Multiplied by the system transition animation scale on Android';
 
   @override
   String pageTransitionSpeedDurationHint(int milliseconds) {
@@ -3792,7 +3861,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get layoutBackToCurrentWeekButtonStyleHelper =>
-      'Defaults to the current inline style, or switch to a small floating button in the bottom-right of week view.';
+      'Defaults to the current inline style, or switch to a small floating button in the bottom-right of week view';
 
   @override
   String get layoutBackToCurrentWeekButtonStyleInline =>
@@ -3813,7 +3882,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get layoutBackToCurrentWeekButtonOpacitySubtitle =>
-      'Only applies to the floating bottom-right style.';
+      'Only applies to the floating bottom-right style';
 
   @override
   String layoutCourseCardGapLabel(String value) {
@@ -3852,7 +3921,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get layoutCourseCardDisplaySubtitle =>
-      'Course name, teacher, and classroom are shown by default. Other information can be toggled freely per timetable.';
+      'Course name, teacher, and classroom are shown by default. Other information can be toggled freely per timetable';
 
   @override
   String get layoutShowTeacherTitle => 'Show teacher';
@@ -3864,11 +3933,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get layoutShowTimeTitle => 'Show time';
 
   @override
-  String get layoutShowTimeLabelsTitle => 'Show class start/end labels';
+  String get layoutShowTimeLabelsTitle => 'Show start and end labels';
 
   @override
   String get layoutShowTimeLabelsSubtitle =>
-      'When off, only the time points are shown, without the \"start\" / \"end\" labels.';
+      'When off, only the time points are shown, without the \"start\" and \"end\" labels';
 
   @override
   String get layoutShowWeeksTitle => 'Show weeks';
@@ -3890,7 +3959,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get layoutShowOtherWeeksSubtitle =>
-      'Off by default. When enabled, courses not in the current week are shown in semi-transparent gray.';
+      'Off by default. When enabled, courses not in the current week are shown in semi-transparent gray';
 
   @override
   String get layoutVerticalAlignLabel => 'Vertical alignment';
@@ -3904,7 +3973,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get layoutShowConflictBadgeSubtitle =>
-      'When off, the home timetable no longer shows the \"Conflict\" pill for conflicting courses.';
+      'When off, the home timetable no longer shows the \"Conflict\" pill for conflicting courses';
 
   @override
   String layoutConflictOpacityLabel(int value) {
@@ -3912,8 +3981,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get layoutConflictOpacityTitle => 'Conflict course opacity';
+
+  @override
   String get layoutConflictOpacitySubtitle =>
-      'Conflicting courses are automatically stacked. Lower opacity makes multiple courses visible at the same time.';
+      'Conflicting courses are automatically stacked. Lower opacity makes multiple courses visible at the same time';
 
   @override
   String get layoutTipsText =>
@@ -3944,7 +4016,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutRepositorySheetHint =>
-      'If you want to add academic-system adapters for more schools, you should also check the qingyu_warehouse repository.';
+      'If you want to add academic-system adapters for more schools, you should also check the qingyu_warehouse repository';
 
   @override
   String get aboutOpenGitHubAction => 'Open GitHub';
@@ -3981,7 +4053,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutReadVersionFailedHint =>
-      'If GitHub access is unstable on your network, try again later or switch to the domestic download route below.';
+      'If GitHub access is unstable on your network, try again later or switch to the domestic download route below';
 
   @override
   String get aboutViewReleaseAction => 'View Release';
@@ -4009,11 +4081,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutUpdateAvailableHint =>
-      'You can simply tap \"Download now\" below. Speed test, mirrors, and prerelease options have been moved into Advanced Options.';
+      'You can simply tap \"Download now\" below. Speed test, mirrors, and prerelease options have been moved into Advanced Options';
 
   @override
   String get aboutUpdateNoUpdateHint =>
-      'The current version is already usable. If you want to try prereleases, enable prerelease checks in Advanced Options below.';
+      'The current version is already usable. If you want to try prereleases, enable prerelease checks in Advanced Options below';
 
   @override
   String aboutUpdatedAt(String time) {
@@ -4025,19 +4097,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutUpdateNowAndroidSubtitle =>
-      'For normal use, just tap Download now once. If downloading is slow, fails, or you need a different route, use Advanced Options below.';
+      'For normal use, just tap Download now once. If downloading is slow, fails, or you need a different route, use Advanced Options below';
 
   @override
   String get aboutUpdateNowOtherSubtitle =>
-      'On the current platform, the app opens the download page directly instead of installing in-app.';
+      'On the current platform, the app opens the download page directly instead of installing in-app';
 
   @override
   String get aboutMirrorDownloadHint =>
-      'Domestic download is currently prioritized. On most domestic networks, tapping \"Download now\" is enough.';
+      'Domestic download is currently prioritized. On most domestic networks, tapping \"Download now\" is enough';
 
   @override
   String get aboutOriginalDownloadHint =>
-      'International-source download is currently prioritized. If downloading is slow or unreachable, switch back to domestic download.';
+      'International-source download is currently prioritized. If downloading is slow or unreachable, switch back to domestic download';
 
   @override
   String get aboutUseSystemDownloaderAction => 'Use system downloader';
@@ -4050,7 +4122,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutDownloadMethodSubtitle =>
-      'Domestic download is recommended by default. Only switch to the international source if you can access GitHub reliably.';
+      'Domestic download is recommended by default. Only switch to the international source if you can access GitHub reliably';
 
   @override
   String get aboutDownloadMethodMirror => 'Domestic download';
@@ -4060,17 +4132,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aboutMirrorModeHintRecommended(String current, String recommended) {
-    return 'Currently using domestic download · $current. Recent speed tests recommend \"$recommended\" instead, and you can switch in Advanced Options if needed.';
+    return 'Currently using domestic download · $current. Recent speed tests recommend \"$recommended\" instead, and you can switch in Advanced Options if needed';
   }
 
   @override
   String aboutMirrorModeHintCurrent(String current) {
-    return 'Currently using domestic download · $current. If downloading is slow or fails, use Advanced Options to test, switch routes, or enter a custom address.';
+    return 'Currently using domestic download · $current. If downloading is slow or fails, use Advanced Options to test, switch routes, or enter a custom address';
   }
 
   @override
   String get aboutOriginalModeHint =>
-      'You are currently using the international source. This is recommended only if your network can access GitHub reliably; otherwise, switch back to domestic download.';
+      'You are currently using the international source. This is recommended only if your network can access GitHub reliably; otherwise, switch back to domestic download';
 
   @override
   String get aboutReleaseNotesTitle => 'Release notes';
@@ -4084,18 +4156,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutAdvancedOptionsSubtitle =>
-      'Expand only when downloads are slow, you need to switch routes manually, or you want prerelease checks.';
+      'Expand only when downloads are slow, you need to switch routes manually, or you want prerelease checks';
 
   @override
   String get aboutMirrorSectionTitle => 'Download routes & mirrors';
 
   @override
   String get aboutMirrorSectionMirrorHint =>
-      'You are currently using domestic download. Here you can switch routes manually, run speed tests, or enter a custom download address.';
+      'You are currently using domestic download. Here you can switch routes manually, run speed tests, or enter a custom download address';
 
   @override
   String get aboutMirrorSectionOriginalHint =>
-      'You are currently using the international source. The route settings below take effect only after you switch back to domestic download.';
+      'You are currently using the international source. The route settings below take effect only after you switch back to domestic download';
 
   @override
   String get aboutFillCustomMirrorFirst =>
@@ -4109,11 +4181,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutCurrentCustomMirrorHint =>
-      'You are currently using the address you entered manually.';
+      'You are currently using the address you entered manually';
 
   @override
   String get aboutCurrentMirrorHint =>
-      'If the current route fails, switch to another built-in route or use a custom address instead.';
+      'If the current route fails, switch to another built-in route or use a custom address instead';
 
   @override
   String get aboutProbeMirrorsAction => 'Test speed and recommend';
@@ -4134,7 +4206,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutMirrorDisabledHint =>
-      'Domestic download is not currently enabled, so the route settings here will not take effect. Switch back to domestic download first if needed.';
+      'Domestic download is not currently enabled, so the route settings here will not take effect. Switch back to domestic download first if needed';
 
   @override
   String get aboutRecentProbeResultsTitle => 'Recent speed-test results';
@@ -4150,21 +4222,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutCheckPrereleaseSubtitle =>
-      'When enabled, prereleases are also included in update checks. It is recommended to keep this off for normal use.';
+      'When enabled, prereleases are also included in update checks. It is recommended to keep this off for normal use';
 
   @override
   String get aboutDiagnosticsTitle => 'Testing & diagnostics';
 
   @override
   String get aboutDiagnosticsSubtitle =>
-      'Expand this only when the Island does not appear or when you need to send feedback to the developer.';
+      'Expand this only when the Island does not appear or when you need to send feedback to the developer';
 
   @override
   String get aboutRecordDiagnosticsTitle => 'Record app logs';
 
   @override
   String get aboutRecordDiagnosticsSubtitle =>
-      'When enabled, app runtime logs are recorded locally. Super Island related entries are labeled separately.';
+      'When enabled, app runtime logs are recorded locally. Super Island related entries are labeled separately';
 
   @override
   String get aboutExportDiagnosticsAction => 'Export app logs';
@@ -4237,7 +4309,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutUpdatePackageDescription =>
-      'The download has been handed to the system download manager. You can install it directly from the system notification once it finishes.';
+      'The download has been handed to the system download manager. You can install it directly from the system notification once it finishes';
 
   @override
   String get aboutSystemDownloaderQueued =>
@@ -4262,7 +4334,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutMirrorUnknownSizeHint =>
-      'The mirror did not return a total file size yet, so only the downloaded size is shown for now.';
+      'The mirror did not return a total file size yet, so only the downloaded size is shown for now';
 
   @override
   String get aboutCancelDownloadAction => 'Cancel download';
@@ -4283,7 +4355,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutWarehouseMaintainersIntro =>
-      'The names below are summarized from the maintainer field in the qingyu_warehouse adapter repository. If cached data already exists locally, the cache is shown first and then refreshed in the background.';
+      'The names below are summarized from the maintainer field in the qingyu_warehouse adapter repository. If cached data already exists locally, the cache is shown first and then refreshed in the background';
 
   @override
   String aboutWarehouseMaintainersLoadFailed(String error) {
@@ -4304,7 +4376,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutParticipateWarehouseSubtitle =>
-      'If you know packet capture, web debugging, JavaScript, or are willing to maintain your school\'s academic system long-term, you are welcome to submit new school adapters and fixes to qingyu_warehouse.';
+      'If you know packet capture, web debugging, JavaScript, or are willing to maintain your school\'s academic system long-term, you are welcome to submit new school adapters and fixes to qingyu_warehouse';
 
   @override
   String get importFileReadFailed => 'Unable to read the selected file';
@@ -4327,7 +4399,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importConfirmSemesterMappingSubtitleIcs =>
-      'Please select the semester start date in your school calendar. The system has inferred a default week mapping from the earliest class date in the file, and you can still adjust it manually.';
+      'Please select the semester start date in your school calendar. The system has inferred a default week mapping from the earliest class date in the file, and you can still adjust it manually';
 
   @override
   String importOverwriteCount(int count) {
@@ -4373,7 +4445,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiWorkflowSubtitle =>
-      'Copy the prompt first, switch Doubao to Expert Mode from the lower-left corner, then send both the timetable screenshots and the prompt together. Copy the JSON returned by Doubao back here, then choose the semester date after tapping Import.';
+      'Copy the prompt first, switch Doubao to Expert Mode from the lower-left corner, then send both the timetable screenshots and the prompt together. Copy the JSON returned by Doubao back here, then choose the semester date after tapping Import';
 
   @override
   String get aiPromptShortAction => 'Prompt';
@@ -4415,7 +4487,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiPasteJsonHintLong =>
-      'Paste the JSON returned by Doubao here exactly as-is, then tap Import. Pure JSON is supported, and ```json code blocks are also accepted.';
+      'Paste the JSON returned by Doubao here exactly as-is, then tap Import. Pure JSON is supported, and ```json code blocks are also accepted';
 
   @override
   String get detailAction => 'Details';
@@ -4438,7 +4510,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get promptCopiedHint =>
-      'Prompt copied. Go to Doubao and send the screenshots with the prompt.';
+      'Prompt copied. Go to Doubao and send the screenshots with the prompt';
 
   @override
   String get clipboardNoText => 'There is no usable text in the clipboard';
@@ -4448,7 +4520,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiPromptSheetSubtitle =>
-      'Doubao is recommended. Switch it to Expert Mode first, then send the full prompt below together with the timetable screenshots so it returns JSON only. After generation, copy the JSON back to this page and choose the semester date after tapping Import.';
+      'Doubao is recommended. Switch it to Expert Mode first, then send the full prompt below together with the timetable screenshots so it returns JSON only. After generation, copy the JSON back to this page and choose the semester date after tapping Import';
 
   @override
   String get aiPreviewTitle => 'Parse preview';
@@ -4481,7 +4553,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importConfirmSemesterMappingSubtitleWarehouse =>
-      'The academic-system script has returned course weeks. Please confirm the semester start date in the school calendar; if there are no classes in the first few weeks, you can map timetable Week 1 to a later calendar week.';
+      'The academic-system script has returned course weeks. Please confirm the semester start date in the school calendar; if there are no classes in the first few weeks, you can map timetable Week 1 to a later calendar week';
 
   @override
   String aiPreviewCourseCount(int count) {
@@ -4510,7 +4582,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get warehouseMissingSchoolSubtitle =>
-      'Just open the feedback page and file an Issue. It helps a lot if you include the school name, academic-system URL, logged-in timetable page link, or screenshots.';
+      'Just open the feedback page and file an Issue. It helps a lot if you include the school name, academic-system URL, logged-in timetable page link, or screenshots';
 
   @override
   String get laterAction => 'Maybe later';
@@ -4550,7 +4622,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deleteDebugRecordMessage(String name) {
-    return 'Delete \"$name\"? This will not affect courses that have already been imported.';
+    return 'Delete \"$name\"? This will not affect courses that have already been imported';
   }
 
   @override
@@ -4577,7 +4649,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get customDebugIntroSubtitle =>
-      'Each record can save a custom URL and a full script. Once saved, you can tap \"Start debug\" next time to reuse it directly instead of searching for the entry from a school detail page again.';
+      'Each record can save a custom URL and a full script. Once saved, you can tap \"Start debug\" next time to reuse it directly instead of searching for the entry from a school detail page again';
 
   @override
   String get addDebugRecordAction => 'Add debug record';
@@ -4587,7 +4659,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noSavedDebugRecordsHint =>
-      'Add one first and paste the URL and script in. After that, you can reuse it directly.';
+      'Add one first and paste the URL and script in. After that, you can reuse it directly';
 
   @override
   String debugScriptLength(int count) {
@@ -4637,7 +4709,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get debugRecordFormulaSubtitle =>
-      'Useful when you repeatedly debug the same school or keep multiple script sets for different schools. Records remain saved and can be edited at any time.';
+      'Useful when you repeatedly debug the same school or keep multiple script sets for different schools. Records remain saved and can be edited at any time';
 
   @override
   String get debugRecordNameLabel => 'Record name';
@@ -4715,7 +4787,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quickImportManualInputHint =>
-      'Complete the required manual step, then tap Continue.';
+      'Complete the required manual step, then tap Continue';
 
   @override
   String get quickImportCancelImportAction => 'Cancel import';
@@ -4760,11 +4832,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get savedImportUrlHint =>
-      'Academic-system URL saved. You can import directly next time.';
+      'Academic-system URL saved. You can import directly next time';
 
   @override
   String get adapterIntroSubtitle =>
-      'You can view adapter info, the login entry, and script status here.';
+      'You can view adapter info, the login entry, and script status here';
 
   @override
   String get schoolLabel => 'School';
@@ -4789,7 +4861,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adapterOverrideImportUrlHint =>
-      'The manually overridden login address is currently in use.';
+      'The manually overridden login address is currently in use';
 
   @override
   String get repositoryLabel => 'Repository';
@@ -4857,6 +4929,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conflictLabel => 'Conflict';
 
   @override
+  String get courseConflictSectionTitle => 'Conflicts';
+
+  @override
+  String get courseNormalSectionTitle => 'Other courses';
+
+  @override
+  String get courseConflictDetailTitle => 'Conflict details';
+
+  @override
+  String get courseConflictDetailEntryTitle => 'View conflict details';
+
+  @override
+  String get courseConflictDetailEntrySubtitle =>
+      'See overlapping schedules and partners';
+
+  @override
+  String courseConflictWithCourse(String name) {
+    return 'Conflicts with “$name”';
+  }
+
+  @override
+  String get courseConflictOpenPartnerAction => 'Open partner schedule';
+
+  @override
+  String get courseConflictEmpty => 'No conflicts detected';
+
+  @override
+  String get courseConflictPairTitle => 'Conflict pair';
+
+  @override
   String get selectWeekTitle => 'Select week';
 
   @override
@@ -4898,11 +5000,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get switchTimetableSubtitleEmpty =>
-      'Tap a timetable below to switch the current view immediately.';
+      'Tap a timetable below to switch the current view immediately';
 
   @override
   String switchTimetableSubtitleCurrent(String name) {
-    return 'Current: $name. Tap a timetable below to switch immediately.';
+    return 'Current: $name. Tap a timetable below to switch immediately';
   }
 
   @override
@@ -4940,12 +5042,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String courseDialogCurrentWeekHint(int week) {
-    return 'You are viewing Week $week. You can reschedule this class occurrence directly.';
+    return 'You are viewing Week $week. You can reschedule this class occurrence directly';
   }
 
   @override
   String courseDialogNotThisWeekHint(int week) {
-    return 'You are viewing Week $week, but this course does not occur this week, so it cannot be rescheduled as the current-week occurrence.';
+    return 'You are viewing Week $week, but this course does not occur this week, so it cannot be rescheduled as the current-week occurrence';
   }
 
   @override
@@ -4962,7 +5064,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteModeSubtitle =>
-      'You can delete the whole schedule entry or just the single occurrence shown for the current week.';
+      'You can delete the whole schedule entry or just the single occurrence shown for the current week';
 
   @override
   String get deleteCourseAction => 'Delete course';
@@ -4972,12 +5074,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deleteModeHintCurrentWeek(int week) {
-    return '\"Delete course\" removes all weeks of this schedule entry; \"Delete occurrence\" removes only the occurrence in Week $week.';
+    return '\"Delete course\" removes all weeks of this schedule entry; \"Delete occurrence\" removes only the occurrence in Week $week';
   }
 
   @override
   String deleteModeHintUnavailable(int week) {
-    return 'This card is not an actual occurrence in Week $week, so only the whole schedule entry can be deleted.';
+    return 'This card is not an actual occurrence in Week $week, so only the whole schedule entry can be deleted';
   }
 
   @override
@@ -5004,7 +5106,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String rescheduleCurrentOccurrenceSubtitle(int week) {
-    return 'Only the occurrence in Week $week will be adjusted. The original class in that week will be removed automatically, while other weeks stay unchanged.';
+    return 'Only the occurrence in Week $week will be adjusted. The original class in that week will be removed automatically, while other weeks stay unchanged';
   }
 
   @override
@@ -5033,11 +5135,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeTitleStyleClassicDescription =>
-      'Keeps the original title style with text only; tap it to switch timetables.';
+      'Keeps the original title style with text only; tap it to switch timetables';
 
   @override
   String get homeTitleStyleBrandDescription =>
-      'Shows a large logo and the smaller timetable name for a stronger branded look.';
+      'Shows a large logo and the smaller timetable name for a stronger branded look';
 
   @override
   String get widgetBackgroundStyleGlass => 'Translucent glass';
@@ -5065,7 +5167,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addCourseSheetSubtitle =>
-      'Blank timetable areas do not respond to taps. Choose clearly whether to add a one-off lesson, a recurring course, or a one-time schedule item.';
+      'Blank timetable areas do not respond to taps. Choose clearly whether to add a one-off lesson, a recurring course, or a one-time schedule item';
 
   @override
   String courseWeekdaySectionSummary(
@@ -5148,6 +5250,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String feedbackQqGroupSubtitle(String id) {
     return 'Group ID: $id';
+  }
+
+  @override
+  String get feedbackWechatOaTitle => 'WeChat Official Account';
+
+  @override
+  String feedbackWechatOaSubtitle(String name) {
+    return '$name';
   }
 
   @override
@@ -5420,21 +5530,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleInfoSectionSubtitle =>
-      'Schedule items are inserted into the day-view timeline for a specific date and do not change course data.';
+      'Schedule items are inserted into the day-view timeline for a specific date and do not change course data';
 
   @override
   String get scheduleTimeSectionTitle => 'Time Arrangement';
 
   @override
   String get scheduleTimeSectionSubtitle =>
-      'Choose the exact date and time range for this schedule item.';
+      'Choose the exact date and time range for this schedule item';
 
   @override
   String get scheduleAppearanceSectionTitle => 'Appearance';
 
   @override
   String get scheduleAppearanceSectionSubtitle =>
-      'Pick a color that makes schedule items easy to distinguish from courses.';
+      'Pick a color that makes schedule items easy to distinguish from courses';
 
   @override
   String get scheduleLocationLabel => 'Location';
@@ -5490,11 +5600,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleSingleDayHint =>
-      'For same-day schedules, the end time must be later than the start time.';
+      'For same-day schedules, the end time must be later than the start time';
 
   @override
   String get scheduleCrossDayHint =>
-      'Cross-day schedules are sliced into the corresponding day view automatically.';
+      'Cross-day schedules are sliced into the corresponding day view automatically';
 
   @override
   String get scheduleSavedHint => 'Schedule added';
@@ -5604,6 +5714,49 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get examOverviewCountdown => 'Countdown';
+
+  @override
+  String get examOverviewCountdownUnit => 'days left';
+
+  @override
+  String examOverviewTodayCount(int count) {
+    return '$count today';
+  }
+
+  @override
+  String examOverviewUpcomingCount(int count) {
+    return '$count upcoming';
+  }
+
+  @override
+  String get examOverviewInProgress => 'Exam in progress';
+
+  @override
+  String get examOverviewLiveBadge => 'Live';
+
+  @override
+  String examOverviewStartsAt(String time) {
+    return 'Starts $time';
+  }
+
+  @override
+  String examOverviewUntilTime(String time) {
+    return 'Until $time';
+  }
+
+  @override
+  String get examOverviewReminderOn => 'Reminder on';
+
+  @override
+  String get examOverviewReminderOff => 'No reminder';
+
+  @override
+  String examTimeRange(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
   String get sortAction => 'Sort';
 
   @override
@@ -5625,14 +5778,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleEntryCardSubtitle =>
-      'Set when this course meets, which weeks it runs, and who teaches it where.';
+      'Set when this course meets, which weeks it runs, and who teaches it where';
 
   @override
   String get scheduleEntryTimeSectionTitle => 'When';
 
   @override
   String get scheduleEntryTimeSectionSubtitle =>
-      'Pick the weekday and section range. Use the same start/end section for a single period.';
+      'Pick the weekday and section range. Use the same start/end section for a single period';
 
   @override
   String get scheduleEntryWeeksSectionTitle => 'Which weeks';
@@ -5645,7 +5798,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleEntryTimeSchemeSectionSubtitle =>
-      'Follows the timetable by default. Change only if this slot uses different bell times.';
+      'Follows the timetable by default. Change only if this slot uses different bell times';
 
   @override
   String scheduleSectionNumberLabel(int section) {
@@ -5758,7 +5911,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get courseActionCoupleExpandHint =>
-      'Expand to preview partner or shared classes. Tap to switch.';
+      'Expand to preview partner or shared classes. Tap to switch';
 
   @override
   String get courseActionCoupleCollapseHint =>
@@ -5898,7 +6051,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guidePermissionsFooterHint =>
-      'Tap to open system settings. Statuses that can be detected will refresh automatically when you return. Auto-start is limited by the system; use the switch on the system page as the source of truth.';
+      'Tap to open system settings. Statuses that can be detected will refresh automatically when you return. Auto-start is limited by the system; use the switch on the system page as the source of truth';
 
   @override
   String get guideTipsHeader => 'Tips';
@@ -6230,6 +6383,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statisticsShareLabel => 'Share statistics';
 
   @override
+  String get statisticsExportTitle => 'Export statistics';
+
+  @override
+  String get statisticsExportModulesSection => 'Include modules';
+
+  @override
+  String get statisticsExportFormatSection => 'Export format';
+
+  @override
+  String get statisticsExportFormatImage => 'Long image (PNG)';
+
+  @override
+  String get statisticsExportFormatPdf => 'PDF document';
+
+  @override
+  String get statisticsExportAction => 'Export';
+
+  @override
+  String get statisticsExportSelectModuleHint => 'Select at least one module';
+
+  @override
+  String get statisticsExportModuleOverview => 'Semester overview';
+
+  @override
+  String get statisticsExportBrandTagline => 'Course info, system experience';
+
+  @override
+  String statisticsExportGithubHint(String url) {
+    return 'Find us on GitHub: $url';
+  }
+
+  @override
+  String get statisticsExportQrScanHint => 'Scan for website';
+
+  @override
+  String statisticsExportRankingMore(int count) {
+    return '$count more courses not shown';
+  }
+
+  @override
   String get statisticsShareTitle => 'My Semester Stats';
 
   @override
@@ -6340,7 +6533,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String importSemesterMappingShiftHint(int shiftedWeeks, int calendarWeek) {
-    return 'All course weeks will shift forward by $shiftedWeeks so timetable week 1 lands on calendar week $calendarWeek.';
+    return 'All course weeks will shift forward by $shiftedWeeks so timetable week 1 lands on calendar week $calendarWeek';
   }
 
   @override
@@ -6407,6 +6600,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncErrorProviderNotReady => 'Timetable is not ready';
 
   @override
+  String get syncErrorInsecureUrl =>
+      'Only HTTPS encrypted connections are supported; HTTP cleartext protocol is disabled.';
+
+  @override
   String get syncErrorSyncFailed => 'Sync failed';
 
   @override
@@ -6438,6 +6635,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get examReminderCustom => 'Custom';
+
+  @override
+  String examReminderOffsetMinutes(int minutes) {
+    return '$minutes minutes before';
+  }
+
+  @override
+  String examReminderOffsetHours(int hours) {
+    return '$hours hours before';
+  }
+
+  @override
+  String examReminderOffsetDays(int days) {
+    return '$days days before';
+  }
+
+  @override
+  String get examReminderCustomEmpty => 'Select at least one reminder time';
+
+  @override
+  String get examReminderAddCustom => 'Add reminder';
+
+  @override
+  String get examReminderAddCustomTitle => 'Custom reminder time';
+
+  @override
+  String get examReminderAddCustomHint =>
+      'How long before the exam starts; you can add multiple';
+
+  @override
+  String get examReminderPickerDays => 'Days';
+
+  @override
+  String get examReminderPickerHours => 'Hours';
+
+  @override
+  String get examReminderPickerMinutes => 'Minutes';
+
+  @override
+  String get examReminderCustomAlreadyAdded => 'This reminder is already added';
+
+  @override
+  String get examReminderCustomInvalid => 'Set a time greater than zero';
+
+  @override
+  String get examReminderCustomEmptyHint =>
+      'No custom reminders yet — tap below to add';
 
   @override
   String get debugCopiedJson => 'JSON copied';
@@ -6658,12 +6902,12 @@ class AppLocalizationsEn extends AppLocalizations {
     int startSection,
     int endSection,
   ) {
-    return 'Selected time scheme does not have enough sections for sections $startSection-$endSection.';
+    return 'Selected time scheme does not have enough sections for sections $startSection-$endSection';
   }
 
   @override
   String serviceMsgSectionCountBelowUsage(int requiredMaxSection) {
-    return 'Section count cannot be less than the maximum section in use (section $requiredMaxSection).';
+    return 'Courses go to period $requiredMaxSection';
   }
 
   @override
@@ -6681,16 +6925,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serviceMsgAtLeastOneSectionRequired =>
-      'At least one section time must be kept.';
+      'At least one section time must be kept';
 
   @override
   String serviceMsgSectionEndMustAfterStart(int sectionNumber) {
-    return 'Section $sectionNumber end time must be later than start time. Overnight classes are not supported.';
+    return 'Section $sectionNumber end time must be later than start time. Overnight classes are not supported';
   }
 
   @override
   String serviceMsgSectionStartBeforePreviousEnd(int sectionNumber) {
-    return 'Section $sectionNumber start time cannot be earlier than the previous section end time.';
+    return 'Section $sectionNumber start time cannot be earlier than the previous section end time';
   }
 
   @override
@@ -6699,7 +6943,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String serviceMsgSectionCrossesMidnight(int sectionNumber) {
-    return 'Section $sectionNumber would cross midnight. Overnight classes are not supported.';
+    return 'Section $sectionNumber would cross midnight. Overnight classes are not supported';
   }
 
   @override
@@ -6712,7 +6956,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serviceMsgAtLeastOnePeriodSection =>
-      'At least one period must have sections.';
+      'At least one period must have sections';
 
   @override
   String get serviceMsgInvalidTimeFormat => 'Time format is invalid.';
@@ -6811,7 +7055,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String serviceMsgSectionOutOfRange(int section, int maxSection) {
-    return 'Section $section is outside the time scheme range (1-$maxSection).';
+    return 'Section $section is outside the time scheme range (1-$maxSection)';
   }
 
   @override
@@ -6933,7 +7177,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String serviceMsgAiCourseEndSectionInvalid(int index) {
-    return 'courses[$index].endSection cannot be less than startSection.';
+    return 'courses[$index].endSection cannot be less than startSection';
   }
 
   @override
@@ -7476,14 +7720,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hyperosShowcaseAccordionSection1Body =>
-      'Content shown after expanding.';
+      'Content shown after expanding';
 
   @override
   String get hyperosShowcaseAccordionSection2 => 'Section 2';
 
   @override
   String get hyperosShowcaseAccordionSection2Body =>
-      'Collapsible group replacing FAccordion.';
+      'Collapsible group replacing FAccordion';
 
   @override
   String get hyperosShowcaseSectionNavRows => 'List rows · Navigation';
@@ -7631,13 +7875,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hyperosShowcaseFooterNote =>
-      'Visible on the settings home page in non-release builds for component QA.';
+      'Visible on the settings home page in non-release builds for component QA';
 
   @override
   String get hyperosShowcaseUndoAction => 'Undo';
 
   @override
-  String get hyperosShowcaseDialogMessage => 'System-style dialog example.';
+  String get hyperosShowcaseDialogMessage => 'System-style dialog example';
 
   @override
   String get hyperosShowcaseConfirmTitle => 'Confirm action';
@@ -7693,7 +7937,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get courseImportRecordingStartedTip =>
-      'Recording started. Continue through the academic portal as usual.';
+      'Recording started. Continue through the academic portal as usual';
 
   @override
   String get courseImportRecordingEmptyStatus => 'No actions recorded';
@@ -7793,7 +8037,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get courseImportPortalUrlHint =>
-      'Saved URL will be reused next time. You can also edit it on the adapter info page.';
+      'Saved URL will be reused next time. You can also edit it on the adapter info page';
 
   @override
   String get courseImportPortalUrlInvalid => 'Invalid login URL format';

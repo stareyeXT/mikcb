@@ -8,6 +8,7 @@ import '../models/course.dart';
 import '../providers/timetable_provider.dart';
 import '../utils/hex_color.dart';
 import 'add_course_screen.dart';
+import 'course_conflict_screen.dart';
 
 enum _SortMode { name, schedule, added }
 
@@ -27,9 +28,9 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
     final provider = context.watch<TimetableProvider>();
     final groups = provider.courseGroups;
     final conflictMap = provider.courseConflictMap;
-    final conflictingCourseCount = conflictMap.length;
 
-    final sorted = _sortGroups(List.of(groups), conflictMap);
+    final sorted = _sortGroups(List.of(groups));
+    final conflictScheduleCount = conflictMap.length;
 
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
@@ -50,16 +51,28 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
           ? _buildEmptyState(context, l10n)
           : HyperosListView(
               children: [
-                if (conflictingCourseCount > 0) ...[
-                  _buildConflictBanner(context, l10n, conflictingCourseCount),
+                // Conflicts: single entry only — details live on the dedicated page.
+                if (conflictScheduleCount > 0) ...[
+                  HyperosListGroup(
+                    children: [
+                      HyperosListTile(
+                        icon: Icons.warning_amber_rounded,
+                        iconAccent: HyperosIconColors.orange,
+                        title: l10n.courseConflictDetailEntryTitle,
+                        details: l10n.conflictCountLabel(conflictScheduleCount),
+                        onTap: () => _openConflictDetail(context),
+                      ),
+                    ],
+                  ),
                   const HyperosSectionGap(),
                 ],
+                // Main course list: no section caption (this is the primary list).
                 HyperosListGroup(
                   children: [
                     for (final group in sorted)
                       _CourseGroupTile(
                         group: group,
-                        conflictMap: conflictMap,
+                        hasConflict: _groupHasConflict(group, conflictMap),
                         onTap: () => _navigateToEditGroup(context, group),
                       ),
                   ],
@@ -69,10 +82,23 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
     );
   }
 
-  List<CourseGroup> _sortGroups(
-    List<CourseGroup> groups,
+  void _openConflictDetail(BuildContext context) {
+    Navigator.of(context).push(
+      HyperosPageRoute(
+        settings: const RouteSettings(name: '/course/conflicts'),
+        builder: (_) => const CourseConflictScreen(),
+      ),
+    );
+  }
+
+  bool _groupHasConflict(
+    CourseGroup group,
     Map<String, List<Course>> conflictMap,
   ) {
+    return group.courses.any((course) => conflictMap.containsKey(course.id));
+  }
+
+  List<CourseGroup> _sortGroups(List<CourseGroup> groups) {
     switch (_sortMode) {
       case _SortMode.name:
         groups.sort((a, b) => a.name.compareTo(b.name));
@@ -155,43 +181,6 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
     );
   }
 
-  Widget _buildConflictBanner(
-    BuildContext context,
-    AppLocalizations l10n,
-    int count,
-  ) {
-    final theme = context.theme;
-    return HyperosListGroup(
-      children: [
-        HyperosPressableRow(
-          backgroundColor: HyperosColors.card(context),
-          highlightColor: HyperosColors.rowHighlight(context),
-          child: Padding(
-            padding: HyperosTokens.rowPaddingUniform,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  color: theme.colors.destructive,
-                ),
-                const SizedBox(width: HyperosTokens.rowContentGap),
-                Expanded(
-                  child: Text(
-                    l10n.conflictDetectedMessage(count),
-                    style: HyperosTypography.listTitle(context).copyWith(
-                      color: theme.colors.destructive,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   void _navigateToAddCourse(BuildContext context) {
     Navigator.push(
       context,
@@ -216,12 +205,12 @@ class _CourseOverviewScreenState extends State<CourseOverviewScreen> {
 class _CourseGroupTile extends StatelessWidget {
   const _CourseGroupTile({
     required this.group,
-    required this.conflictMap,
+    required this.hasConflict,
     required this.onTap,
   });
 
   final CourseGroup group;
-  final Map<String, List<Course>> conflictMap;
+  final bool hasConflict;
   final VoidCallback onTap;
 
   @override
@@ -232,85 +221,88 @@ class _CourseGroupTile extends StatelessWidget {
       group.color,
       fallback: theme.colors.primary,
     );
-    final hasConflict = group.courses.any((c) => conflictMap.containsKey(c.id));
-    final conflictCount = group.courses
-        .where((c) => conflictMap.containsKey(c.id))
-        .length;
     final initial = group.name.isNotEmpty ? group.name[0] : '?';
     final cardColor = HyperosColors.card(context);
     final highlightColor = HyperosColors.rowHighlight(context);
-    final scope = HyperosListTileScope.maybeOf(context);
+    final primaryText = HyperosColors.primaryText(context);
 
-    final row = ConstrainedBox(
-      constraints: const BoxConstraints(
-        minHeight: HyperosTokens.listRowMinHeight,
-      ),
-      child: Padding(
-        padding: HyperosTokens.rowPadding(
-          isFirst: scope?.isFirst ?? true,
-          isLast: scope?.isLast ?? true,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: courseColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(10),
-                border: hasConflict
-                    ? Border.all(
-                        color: theme.colors.destructive.withValues(alpha: 0.55),
-                        width: 1.5,
-                      )
-                    : null,
+    final row = hyperosListRowShell(
+      padding: hyperosChevronRowPadding(context),
+      minHeight: HyperosTokens.listRowTwoLineMinHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: HyperosTokens.iconBadgeSize,
+            height: HyperosTokens.iconBadgeSize,
+            decoration: BoxDecoration(
+              color: courseColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(
+                HyperosTokens.iconBadgeRadius,
               ),
-              alignment: Alignment.center,
-              child: Text(
-                initial,
-                style: theme.typography.body.sm.copyWith(
-                  color: courseColor,
-                  fontWeight: FontWeight.w800,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              initial,
+              style: HyperosTypography.listTitle(
+                context,
+              ).copyWith(color: courseColor, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: HyperosTokens.rowContentGap),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _displayName(group),
+                        style: HyperosTypography.listTitle(
+                          context,
+                        ).copyWith(color: primaryText),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (hasConflict) ...[
+                      const SizedBox(width: 6),
+                      HyperosTag(
+                        label: l10n.conflictLabel,
+                        backgroundColor: theme.colors.destructive.withValues(
+                          alpha: 0.12,
+                        ),
+                        textStyle: HyperosTypography.listDetail(context)
+                            .copyWith(
+                              color: theme.colors.destructive,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 11,
+                            ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  _subtitle(group, l10n),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HyperosTypography.listDetail(context),
+                ),
+              ],
             ),
-            const SizedBox(width: HyperosTokens.rowContentGap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _displayName(group),
-                    style: HyperosTypography.listTitle(context),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _subtitle(group, l10n),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: HyperosTypography.listDetail(context),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              hasConflict
-                  ? l10n.conflictCountLabel(conflictCount)
-                  : courseNatureLabel(l10n, group.courseNature),
-              style: HyperosTypography.listDetail(context).copyWith(
-                fontWeight: hasConflict ? FontWeight.w700 : FontWeight.w400,
-                color: hasConflict
-                    ? theme.colors.destructive
-                    : HyperosColors.secondaryText(context),
-              ),
-            ),
-            SizedBox(width: HyperosTokens.titleChevronGap),
-            const HyperosChevron(),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            courseNatureLabel(l10n, group.courseNature),
+            style: HyperosTypography.listDetail(context),
+          ),
+          SizedBox(width: HyperosTokens.titleChevronGap),
+          const HyperosChevron(),
+        ],
       ),
     );
 

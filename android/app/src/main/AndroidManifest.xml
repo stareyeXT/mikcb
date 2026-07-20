@@ -2,6 +2,39 @@
     <queries>
         <package android:name="com.example.university_timetable" />
         <package android:name="com.example.university_timetable.debug" />
+        <!-- Feedback channel deep links (Coolapk / Xiaohongshu / QQ / WeChat) -->
+        <package android:name="com.coolapk.market" />
+        <package android:name="com.xingin.xhs" />
+        <package android:name="com.tencent.mobileqq" />
+        <package android:name="com.tencent.mm" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="coolmarket" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="xhsdiscover" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="mqqopensdkapi" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="mqqapi" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="weixin" />
+        </intent>
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -10,6 +43,7 @@
     <!-- Required for connectedDevice foreground service (LAN edit HTTP server) on API 34+ -->
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
@@ -24,7 +58,7 @@
         android:name=".UmengApplication"
         android:label="${appLabel}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="false"
+        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
@@ -50,6 +84,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="${umengScheme}" />
+            </intent-filter>
+
+            <!-- Debug / profile automation deep links (adb / Android CLI). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mikcb-debug" />
             </intent-filter>
 
             <!-- Supported import types: .ics, .mikcb, .json, .csv, .xlsx -->
@@ -182,6 +224,19 @@
              delivered via explicit Component PendingIntent (not in filter). -->
         <receiver
             android:name=".LiveUpdateReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Explicit PendingIntent delivers ACTION_FIRE; boot/time filters re-arm. -->
+        <receiver
+            android:name=".ExamReminderReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>

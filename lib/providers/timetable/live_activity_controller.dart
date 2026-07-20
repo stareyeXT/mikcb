@@ -81,16 +81,40 @@ List<String> _liveBuildHolidayDatesForSnapshot(TimetableProvider host) {
   if (!host._settings.enableHolidayMarking || host._holidayData == null) {
     return const [];
   }
-  return host._holidayData!.entries.where((e) => e.shouldHideCourses).map((e) {
-    final d = e.date;
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }).toList();
+  // Full HolidayData.isHoliday semantics (custom makeup beats statutory hide).
+  // Do not use TimetableProvider.isHoliday: holidayOverride is sent separately.
+  return host._holidayData!.holidayDateKeysForSnapshot();
+}
+
+/// Makeup days that must punch through native [holidayOverrideEnabled].
+List<String> _liveBuildAdjustedWorkdayDatesForSnapshot(TimetableProvider host) {
+  if (host._holidayData == null) {
+    return const [];
+  }
+  return host._holidayData!.adjustedWorkdayDateKeysForSnapshot();
 }
 
 void _liveStartActivityTick(TimetableProvider host) {
   host._liveActivityTimer?.cancel();
   unawaited(host.syncTemporalContext());
   unawaited(_liveUpdateActivity(host));
+  _liveScheduleActivityTick(host);
+}
+
+Future<void> _liveHandleAppResumed(TimetableProvider host) async {
+  host._liveActivityTimer?.cancel();
+  await host.syncTemporalContext();
+  // Clear + push under one exclusive section so a concurrent WebDAV apply
+  // cannot interleave a half-updated native snapshot.
+  await host._runLiveSurfaceExclusive(() async {
+    host._lastLiveSnapshotSignature = null;
+    host._currentLiveCourseId = null;
+    await _liveUpdateActivityBody(host);
+  });
+  _liveScheduleActivityTick(host);
+}
+
+void _liveScheduleActivityTick(TimetableProvider host) {
   host._liveActivityTimer = Timer.periodic(const Duration(seconds: 30), (_) {
     unawaited(host.syncTemporalContext());
     _liveCheckActivityStageTransition(host);
@@ -140,6 +164,11 @@ LiveActivityCourseSelection? _liveGetActivityCourseSelection(
   int? week,
 }) {
   final currentTime = now ?? DateTime.now();
+  // Selection must honor holiday semantics; do not rely solely on the stop
+  // branch in _liveUpdateActivityBody (tick/stage paths call selection first).
+  if (host.isHoliday(currentTime)) {
+    return null;
+  }
   final targetWeek = week ?? host._calculateCalendarWeekForDate(currentTime);
   final todayCourses = host.getActiveCoursesForDay(
     currentTime.weekday,
@@ -340,17 +369,23 @@ HomeWidgetSnapshot? _liveBuildHomeWidgetSnapshot(
   final originalTodayCount = host
       .getCoursesForDay(currentTime.weekday, week: targetWeek)
       .length;
-  final todayCourses = host
-      .getActiveCoursesForDay(currentTime.weekday, week: targetWeek)
-      .map(host.resolveCourseDisplayName)
-      .toList(growable: false);
+  final todayIsHoliday = host.isHoliday(currentTime);
+  final todayCourses = todayIsHoliday
+      ? const <Course>[]
+      : host
+            .getActiveCoursesForDay(currentTime.weekday, week: targetWeek)
+            .map(host.resolveCourseDisplayName)
+            .toList(growable: false);
 
   final tomorrow = currentTime.add(const Duration(days: 1));
   final tomorrowWeek = host._calculateWeekForDate(tomorrow);
-  final tomorrowCourses = host
-      .getActiveCoursesForDay(tomorrow.weekday, week: tomorrowWeek)
-      .map(host.resolveCourseDisplayName)
-      .toList(growable: false);
+  final tomorrowIsHoliday = host.isHoliday(tomorrow);
+  final tomorrowCourses = tomorrowIsHoliday
+      ? const <Course>[]
+      : host
+            .getActiveCoursesForDay(tomorrow.weekday, week: tomorrowWeek)
+            .map(host.resolveCourseDisplayName)
+            .toList(growable: false);
 
   final holidayEntry = host.getHolidayForDate(currentTime);
 
@@ -364,17 +399,29 @@ HomeWidgetSnapshot? _liveBuildHomeWidgetSnapshot(
     countdownLeadMinutes: host._settings.widgetCountdownLeadMinutes,
     countdownTextStyle: host._settings.widgetCountdownTextStyle.value,
     nextExam: host.getNextExam(),
-    isHoliday: holidayEntry?.shouldHideCourses ?? false,
-    holidayName: holidayEntry?.name,
+    isHoliday: todayIsHoliday,
+    holidayName: todayIsHoliday ? holidayEntry?.name : null,
     tomorrowCourses: tomorrowCourses,
     tomorrowWeek: tomorrowWeek,
     tomorrowDayOfWeek: tomorrow.weekday,
     showTomorrowCourses: host._settings.widgetShowTomorrowCourses,
-    originalTodayCourseCount: originalTodayCount,
+    originalTodayCourseCount: todayIsHoliday ? 0 : originalTodayCount,
   );
 }
 
 Future<void> _liveUpdateActivity(
+  TimetableProvider host, {
+  bool syncScheduleSnapshot = true,
+}) {
+  return host._runLiveSurfaceExclusive(
+    () => _liveUpdateActivityBody(
+      host,
+      syncScheduleSnapshot: syncScheduleSnapshot,
+    ),
+  );
+}
+
+Future<void> _liveUpdateActivityBody(
   TimetableProvider host, {
   bool syncScheduleSnapshot = true,
 }) async {
@@ -462,6 +509,8 @@ Future<void> _liveUpdateActivity(
       stage: selection.stage.name,
       validateAgainstSchedule: true,
       beforeClassLeadMillis: settings.liveShowBeforeClassMinutes * 60000,
+      startAtMillis: startAtMillis,
+      endAtMillis: endAtMillis,
       liveClassReminderStartMinutes: settings.liveClassReminderStartMinutes,
       endSecondsCountdownThreshold: settings.liveEndSecondsCountdownThreshold,
       promoteDuringClass:
@@ -537,6 +586,7 @@ Future<void> _liveSyncScheduleSnapshot(TimetableProvider host) async {
       '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   final todayIsHoliday = host.isHoliday(now);
   final holidayDates = _liveBuildHolidayDatesForSnapshot(host);
+  final adjustedWorkdayDates = _liveBuildAdjustedWorkdayDatesForSnapshot(host);
   final snapshotSignature = jsonEncode({
     'profileId': activeProfile.id,
     'currentWeek': scheduleWeek,
@@ -545,6 +595,7 @@ Future<void> _liveSyncScheduleSnapshot(TimetableProvider host) async {
     'isHoliday': todayIsHoliday,
     'isHolidayDate': todayKey,
     'holidayDates': holidayDates,
+    'adjustedWorkdayDates': adjustedWorkdayDates,
     'holidayOverrideEnabled': host._settings.holidayOverrideEnabled,
     'enableHolidayMarking': host._settings.enableHolidayMarking,
     'settings': host._settings.toJson(),
@@ -564,6 +615,7 @@ Future<void> _liveSyncScheduleSnapshot(TimetableProvider host) async {
     isHoliday: todayIsHoliday,
     isHolidayDate: todayKey,
     holidayDates: holidayDates,
+    adjustedWorkdayDates: adjustedWorkdayDates,
     holidayOverrideEnabled: host._settings.holidayOverrideEnabled,
     enableHolidayMarking: host._settings.enableHolidayMarking,
   );

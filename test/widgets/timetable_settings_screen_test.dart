@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:university_timetable/models/timetable_profile.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
-import 'package:university_timetable/providers/timetable_provider.dart';
 import 'package:university_timetable/screens/timetable_settings_screen.dart';
 import 'package:university_timetable/services/storage_service.dart';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
@@ -88,11 +87,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final provider = TimetableProvider(
-      autoInitialize: false,
-      enableLiveActivitySync: false,
-    );
-    await provider.initialize();
+    final provider = await createInitializedTestProvider(tester);
 
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
@@ -133,11 +128,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final provider = TimetableProvider(
-      autoInitialize: false,
-      enableLiveActivitySync: false,
-    );
-    await provider.initialize();
+    final provider = await createInitializedTestProvider(tester);
 
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
@@ -182,11 +173,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final provider = TimetableProvider(
-      autoInitialize: false,
-      enableLiveActivitySync: false,
-    );
-    await provider.initialize();
+    final provider = await createInitializedTestProvider(tester);
 
     await tester.pumpWidget(
       ChangeNotifierProvider.value(

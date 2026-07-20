@@ -1,5 +1,9 @@
 package com.mutx163.qingyu
 
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.HapticFeedbackConstants
 import android.Manifest
 import android.app.ActivityManager
 import android.app.AppOpsManager
@@ -63,6 +67,7 @@ class MainActivity : FlutterActivity() {
         private const val SYSTEM_UI_CHANNEL = "com.mutx163.qingyu/system_ui"
         private const val UMENG_CHANNEL = "com.mutx163.qingyu/umeng_analytics"
         private const val HOME_WIDGET_CHANNEL = "com.mutx163.qingyu/home_widget"
+        private const val EXAM_REMINDER_CHANNEL = "com.mutx163.qingyu/exam_reminder"
         private const val SUPPORT_CHANNEL = "com.mutx163.qingyu/support"
         private const val MIGRATION_CHANNEL = "com.mutx163.qingyu/migration"
         private const val CHANNEL_ID = "live_update_channel"
@@ -75,6 +80,13 @@ class MainActivity : FlutterActivity() {
         private const val ICS_CHANNEL = "com.mutx163.qingyu/ics_import"
         private const val LAN_EDIT_CHANNEL = "com.mutx163.qingyu/lan_edit"
         private const val FROSTED_BLUR_CHANNEL = "com.mutx163.qingyu/frosted_blur"
+        private const val LAUNCH_URL_CHANNEL = "com.mutx163.qingyu/launch_url"
+        private const val HAPTIC_CHANNEL = "com.mutx163.qingyu/haptic"
+
+        /** Schemes allowed for the `launch_url` channel (feedback deep links). */
+        private val ALLOWED_LAUNCH_SCHEMES = setOf(
+            "https", "http", "coolmarket", "xhsdiscover", "mqqopensdkapi", "mqqapi", "weixin"
+        )
     }
 
     private var notificationManager: NotificationManager? = null
@@ -88,10 +100,38 @@ class MainActivity : FlutterActivity() {
 
     private var pendingExternalImport: PendingExternalImport? = null
     private var pendingOpenLanEdit = false
+    private var pendingDebugRoute: Map<String, Any?>? = null
     private var flutterChannel: MethodChannel? = null
     private var lanEditChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Fix: when launched via ACTION_SEND / ACTION_VIEW from another app (e.g.
+        // a file manager), the caller may NOT set FLAG_ACTIVITY_NEW_TASK, which
+        // causes our Activity to run inside the caller's task.  The Recents
+        // screen then shows the caller's label & icon instead of ours.
+        // Detect this situation (not task root + external intent) and redirect
+        // into our own task before proceeding.
+        if (!isTaskRoot && intent != null &&
+            (intent.action == Intent.ACTION_SEND ||
+             intent.action == Intent.ACTION_SEND_MULTIPLE ||
+             intent.action == Intent.ACTION_VIEW)) {
+            val relaunch = Intent(this, MainActivity::class.java).apply {
+                action = intent.action
+                type = intent.type
+                intent.clipData?.let { clipData = it }
+                putExtras(intent)
+                intent.data?.let { data = it }
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
+            }
+            startActivity(relaunch)
+            finish()
+            return
+        }
+
         window.setBackgroundDrawable(
             SplashLayerDrawable(
                 this,
@@ -100,6 +140,8 @@ class MainActivity : FlutterActivity() {
         )
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Debug deep links first so automation routes never fall into import.
+        handleDebugDeepLinkIntent(intent)
         handleExternalImportIntent(intent)
         handleLanEditIntent(intent)
     }
@@ -107,6 +149,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleDebugDeepLinkIntent(intent)
         handleExternalImportIntent(intent)
         handleLanEditIntent(intent)
     }
@@ -135,6 +178,21 @@ class MainActivity : FlutterActivity() {
                     }
                     "getDisplayCornerRadiusDp" -> {
                         result.success(readDisplayCornerRadiusDp())
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HAPTIC_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "edgeTick" -> {
+                        try {
+                            result.success(performEdgeHapticTick())
+                        } catch (error: Exception) {
+                            Log.w("EdgeHaptic", "edgeTick failed", error)
+                            result.error("HAPTIC_FAILED", error.message, null)
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -201,6 +259,41 @@ class MainActivity : FlutterActivity() {
                                 }
                             }
                         }.start()
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // ── Feedback: direct Intent launch (bypasses url_launcher on MIUI) ──
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LAUNCH_URL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "launch" -> {
+                        val urlString = call.argument<String>("url")
+                        if (urlString.isNullOrEmpty()) {
+                            result.error("INVALID_URL", "url is null or empty", null)
+                            return@setMethodCallHandler
+                        }
+                        val parsed = Uri.parse(urlString)
+                        val scheme = parsed.scheme?.lowercase()
+                        if (scheme == null || scheme !in ALLOWED_LAUNCH_SCHEMES) {
+                            Log.w("MainActivity", "launch_url: blocked scheme '$scheme' for $urlString")
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, parsed).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: ActivityNotFoundException) {
+                            Log.w("MainActivity", "launch_url: no activity for $urlString", e)
+                            result.success(false)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "launch_url: failed for $urlString", e)
+                            result.success(false)
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -311,6 +404,12 @@ class MainActivity : FlutterActivity() {
                                 )
                             },
                         )
+                    }
+
+                    "getPendingDebugRoute" -> {
+                        val pending = pendingDebugRoute
+                        pendingDebugRoute = null
+                        result.success(pending)
                     }
 
                     else -> result.notImplemented()
@@ -451,6 +550,27 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, EXAM_REMINDER_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "reconcile" -> {
+                        val payload = call.arguments as? Map<*, *>
+                        val fires = payload?.get("fires") as? List<*>
+                        if (fires != null) {
+                            ExamReminderScheduler.reconcile(applicationContext, fires)
+                            result.success(true)
+                        } else {
+                            result.error("INVALID_ARGUMENTS", "Missing exam reminder fires", null)
+                        }
+                    }
+                    "clear" -> {
+                        ExamReminderScheduler.clear(applicationContext)
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SUPPORT_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -556,11 +676,81 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    /**
+     * Debug-only deep links for adb / Android CLI automation.
+     * Scheme: mikcb-debug://path?query=value
+     * Only honored on non-release package ids (*.debug / *.profile).
+     */
+    private fun handleDebugDeepLinkIntent(intent: Intent) {
+        if (!isDebugAutomationPackage()) {
+            return
+        }
+        val action = intent.action ?: return
+        if (action != Intent.ACTION_VIEW) {
+            return
+        }
+        val data = intent.data ?: return
+        if (data.scheme != "mikcb-debug") {
+            return
+        }
+        // Prefer path-absolute form: mikcb-debug:///settings/live
+        // (empty host). Host-based form mikcb-debug://settings/live is also
+        // accepted for convenience.
+        val host = data.host?.trim().orEmpty()
+        val pathSegment = data.path
+            ?.trim()
+            .orEmpty()
+            .removePrefix("/")
+        val path = when {
+            host.isEmpty() && pathSegment.isEmpty() -> "home"
+            host.isEmpty() -> pathSegment
+            pathSegment.isEmpty() -> host
+            else -> "$host/$pathSegment"
+        }.trim().removePrefix("/")
+        if (path.isEmpty()) {
+            return
+        }
+        val query = mutableMapOf<String, String>()
+        for (name in data.queryParameterNames) {
+            val value = data.getQueryParameter(name) ?: continue
+            query[name] = value
+        }
+        pendingDebugRoute = mapOf(
+            "path" to path,
+            "query" to query,
+        )
+        notifyDebugRouteReceived()
+    }
+
+    private fun isDebugAutomationPackage(): Boolean {
+        val packageName = applicationContext.packageName
+        return packageName.endsWith(".debug") || packageName.endsWith(".profile")
+    }
+
+    private fun notifyDebugRouteReceived() {
+        try {
+            flutterChannel?.invokeMethod("onDebugRouteReceived", null)
+        } catch (error: Exception) {
+            Log.w("MainActivity", "notifyDebugRouteReceived failed", error)
+        }
+    }
+
     private fun handleExternalImportIntent(intent: Intent) {
         val action = intent.action ?: return
         if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return
 
+        // Debug automation deep links share ACTION_VIEW with file imports.
+        // Never open them as content URIs — that floods logcat with
+        // FileNotFoundException: No content provider: mikcb-debug://...
+        val dataScheme = intent.data?.scheme
+        if (dataScheme == "mikcb-debug") {
+            return
+        }
+
         val uri = resolveImportUri(intent) ?: return
+        if (uri.scheme == "mikcb-debug") {
+            return
+        }
         val mimeType = intent.type?.takeIf { it.isNotBlank() }
             ?: contentResolver.getType(uri)
         val fileName = resolveImportDisplayName(uri)
@@ -639,6 +829,9 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun readImportBytes(uri: Uri): ByteArray? {
+        if (uri.scheme == "mikcb-debug") {
+            return null
+        }
         return try {
             contentResolver.openInputStream(uri)?.use { stream -> stream.readBytes() }
         } catch (e: Exception) {
@@ -1164,6 +1357,7 @@ class MainActivity : FlutterActivity() {
                 description = getString(R.string.notification_channel_live_update_desc)
             }
             notificationManager?.createNotificationChannel(channel)
+            ExamReminderScheduler.ensureChannel(this)
         }
     }
 
@@ -1380,6 +1574,66 @@ class MainActivity : FlutterActivity() {
             }
         }
         return 28.0
+    }
+
+    /**
+     * Soft edge-arrival tick (CLOCK_TICK). Kept for optional native callers;
+     * Dart currently uses Flutter [HapticFeedback.selectionClick] for intensity.
+     */
+    private fun performEdgeHapticTick(): String {
+        val decorView = window?.decorView
+        if (decorView != null) {
+            @Suppress("DEPRECATION")
+            val feedbackFlags =
+                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or
+                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+            if (decorView.performHapticFeedback(
+                    HapticFeedbackConstants.CLOCK_TICK,
+                    feedbackFlags,
+                )
+            ) {
+                return "view_clock_tick"
+            }
+            if (decorView.performHapticFeedback(
+                    HapticFeedbackConstants.CONTEXT_CLICK,
+                    feedbackFlags,
+                )
+            ) {
+                return "view_context_click"
+            }
+        }
+
+        val vibrator = resolveDefaultVibrator()
+        if (vibrator != null && vibrator.hasVibrator()) {
+            // Soft tick only — avoid long/high-amplitude oneshots.
+            val durationMs = 8L
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val amplitude =
+                    if (vibrator.hasAmplitudeControl()) {
+                        48
+                    } else {
+                        VibrationEffect.DEFAULT_AMPLITUDE
+                    }
+                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
+                return "vibrator_oneshot_${durationMs}ms"
+            }
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(durationMs)
+            return "vibrator_legacy_${durationMs}ms"
+        }
+
+        return "no_haptic"
+    }
+
+    private fun resolveDefaultVibrator(): Vibrator? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager =
+                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            manager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
     }
 }
 

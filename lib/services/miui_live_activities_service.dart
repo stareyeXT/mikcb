@@ -544,6 +544,7 @@ class MiuiLiveActivitiesService {
     required int endReminderLeadMillis,
     bool isHoliday = false,
     List<String> holidayDates = const [],
+    List<String> adjustedWorkdayDates = const [],
     bool holidayOverrideEnabled = false,
     bool enableHolidayMarking = true,
     String? isHolidayDate,
@@ -557,6 +558,7 @@ class MiuiLiveActivitiesService {
         'isHoliday': isHoliday,
         'isHolidayDate': isHolidayDate,
         'holidayDates': holidayDates,
+        'adjustedWorkdayDates': adjustedWorkdayDates,
         'holidayOverrideEnabled': holidayOverrideEnabled,
         'enableHolidayMarking': enableHolidayMarking,
         'courses': courses.map((course) => course.toJson()).toList(),
@@ -631,6 +633,7 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
 
   int stopLiveUpdateCallCount = 0;
   int startLiveUpdateCallCount = 0;
+  int syncScheduleSnapshotCallCount = 0;
 
   @override
   Future<void> stopLiveUpdate() async {
@@ -699,10 +702,12 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     required int endReminderLeadMillis,
     bool isHoliday = false,
     List<String> holidayDates = const [],
+    List<String> adjustedWorkdayDates = const [],
     bool holidayOverrideEnabled = false,
     bool enableHolidayMarking = true,
     String? isHolidayDate,
   }) async {
+    syncScheduleSnapshotCallCount++;
     return true;
   }
 

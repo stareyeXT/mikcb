@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 
 import 'hyperos_miuix_spec.dart';
+import 'hyperos_radius.dart';
 import 'hyperos_tokens.dart';
 
 /// Resolves HyperOS palette values for light / dark and Forui themes.
@@ -309,10 +310,15 @@ abstract final class HyperosTypography {
 
   static TextStyle listTitle(BuildContext context) => title(context);
 
+  /// Preference row helper / trailing summary (muted vs [title], system style).
+  ///
+  /// Explicit [height] keeps multi-line Chinese captions from stacking too
+  /// tightly (system default metrics are often cramped under CJK fonts).
   static TextStyle listDetail(BuildContext context) {
     return TextStyle(
       fontSize: HyperosTokens.listDetailSize,
       fontWeight: FontWeight.w400,
+      height: 1.4,
       color: HyperosColors.secondaryText(context),
     );
   }
@@ -327,11 +333,12 @@ abstract final class HyperosTypography {
     );
   }
 
+  /// Footnote under list groups (muted secondary ink).
   static TextStyle sectionDescription(BuildContext context) {
     return TextStyle(
       fontSize: HyperosTokens.sectionDescriptionSize,
       fontWeight: FontWeight.w400,
-      height: 1.45,
+      height: 1.5,
       color: HyperosColors.secondaryText(context),
     );
   }
@@ -343,12 +350,12 @@ abstract final class HyperosTypography {
   /// Summary card primary line.
   static TextStyle summaryTitle(BuildContext context) => title(context);
 
-  /// Summary card secondary line (Miuix footnote1 + onSurfaceVariantSummary).
+  /// Summary card secondary line (Miuix footnote + summary ink).
   static TextStyle summarySubtitle(BuildContext context) {
     return TextStyle(
       fontSize: HyperosMiuixTypography.footnote1,
       fontWeight: FontWeight.w400,
-      height: 1.3,
+      height: 1.4,
       color: HyperosColors.onSurfaceVariantSummary(context),
     );
   }
@@ -368,17 +375,51 @@ abstract final class HyperosTheme {
   static BorderRadius get cardBorderRadius =>
       BorderRadius.circular(HyperosTokens.cardRadius);
 
-  /// Squircle card used by settings list groups (HyperOS measured 24dp).
-  static ShapeBorder cardShape() {
-    return RoundedSuperellipseBorder(
-      borderRadius: cardBorderRadius,
-      side: BorderSide.none,
+  static BorderRadius get controlBorderRadius =>
+      BorderRadius.circular(HyperosTokens.controlRadius);
+
+  /// Squircle / rounded rect for a known corner radius.
+  ///
+  /// Tall surfaces keep the HyperOS superellipse; short ones use a plain
+  /// rounded rect so corners do not read as a stadium.
+  static ShapeBorder roundedShape(
+    double radius, {
+    BorderSide side = BorderSide.none,
+  }) {
+    final borderRadius = BorderRadius.circular(radius);
+    if (radius >= HyperosTokens.controlRadius + 2) {
+      return RoundedSuperellipseBorder(borderRadius: borderRadius, side: side);
+    }
+    return RoundedRectangleBorder(borderRadius: borderRadius, side: side);
+  }
+
+  /// Squircle card used by tall settings list groups (HyperOS measured 24dp).
+  ///
+  /// Prefer [HyperosAdaptiveCard] when the surface may be a single short row.
+  static ShapeBorder cardShape({BorderSide side = BorderSide.none}) {
+    return roundedShape(HyperosTokens.cardRadius, side: side);
+  }
+
+  /// Compact control shape (Miuix button / text field radius).
+  static ShapeBorder controlShape({BorderSide side = BorderSide.none}) {
+    return roundedShape(HyperosTokens.controlRadius, side: side);
+  }
+
+  /// Shape for a measured height — clamps so top/bottom arcs never merge.
+  static ShapeBorder surfaceShapeForHeight(
+    double height, {
+    double? preferred,
+    BorderSide side = BorderSide.none,
+  }) {
+    return roundedShape(
+      HyperosRadius.surfaceRadiusForHeight(height, preferred: preferred),
+      side: side,
     );
   }
 
-  /// Stadium outline for single-line account / status strips.
-  static ShapeBorder stripShape() {
-    return const StadiumBorder(side: BorderSide.none);
+  /// Single-line status strip: control radius, not a full stadium capsule.
+  static ShapeBorder stripShape({BorderSide side = BorderSide.none}) {
+    return roundedShape(HyperosTokens.controlRadius, side: side);
   }
 
   static FCardStyleDelta cardStyle(

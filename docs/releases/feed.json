@@ -1,7 +1,114 @@
 {
-  "generatedAt": "2026-07-13T04:03:02.211Z",
-  "releaseCount": 86,
+  "generatedAt": "2026-07-20T09:35:42.720Z",
+  "releaseCount": 89,
   "releases": [
+    {
+      "channelLabel": "预发布",
+      "version": "2.0.5.2",
+      "title": "v2.0.5.2",
+      "prerelease": true,
+      "publishedAt": "2026-07-20T07:21:40Z",
+      "description": "课程统计「生成主图分享」：修复正式包 / 预发布包下分享失败（提示 Local result 未初始化）的问题，导出长图更稳定",
+      "highlights": [
+        {
+          "type": "优化",
+          "text": "课程统计「生成主图分享」：修复正式包 / 预发布包下分享失败（提示 Local result 未初始化）的问题，导出长图更稳定"
+        }
+      ],
+      "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v2.0.5.2",
+      "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v2.0.5.2/mikcb-2.0.5.2-arm64-v8a.apk",
+      "assetName": "mikcb-2.0.5.2-arm64-v8a.apk"
+    },
+    {
+      "channelLabel": "预发布",
+      "version": "2.0.5.1",
+      "title": "v2.0.5.1",
+      "prerelease": true,
+      "publishedAt": "2026-07-20T06:47:37Z",
+      "description": "问题反馈：支持微信公众号通道——一键复制「轻屿课表」并可拉起微信搜索关注 · 考试提醒：支持系统级考试提醒调度，可设置考前多时段与自定义提醒时间 · 考试安排：列表页增加概览（今日 / 临近 / 进行中）与更清晰的条目布局",
+      "highlights": [
+        {
+          "type": "新增",
+          "text": "问题反馈：支持微信公众号通道——一键复制「轻屿课表」并可拉起微信搜索关注"
+        },
+        {
+          "type": "新增",
+          "text": "考试提醒：支持系统级考试提醒调度，可设置考前多时段与自定义提醒时间"
+        },
+        {
+          "type": "新增",
+          "text": "考试安排：列表页增加概览（今日 / 临近 / 进行中）与更清晰的条目布局"
+        },
+        {
+          "type": "新增",
+          "text": "桌面小组件：考试进行中时优先展示考试状态"
+        },
+        {
+          "type": "优化",
+          "text": "应用内提示（Toast）改为系统风格胶囊样式，更轻、更不挡内容"
+        },
+        {
+          "type": "优化",
+          "text": "弹窗与底部弹层支持磨砂 / 浮层样式，模糊强度跟随外观设置；关闭模糊时保持不透明底"
+        },
+        {
+          "type": "优化",
+          "text": "表单内选择行、节假日编辑等控件对齐输入框样式，设置页观感更统一"
+        },
+        {
+          "type": "优化",
+          "text": "时间模板：切换到节次更少的方案时，若课表仍有课排在超出节次，会拦截并提示「有课排到第 N 节」"
+        }
+      ],
+      "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v2.0.5.1",
+      "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v2.0.5.1/mikcb-2.0.5.1-arm64-v8a.apk",
+      "assetName": "mikcb-2.0.5.1-arm64-v8a.apk"
+    },
+    {
+      "channelLabel": "正式版",
+      "version": "2.0.5",
+      "title": "v2.0.5",
+      "prerelease": false,
+      "publishedAt": "2026-07-19T04:52:00Z",
+      "description": "局域网编辑：支持「离开后保持开启」——回到设置页可选择继续运行，不必每次重新开服务 · 局域网编辑：控制台支持浅色 / 深色主题切换，并记住本机偏好 · 局域网编辑：浏览器端支持切换课表档案",
+      "highlights": [
+        {
+          "type": "新增",
+          "text": "局域网编辑：支持「离开后保持开启」——回到设置页可选择继续运行，不必每次重新开服务"
+        },
+        {
+          "type": "新增",
+          "text": "局域网编辑：控制台支持浅色 / 深色主题切换，并记住本机偏好"
+        },
+        {
+          "type": "新增",
+          "text": "局域网编辑：浏览器端支持切换课表档案"
+        },
+        {
+          "type": "新增",
+          "text": "关于页：新增「开源许可证」列表（本应用 GPL 说明 + 第三方组件许可证检索）"
+        },
+        {
+          "type": "新增",
+          "text": "课程总览：冲突详情页（互撞组合、时段，可跳转对应排课编辑）"
+        },
+        {
+          "type": "新增",
+          "text": "导入课程：首页增加「随机预设色」总开关（各导入子页统一）"
+        },
+        {
+          "type": "新增",
+          "text": "运行日志：独立解析能力，大文件更顺畅，支持单条展开详情"
+        },
+        {
+          "type": "新增",
+          "text": "HyperOS：胶囊滑块轨道样式、控件无障碍语义，界面组件与语义色更完整"
+        }
+      ],
+      "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v2.0.5",
+      "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v2.0.5/mikcb-2.0.5-arm64-v8a.apk",
+      "assetName": "mikcb-2.0.5-arm64-v8a.apk"
+    },
     {
       "channelLabel": "正式版",
       "version": "2.0.4",
@@ -174,81 +281,6 @@
       "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v1.3",
       "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v1.3/mikcb-1.3-arm64-v8a.apk",
       "assetName": "mikcb-1.3-arm64-v8a.apk"
-    },
-    {
-      "channelLabel": "正式版",
-      "version": "1.2.1.15",
-      "title": "v1.2.1.15",
-      "prerelease": false,
-      "publishedAt": "2026-06-27T07:31:50Z",
-      "description": "优化超级岛在课程最后一周结束后，不再于下一周同一时刻误弹 · 优化应用启动时自动同步并结束已过期的超级岛提醒",
-      "highlights": [
-        {
-          "type": "优化",
-          "text": "优化超级岛在课程最后一周结束后，不再于下一周同一时刻误弹"
-        },
-        {
-          "type": "优化",
-          "text": "优化应用启动时自动同步并结束已过期的超级岛提醒"
-        }
-      ],
-      "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v1.2.1.15",
-      "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v1.2.1.15/mikcb-1.2.1.15-arm64-v8a.apk",
-      "assetName": "mikcb-1.2.1.15-arm64-v8a.apk"
-    },
-    {
-      "channelLabel": "预发布",
-      "version": "1.2.1.14",
-      "title": "v1.2.1.14",
-      "prerelease": true,
-      "publishedAt": "2026-06-06T16:09:34Z",
-      "description": "新增导入流程调试日志，便于排查快捷导入问题 · 优化快捷导入录制按钮位置，移至每个适配器卡片内与\"网页登录导入\"同级显示 · 优化快捷导入登录弹窗稳定性，自动检测登录表单并填充已记住的密码",
-      "highlights": [
-        {
-          "type": "新增",
-          "text": "新增导入流程调试日志，便于排查快捷导入问题"
-        },
-        {
-          "type": "优化",
-          "text": "优化快捷导入录制按钮位置，移至每个适配器卡片内与\"网页登录导入\"同级显示"
-        },
-        {
-          "type": "优化",
-          "text": "优化快捷导入登录弹窗稳定性，自动检测登录表单并填充已记住的密码"
-        },
-        {
-          "type": "优化",
-          "text": "优化宏回放导入流程，脚本完成与课程数据到达之间的状态过渡更平滑"
-        }
-      ],
-      "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v1.2.1.14",
-      "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v1.2.1.14/mikcb-1.2.1.14-arm64-v8a.apk",
-      "assetName": "mikcb-1.2.1.14-arm64-v8a.apk"
-    },
-    {
-      "channelLabel": "正式版",
-      "version": "1.2.1.12",
-      "title": "v1.2.1.12",
-      "prerelease": false,
-      "publishedAt": "2026-06-03T15:10:00Z",
-      "description": "修复 CI 构建流程中因 AGP 8.9.1 与 --split-per-abi 不兼容导致产出空 APK 的问题 · 优化构建产物大小，使用 --target-platform 精简 APK 体积 · 增强工作流错误检测，避免静默吞失败",
-      "highlights": [
-        {
-          "type": "修复",
-          "text": "修复 CI 构建流程中因 AGP 8.9.1 与 --split-per-abi 不兼容导致产出空 APK 的问题"
-        },
-        {
-          "type": "优化",
-          "text": "优化构建产物大小，使用 --target-platform 精简 APK 体积"
-        },
-        {
-          "type": "优化",
-          "text": "增强工作流错误检测，避免静默吞失败"
-        }
-      ],
-      "releaseUrl": "https://github.com/Mutx163/mikcb/releases/tag/v1.2.1.12",
-      "downloadUrl": "https://github.com/Mutx163/mikcb/releases/download/v1.2.1.12/mikcb-1.2.1.12-arm64-v8a.apk",
-      "assetName": "mikcb-1.2.1.12-arm64-v8a.apk"
     }
   ]
 }

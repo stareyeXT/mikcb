@@ -42,6 +42,20 @@ abstract final class HyperosTokens {
 
   static double get cardRadius => _t.cardRadius;
 
+  /// Corner radius for compact controls (buttons, text fields, nested pickers).
+  ///
+  /// Miuix pairs this with a real min height ([controlMinHeight] /
+  /// TextField padding) so the side walls stay flat. Never put [cardRadius]
+  /// (settings group 24) on a short surface — when radius ≥ height/2 the top
+  /// and bottom arcs merge into a capsule and look unlike other HyperOS chrome.
+  ///
+  /// Prefer [HyperosRadius.surfaceRadiusForHeight] / [HyperosAdaptiveCard] when
+  /// the surface height is not fixed.
+  static const controlRadius = HyperosMiuixButton.cornerRadius;
+
+  /// Minimum height for compact bordered controls using [controlRadius].
+  static const controlMinHeight = HyperosMiuixButton.minHeight;
+
   static const sectionGap = HyperosMiuixSpec.settingsSectionGap;
   static const listPadding = HyperosMiuixSpec.settingsListPadding;
   static const rowContentGap = HyperosMiuixSpec.settingsIconGap;
@@ -64,6 +78,9 @@ abstract final class HyperosTokens {
   static double get titleChevronGap => _t.titleChevronGap;
 
   static const listDetailSize = HyperosMiuixSpec.body2Size;
+
+  /// Vertical gap between a list/card title and its multi-line caption.
+  static const titleCaptionGap = 3.0;
 
   /// Gap between trailing summary text and chevron (~one body2 character).
   static const detailChevronGap = listDetailSize;
