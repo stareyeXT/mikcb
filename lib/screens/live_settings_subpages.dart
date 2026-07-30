@@ -1200,9 +1200,54 @@ class HyperFocusTimingScreen extends StatefulWidget {
 }
 
 class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
+  late TimetableSettings _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = context.read<TimetableProvider>().settings;
+  }
+
+  void _updateDraft(TimetableSettings next) {
+    final provider = context.read<TimetableProvider>();
+    provider.updateTimetableSettings(next);
+    setState(() => _draft = next);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Placeholder();
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: const Text('提醒时机'),
+      child: HyperosListView(
+        itemCount: 1,
+        itemBuilder: (context, index) => HyperosListGroup(
+          children: [
+            HyperosSwitchTile(
+              title: '课前提醒',
+              value: _draft.hfEnableBeforeClass,
+              onChanged: (v) => _updateDraft(
+                _draft.copyWith(hfEnableBeforeClass: v),
+              ),
+            ),
+            HyperosSwitchTile(
+              title: '课中提醒',
+              value: _draft.hfEnableDuringClass,
+              onChanged: (v) => _updateDraft(
+                _draft.copyWith(hfEnableDuringClass: v),
+              ),
+            ),
+            HyperosSwitchTile(
+              title: '课后提醒',
+              value: _draft.hfEnableBeforeEnd,
+              onChanged: (v) => _updateDraft(
+                _draft.copyWith(hfEnableBeforeEnd: v),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1214,9 +1259,54 @@ class HyperFocusDisplayScreen extends StatefulWidget {
 }
 
 class _HyperFocusDisplayScreenState extends State<HyperFocusDisplayScreen> {
+  late TimetableSettings _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = context.read<TimetableProvider>().settings;
+  }
+
+  void _updateDraft(TimetableSettings next) {
+    final provider = context.read<TimetableProvider>();
+    provider.updateTimetableSettings(next);
+    setState(() => _draft = next);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Placeholder();
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: const Text('显示设置'),
+      child: HyperosListView(
+        itemCount: 1,
+        itemBuilder: (context, index) => HyperosListGroup(
+          children: [
+            HyperosSwitchTile(
+              title: '显示课名',
+              value: _draft.hfShowCourseName,
+              onChanged: (v) => _updateDraft(
+                _draft.copyWith(hfShowCourseName: v),
+              ),
+            ),
+            HyperosSwitchTile(
+              title: '显示地点',
+              value: _draft.hfShowLocation,
+              onChanged: (v) => _updateDraft(
+                _draft.copyWith(hfShowLocation: v),
+              ),
+            ),
+            HyperosSwitchTile(
+              title: '显示倒计时',
+              value: _draft.hfShowCountdown,
+              onChanged: (v) => _updateDraft(
+                _draft.copyWith(hfShowCountdown: v),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1228,9 +1318,102 @@ class HyperFocusTestScreen extends StatefulWidget {
 }
 
 class _HyperFocusTestScreenState extends State<HyperFocusTestScreen> {
+  final List<String> _logs = [];
+  bool _isSending = false;
+
+  void _addLog(String msg) {
+    final now = DateTime.now();
+    final time =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+    setState(() => _logs.insert(0, '[$time] $msg'));
+  }
+
+  Future<void> _sendTestNotification() async {
+    setState(() => _isSending = true);
+    _addLog('正在发送测试通知...');
+    final service = MiuiLiveActivitiesService();
+    try {
+      final success = await service.sendTestFocusNotification();
+      if (success) {
+        _addLog('测试通知已发送');
+      } else {
+        _addLog('发送失败');
+      }
+    } catch (e) {
+      _addLog('发送异常：$e');
+    }
+    setState(() => _isSending = false);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Placeholder();
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: const Text('测试'),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          children: [
+            HyperosListGroup(
+              children: [
+                HyperosListTile(
+                  icon: Icons.send_rounded,
+                  title: '发送测试通知',
+                  details: '发送一条硬编码的焦点通知到超级岛',
+                  onTap: _isSending ? null : _sendTestNotification,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '操作日志',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: _logs.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '暂无日志，点击上方按钮发送测试通知',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _logs.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          _logs[index],
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
