@@ -1192,6 +1192,48 @@ class _ImagePreview extends StatelessWidget {
   }
 }
 
+class HyperFocusTimingScreen extends StatefulWidget {
+  const HyperFocusTimingScreen({super.key});
+
+  @override
+  State<HyperFocusTimingScreen> createState() => _HyperFocusTimingScreenState();
+}
+
+class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+class HyperFocusDisplayScreen extends StatefulWidget {
+  const HyperFocusDisplayScreen({super.key});
+
+  @override
+  State<HyperFocusDisplayScreen> createState() => _HyperFocusDisplayScreenState();
+}
+
+class _HyperFocusDisplayScreenState extends State<HyperFocusDisplayScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+class HyperFocusTestScreen extends StatefulWidget {
+  const HyperFocusTestScreen({super.key});
+
+  @override
+  State<HyperFocusTestScreen> createState() => _HyperFocusTestScreenState();
+}
+
+class _HyperFocusTestScreenState extends State<HyperFocusTestScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+
 Color _parseColor(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
 }
