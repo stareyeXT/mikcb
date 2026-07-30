@@ -134,6 +134,18 @@ enum MiuiIslandExpandedIconMode { appIcon, customImage, hidden }
 
 enum LiveBeforeClassQuickAction { none, silent, doNotDisturb }
 
+enum SuperIslandEngine { builtIn, hyperFocusApi }
+
+extension SuperIslandEngineX on SuperIslandEngine {
+  String get value => name;
+  static SuperIslandEngine fromValue(String? value) {
+    return SuperIslandEngine.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => SuperIslandEngine.builtIn,
+    );
+  }
+}
+
 const String defaultAppUpdateMirrorUrlPrefix = 'https://ghfast.top/';
 const String ghproxyCnMirrorUrlPrefix = 'https://ghproxy.cn/';
 const String ghLlkkMirrorUrlPrefix = 'https://gh.llkk.cc/';
@@ -1067,6 +1079,15 @@ class TimetableSettings {
   final int liveClassReminderStartMinutes;
   final int liveEndSecondsCountdownThreshold;
   final int liveTimeCorrectionSeconds;
+  final SuperIslandEngine superIslandEngine;
+  final bool hfEnableBeforeClass;
+  final bool hfEnableDuringClass;
+  final bool hfEnableBeforeEnd;
+  final bool hfShowCourseName;
+  final bool hfShowLocation;
+  final bool hfShowCountdown;
+  final String hfCustomTitle;
+  final String hfCustomTitleColor;
   final LiveBeforeClassQuickAction liveBeforeClassQuickAction;
   final String themeSeedColor;
   final ForuiTheme foruiTheme;
@@ -1217,6 +1238,15 @@ class TimetableSettings {
     this.liveEndSecondsCountdownThreshold = 60,
     this.liveTimeCorrectionSeconds = 0,
     this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
+    this.superIslandEngine = SuperIslandEngine.builtIn,
+    this.hfEnableBeforeClass = true,
+    this.hfEnableDuringClass = true,
+    this.hfEnableBeforeEnd = true,
+    this.hfShowCourseName = true,
+    this.hfShowLocation = true,
+    this.hfShowCountdown = true,
+    this.hfCustomTitle = '',
+    this.hfCustomTitleColor = '#FFFFFF',
     this.themeSeedColor = '#2563EB',
     this.foruiTheme = ForuiTheme.blue,
     this.timetablePageBackgroundColor = '#F8FAFC',
@@ -1521,6 +1551,15 @@ class TimetableSettings {
       'liveEndSecondsCountdownThreshold': liveEndSecondsCountdownThreshold,
       'liveTimeCorrectionSeconds': liveTimeCorrectionSeconds,
       'liveBeforeClassQuickAction': liveBeforeClassQuickAction.value,
+      'superIslandEngine': superIslandEngine.value,
+      'hfEnableBeforeClass': hfEnableBeforeClass,
+      'hfEnableDuringClass': hfEnableDuringClass,
+      'hfEnableBeforeEnd': hfEnableBeforeEnd,
+      'hfShowCourseName': hfShowCourseName,
+      'hfShowLocation': hfShowLocation,
+      'hfShowCountdown': hfShowCountdown,
+      'hfCustomTitle': hfCustomTitle,
+      'hfCustomTitleColor': hfCustomTitleColor,
       'themeSeedColor': themeSeedColor,
       'foruiTheme': foruiTheme.value,
       'timetablePageBackgroundColor': timetablePageBackgroundColor,
@@ -1834,6 +1873,17 @@ class TimetableSettings {
       liveBeforeClassQuickAction: LiveBeforeClassQuickActionX.fromValue(
         json['liveBeforeClassQuickAction'] as String?,
       ),
+      superIslandEngine: SuperIslandEngineX.fromValue(
+        json['superIslandEngine'] as String?,
+      ),
+      hfEnableBeforeClass: json['hfEnableBeforeClass'] as bool? ?? true,
+      hfEnableDuringClass: json['hfEnableDuringClass'] as bool? ?? true,
+      hfEnableBeforeEnd: json['hfEnableBeforeEnd'] as bool? ?? true,
+      hfShowCourseName: json['hfShowCourseName'] as bool? ?? true,
+      hfShowLocation: json['hfShowLocation'] as bool? ?? true,
+      hfShowCountdown: json['hfShowCountdown'] as bool? ?? true,
+      hfCustomTitle: json['hfCustomTitle'] as String? ?? '',
+      hfCustomTitleColor: json['hfCustomTitleColor'] as String? ?? '#FFFFFF',
       themeSeedColor: json['themeSeedColor'] as String? ?? '#2563EB',
       foruiTheme: ForuiThemeX.fromValue(json['foruiTheme'] as String?),
       timetablePageBackgroundColor:
@@ -2044,6 +2094,15 @@ class TimetableSettings {
     int? liveEndSecondsCountdownThreshold,
     int? liveTimeCorrectionSeconds,
     LiveBeforeClassQuickAction? liveBeforeClassQuickAction,
+    SuperIslandEngine? superIslandEngine,
+    bool? hfEnableBeforeClass,
+    bool? hfEnableDuringClass,
+    bool? hfEnableBeforeEnd,
+    bool? hfShowCourseName,
+    bool? hfShowLocation,
+    bool? hfShowCountdown,
+    String? hfCustomTitle,
+    String? hfCustomTitleColor,
     String? themeSeedColor,
     ForuiTheme? foruiTheme,
     String? timetablePageBackgroundColor,
@@ -2295,6 +2354,15 @@ class TimetableSettings {
           liveTimeCorrectionSeconds ?? this.liveTimeCorrectionSeconds,
       liveBeforeClassQuickAction:
           liveBeforeClassQuickAction ?? this.liveBeforeClassQuickAction,
+      superIslandEngine: superIslandEngine ?? this.superIslandEngine,
+      hfEnableBeforeClass: hfEnableBeforeClass ?? this.hfEnableBeforeClass,
+      hfEnableDuringClass: hfEnableDuringClass ?? this.hfEnableDuringClass,
+      hfEnableBeforeEnd: hfEnableBeforeEnd ?? this.hfEnableBeforeEnd,
+      hfShowCourseName: hfShowCourseName ?? this.hfShowCourseName,
+      hfShowLocation: hfShowLocation ?? this.hfShowLocation,
+      hfShowCountdown: hfShowCountdown ?? this.hfShowCountdown,
+      hfCustomTitle: hfCustomTitle ?? this.hfCustomTitle,
+      hfCustomTitleColor: hfCustomTitleColor ?? this.hfCustomTitleColor,
       themeSeedColor: themeSeedColor ?? this.themeSeedColor,
       foruiTheme: foruiTheme ?? this.foruiTheme,
       timetablePageBackgroundColor:
