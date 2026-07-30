@@ -141,7 +141,7 @@ extension SuperIslandEngineX on SuperIslandEngine {
   static SuperIslandEngine fromValue(String? value) {
     return SuperIslandEngine.values.firstWhere(
       (e) => e.name == value,
-      orElse: () => SuperIslandEngine.builtIn,
+      orElse: () => SuperIslandEngine.hyperFocusApi,
     );
   }
 }
@@ -1088,6 +1088,7 @@ class TimetableSettings {
   final bool hfShowCountdown;
   final String hfCustomTitle;
   final String hfCustomTitleColor;
+  final String hfTemplatesJson;
   final LiveBeforeClassQuickAction liveBeforeClassQuickAction;
   final String themeSeedColor;
   final ForuiTheme foruiTheme;
@@ -1238,7 +1239,7 @@ class TimetableSettings {
     this.liveEndSecondsCountdownThreshold = 60,
     this.liveTimeCorrectionSeconds = 0,
     this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
-    this.superIslandEngine = SuperIslandEngine.builtIn,
+    this.superIslandEngine = SuperIslandEngine.hyperFocusApi,
     this.hfEnableBeforeClass = true,
     this.hfEnableDuringClass = true,
     this.hfEnableBeforeEnd = true,
@@ -1247,6 +1248,7 @@ class TimetableSettings {
     this.hfShowCountdown = true,
     this.hfCustomTitle = '',
     this.hfCustomTitleColor = '#FFFFFF',
+    this.hfTemplatesJson = '',
     this.themeSeedColor = '#2563EB',
     this.foruiTheme = ForuiTheme.blue,
     this.timetablePageBackgroundColor = '#F8FAFC',
@@ -1560,6 +1562,7 @@ class TimetableSettings {
       'hfShowCountdown': hfShowCountdown,
       'hfCustomTitle': hfCustomTitle,
       'hfCustomTitleColor': hfCustomTitleColor,
+      'hfTemplatesJson': hfTemplatesJson,
       'themeSeedColor': themeSeedColor,
       'foruiTheme': foruiTheme.value,
       'timetablePageBackgroundColor': timetablePageBackgroundColor,
@@ -1884,6 +1887,7 @@ class TimetableSettings {
       hfShowCountdown: json['hfShowCountdown'] as bool? ?? true,
       hfCustomTitle: json['hfCustomTitle'] as String? ?? '',
       hfCustomTitleColor: json['hfCustomTitleColor'] as String? ?? '#FFFFFF',
+      hfTemplatesJson: json['hfTemplatesJson'] as String? ?? '',
       themeSeedColor: json['themeSeedColor'] as String? ?? '#2563EB',
       foruiTheme: ForuiThemeX.fromValue(json['foruiTheme'] as String?),
       timetablePageBackgroundColor:
@@ -2103,6 +2107,7 @@ class TimetableSettings {
     bool? hfShowCountdown,
     String? hfCustomTitle,
     String? hfCustomTitleColor,
+    String? hfTemplatesJson,
     String? themeSeedColor,
     ForuiTheme? foruiTheme,
     String? timetablePageBackgroundColor,
@@ -2363,6 +2368,7 @@ class TimetableSettings {
       hfShowCountdown: hfShowCountdown ?? this.hfShowCountdown,
       hfCustomTitle: hfCustomTitle ?? this.hfCustomTitle,
       hfCustomTitleColor: hfCustomTitleColor ?? this.hfCustomTitleColor,
+      hfTemplatesJson: hfTemplatesJson ?? this.hfTemplatesJson,
       themeSeedColor: themeSeedColor ?? this.themeSeedColor,
       foruiTheme: foruiTheme ?? this.foruiTheme,
       timetablePageBackgroundColor:

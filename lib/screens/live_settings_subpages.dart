@@ -1310,108 +1310,189 @@ class _HyperFocusDisplayScreenState extends State<HyperFocusDisplayScreen> {
   }
 }
 
-class HyperFocusTestScreen extends StatefulWidget {
-  const HyperFocusTestScreen({super.key});
+
+
+class HyperFocusStageTemplateScreen extends StatefulWidget {
+  const HyperFocusStageTemplateScreen({super.key});
 
   @override
-  State<HyperFocusTestScreen> createState() => _HyperFocusTestScreenState();
+  State<HyperFocusStageTemplateScreen> createState() => _HyperFocusStageTemplateScreenState();
 }
 
-class _HyperFocusTestScreenState extends State<HyperFocusTestScreen> {
-  final List<String> _logs = [];
-  bool _isSending = false;
+class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateScreen> {
+  String _selectedStage = 'pre';
 
-  void _addLog(String msg) {
-    final now = DateTime.now();
-    final time =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-    setState(() => _logs.insert(0, '[$time] $msg'));
+  static const _defaultTemplates = {
+    'ticker_pre': '课名',
+    'ticker_active': '课名',
+    'ticker_post': '课名',
+    'islandA_pre': '教室',
+    'islandA_active': '短课名',
+    'islandA_post': '短课名',
+    'islandB_pre': '',
+    'islandB_active': '上课中',
+    'islandB_post': '已下课',
+    'baseTitle_pre': '课名',
+    'baseTitle_active': '课名',
+    'baseTitle_post': '课名',
+    'baseContent_pre': '开始,结束',
+    'baseContent_active': '开始,结束',
+    'baseContent_post': '开始,结束',
+    'baseSubcontent_pre': '教室',
+    'baseSubcontent_active': '教室',
+    'baseSubcontent_post': '教室',
+    'hintTitle_pre': '',
+    'hintTitle_active': '上课中',
+    'hintTitle_post': '已下课',
+  };
+
+  late Map<String, TextEditingController> _controllers;
+
+  String get _s => _selectedStage;
+
+  static const _tabOrder = ['pre', 'active', 'post'];
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = {};
+    for (final key in ['ticker', 'islandA', 'islandB', 'baseTitle', 'baseContent', 'baseSubcontent', 'hintTitle']) {
+      for (final stage in _tabOrder) {
+        final k = '${key}_$stage';
+        _controllers[k] = TextEditingController(text: _defaultTemplates[k]!);
+      }
+    }
+    _loadTemplates();
   }
 
-  Future<void> _sendTestNotification() async {
-    setState(() => _isSending = true);
-    _addLog('正在发送测试通知...');
+  Future<void> _loadTemplates() async {
     final service = MiuiLiveActivitiesService();
-    try {
-      final success = await service.sendTestFocusNotification();
-      if (success) {
-        _addLog('测试通知已发送');
-      } else {
-        _addLog('发送失败');
+    final saved = await service.loadHyperFocusTemplates();
+    if (!mounted) return;
+    for (final key in _controllers.keys) {
+      if (saved.containsKey(key)) {
+        _controllers[key]?.text = saved[key]!;
       }
-    } catch (e) {
-      _addLog('发送异常：$e');
     }
-    setState(() => _isSending = false);
+  }
+
+  Future<void> _saveTemplates() async {
+    final map = <String, String>{};
+    for (final key in _defaultTemplates.keys) {
+      map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
+    }
+    final service = MiuiLiveActivitiesService();
+    final ok = await service.saveHyperFocusTemplates(map);
+    if (!mounted) return;
+    showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+  }
+
+  Future<void> _resetStage() async {
+    for (final key in _controllers.keys) {
+      if (key.endsWith('_$_s')) {
+        _controllers[key]?.text = _defaultTemplates[key]!;
+      }
+    }
+    await _saveTemplates();
+  }
+
+  Widget _textFieldTile(String key, String label, String hint) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: HyperosTextField(
+        controller: _controllers[key],
+        label: label,
+        hint: hint,
+        minLines: 1,
+        maxLines: 2,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
-      title: const Text('测试'),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Column(
-          children: [
-            HyperosListGroup(
-              children: [
-                HyperosListTile(
-                  icon: Icons.send_rounded,
-                  title: '发送测试通知',
-                  details: '发送一条硬编码的焦点通知到超级岛',
-                  onTap: _isSending ? null : _sendTestNotification,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '操作日志',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
+      title: const Text('自定义模板'),
+      child: Column(
+        children: [
+          HyperosTabRow(
+            tabs: ['课前', '课中', '课后'],
+            selectedIndex: _tabOrder.indexOf(_selectedStage),
+            onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '可用变量：{课名} {短课名} {教室} {教师} {开始} {结束} {倒计时} {正计时}',
+                    style: HyperosTypography.listDetail(context),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              constraints: const BoxConstraints(maxHeight: 300),
-              child: _logs.isEmpty
-                  ? const Center(
-                      child: Text(
-                        '暂无日志，点击上方按钮发送测试通知',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
-                      ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _logs.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          _logs[index],
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                          ),
+                  const SizedBox(height: 8),
+                  HyperosSectionLabel(text: '状态栏岛'),
+                  HyperosListGroup(
+                    children: [
+                      _textFieldTile('ticker_$_s', '状态栏/息屏文本', '即将上课：{课名}'),
+                    ],
+                  ),
+                  const HyperosSectionGap(),
+                  HyperosSectionLabel(text: '岛内容'),
+                  HyperosListGroup(
+                    children: [
+                      _textFieldTile('islandA_$_s', '岛左侧文字', '{教室}'),
+                      _textFieldTile('islandB_$_s', '岛右侧后缀', '上课'),
+                    ],
+                  ),
+                  const HyperosSectionGap(),
+                  HyperosSectionLabel(text: '展开态'),
+                  HyperosListGroup(
+                    children: [
+                      _textFieldTile('baseTitle_$_s', '标题', '{课名}'),
+                      _textFieldTile('baseContent_$_s', '内容', '{开始} - {结束}'),
+                      _textFieldTile('baseSubcontent_$_s', '副内容', '{教室}'),
+                    ],
+                  ),
+                  const HyperosSectionGap(),
+                  HyperosSectionLabel(text: '阶段标签'),
+                  HyperosListGroup(
+                    children: [
+                      _textFieldTile('hintTitle_$_s', '阶段标签文字', '即将上课'),
+                    ],
+                  ),
+                  const HyperosSectionGap(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FButton(
+                          onPress: _saveTemplates,
+                          child: const Text('保存'),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FButton(
+                          onPress: _resetStage,
+                          child: const Text('恢复默认'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

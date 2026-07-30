@@ -1,0 +1,64 @@
+<h2>小米超级岛 - 设置页结构</h2>
+<p class="subtitle">选择「小米超级岛」引擎后，Live Settings 显示以下简化设置</p>
+
+<div class="mockup" style="max-width:420px;margin:0 auto;">
+  <div class="mockup-header">小米超级岛</div>
+  <div style="padding:4px 0;">
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #eee;">
+      <div style="flex:1;">
+        <div style="font-weight:500;">提醒时机</div>
+        <div style="font-size:12px;color:#999;">课前 / 课中 / 课后</div>
+      </div>
+      <div style="color:#999;">›</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #eee;">
+      <div style="flex:1;">
+        <div style="font-weight:500;">显示设置</div>
+        <div style="font-size:12px;color:#999;">课名 / 地点 / 倒计时 / 自定义标签</div>
+      </div>
+      <div style="color:#999;">›</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #eee;">
+      <div style="flex:1;">
+        <div style="font-weight:500;">超级岛样式</div>
+        <div style="font-size:12px;color:#999;">展开态布局 / 小岛图标 / 颜色</div>
+      </div>
+      <div style="color:#999;">›</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:12px 16px;">
+      <div style="flex:1;">
+        <div style="font-weight:500;">测试</div>
+        <div style="font-size:12px;color:#999;">发送测试通知 / 调试信息</div>
+      </div>
+      <div style="color:#999;">›</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>与 Live Updates 的差异</h3>
+  <p>HyperFocusApi 方案设置项更精简，聚焦于超级岛显示层面的自定义：</p>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>保留项</h4>
+      <ul>
+        <li>提醒时机（三阶段开关 + 提前时间）</li>
+        <li>课名 / 地点 / 倒计时 显示开关</li>
+        <li>自定义标签文字和颜色</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>移除项</h4>
+      <ul>
+        <li>保活相关设置（不适用）</li>
+        <li>状态栏岛精细自定义</li>
+        <li>展开态岛逐字段模板</li>
+        <li>通知栏相关选项</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p style="font-size:13px;color:#888;">毛坯版只实现「测试」功能（发一条硬编码通知），其余页面先做 UI 占位。</p>
+</div>

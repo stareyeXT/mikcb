@@ -552,6 +552,7 @@ private data class NativeLiveSettings(
     val liveEndSecondsCountdownThreshold: Int,
     val liveTimeCorrectionSeconds: Int,
     val liveBeforeClassQuickAction: String,
+    val superIslandEngine: String = "builtIn",
 )
 
 private data class NativeScheduleSnapshot(
@@ -628,6 +629,7 @@ private data class LiveUpdatePayload(
     val progressMilestoneTimeTexts: List<String>,
     /** When true, ticker re-validates against the schedule snapshot (scheduler path). */
     val validateAgainstSchedule: Boolean = true,
+    val superIslandEngine: String = "builtIn",
 )
 
 private fun normalizeNullableText(value: String?): String? {
@@ -885,6 +887,8 @@ object LiveUpdateScheduler {
             // their fixture course is intentionally absent from the snapshot.
             validateAgainstSchedule =
                 data["validateAgainstSchedule"] as? Boolean ?: false,
+            superIslandEngine =
+                data["superIslandEngine"] as? String ?: "hyperFocusApi",
         )
         return buildServiceIntent(context, payload)
     }
@@ -1233,6 +1237,8 @@ object LiveUpdateScheduler {
                 settingsJson.optInt("liveTimeCorrectionSeconds", 0),
             liveBeforeClassQuickAction =
                 settingsJson.optString("liveBeforeClassQuickAction", "none"),
+            superIslandEngine =
+                settingsJson.optString("superIslandEngine", "builtIn"),
         )
 
         val coursesJson = json.optJSONArray("courses") ?: JSONArray()
@@ -1356,6 +1362,7 @@ object LiveUpdateScheduler {
             putExtra("miuiIslandExpandedIconPath", payload.miuiIslandExpandedIconPath)
             putExtra("beforeClassQuickAction", payload.beforeClassQuickAction)
             putExtra("validateAgainstSchedule", payload.validateAgainstSchedule)
+            putExtra("superIslandEngine", payload.superIslandEngine)
         }
     }
 
@@ -1782,6 +1789,7 @@ object LiveUpdateScheduler {
             progressMilestoneLabels = selection.progressMilestoneLabels,
             progressMilestoneTimeTexts = selection.progressMilestoneTimeTexts,
             validateAgainstSchedule = true,
+            superIslandEngine = snapshot.settings.superIslandEngine,
         )
     }
 

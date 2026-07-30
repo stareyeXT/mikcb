@@ -43,7 +43,7 @@ android {
 
     defaultConfig {
         applicationId = "com.mutx163.qingyu"
-        minSdk = 26
+        minSdk = 27
         targetSdk = 36
         // +100000 offset: Flutter 3.35+ 的 --split-per-abi 会在 versionCode 上加 ABI 乘数 (e.g., arm64: ×2000),
         // 移除 --split-per-abi 后 versionCode 会变小，导致 Android 误判为降级安装。
@@ -140,5 +140,5 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'androidx.work:work-runtime-ktx:2.10.1'
     testImplementation 'junit:junit:4.13.2'
-    implementation 'com.github.ghhccghk:HyperFocusApi:2.0'
+    implementation 'com.xzakota.hyper.notification:focus-api:1.4'
 }

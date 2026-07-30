@@ -53,7 +53,19 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.hyperfocus.api.FocusApi
+import com.xzakota.hyper.notification.common.model.TimerInfo
+import com.xzakota.hyper.notification.focus.FocusNotification
+import com.xzakota.hyper.notification.focus.model.ActionInfo
+import com.xzakota.hyper.notification.focus.model.BaseInfo
+import com.xzakota.hyper.notification.focus.model.HintInfo
+import com.xzakota.hyper.notification.focus.model.PicInfo
+import com.xzakota.hyper.notification.island.model.BigIslandArea
+import com.xzakota.hyper.notification.island.model.ImageTextInfo
+import com.xzakota.hyper.notification.island.model.SameWidthDigitInfo
+import com.xzakota.hyper.notification.island.model.ShareData
+import com.xzakota.hyper.notification.island.model.SmallIslandArea
+import com.xzakota.hyper.notification.island.model.TextInfo
+import com.xzakota.hyper.notification.island.template.IslandTemplate
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -394,8 +406,24 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "sendTestFocus" -> {
-                        sendTestFocusNotification()
+                        val args = call.arguments as? Map<String, String>
+                        sendTestFocusNotification(args)
                         result.success(true)
+                    }
+
+                    "saveHyperFocusTemplates" -> {
+                        val json = call.arguments as? String ?: ""
+                        getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
+                            .edit()
+                            .putString("templates_json", json)
+                            .apply()
+                        result.success(true)
+                    }
+
+                    "getHyperFocusTemplates" -> {
+                        val json = getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
+                            .getString("templates_json", null)
+                        result.success(json)
                     }
 
                     "getPendingExternalImport" -> {
@@ -1074,71 +1102,121 @@ class MainActivity : FlutterActivity() {
         return powerManager?.isIgnoringBatteryOptimizations(packageName) == true
     }
 
-    private fun sendTestFocusNotification() {
+    private fun sendTestFocusNotification(args: Map<String, String>?) {
         try {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channelId = "hyperfocus_test_channel"
-            val channel = NotificationChannel(
-                channelId,
-                "HyperFocusApi Test",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
+            val courseName = args?.get("courseName") ?: "高等数学"
+            val startTime = args?.get("startTime") ?: "08:00"
+            val endTime = args?.get("endTime") ?: "09:40"
+            val location = args?.get("location") ?: "教科A-101"
+            val teacher = args?.get("teacher") ?: ""
 
-            val sendNotification = NotificationCompat.Builder(this, channelId)
-                .setContentTitle("测试课程")
-                .setContentText("高等数学")
+            val now = System.currentTimeMillis()
+            val startAt = now + 60_000L
+            val endAt = startAt + 100 * 60_000L
+            val timeRange = "$startTime - $endTime"
+
+            val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+            val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
+
+            val extras = FocusNotification.buildV3 {
+                business = "course_schedule"
+                updatable = true
+                enableFloat = true
+                ticker = "即将上课：$courseName"
+                aodTitle = "即将上课：$courseName"
+                islandFirstFloat = true
+                outEffectSrc = "outer_glow"
+
+                baseInfo {
+                    type = 2
+                    title = courseName
+                    content = timeRange
+                    subContent = location
+                    showDivider = true
+                }
+
+                picInfo {
+                    type = 1
+                }
+
+                hintInfo {
+                    type = 2
+                    title = "即将上课"
+                    content = "距离上课还有 5 分钟"
+
+                    timerInfo {
+                        timerType = -1
+                        timerWhen = startAt
+                        timerSystemCurrent = now
+                    }
+
+                    actionInfo {
+                        actionIntentType = 1
+                        actionIntent = openAppUri
+                        actionTitle = "查看课表"
+                    }
+                }
+
+                island {
+                    islandProperty = 1
+                    islandTimeout = 300
+
+                    bigIslandArea {
+                        imageTextInfoLeft {
+                            type = 1
+                            textInfo {
+                                title = courseName
+                                showHighlightColor = true
+                            }
+                            picInfo {
+                                type = 1
+                            }
+                        }
+
+                        sameWidthDigitInfo {
+                            timerInfo {
+                                timerType = -1
+                                timerWhen = startAt
+                                timerSystemCurrent = now
+                            }
+                            content = "上课"
+                            turnAnim = true
+                            showHighlightColor = true
+                        }
+                    }
+
+                    smallIslandArea { }
+
+                    shareData {
+                        title = courseName
+                        content = location
+                    }
+                }
+            }
+
+            extras.putString("miui.bigIsland.effect.src", "outer_glow")
+            extras.putString("miui.effect.src", "outer_glow")
+
+            val testChannelId = "hyperfocus_test_channel"
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(
+                NotificationChannel(testChannelId, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
+            )
+
+            val notification = Notification.Builder(this, testChannelId)
+                .setContentTitle(courseName)
+                .setContentText(timeRange)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setOngoing(true)
                 .setAutoCancel(false)
+                .addExtras(extras)
+                .build()
 
-            val intent = Intent()
-            intent.action = "android.settings.APPLICATION_DETAILS_SETTINGS"
-            intent.data = Uri.fromParts("package", packageName, null)
-
-            val baseInfo = FocusApi.baseinfo(
-                title = "测试课程",
-                colorTitle = "#FFFFFF",
-                basetype = 1,
-                content = "高等数学",
-                colorContent = "#FFFFFF",
-                subContent = "教科A-101",
-                colorSubContent = "#CCCCCC",
-                extraTitle = "",
-                colorExtraTitle = "#FFFFFF",
-                subTitle = "08:00 - 09:40",
-                colorsubTitle = "#AAAAAA",
-                specialTitle = "即将上课",
-                colorSpecialTitle = "#FFFFFF",
-            )
-
-            val hintInfo = FocusApi.hintInfo(
-                type = 1,
-                titleLineCount = 2,
-                title = "高等数学",
-                colortitle = "#FFFFFF",
-                content = "距离上课还有 5 分钟",
-                colorContent = "#AAAAAA",
-                actionInfo = FocusApi.actionInfo(
-                    actionIntent = intent.toUri(Intent.URI_INTENT_SCHEME),
-                    actionTitle = "查看课表",
-                ),
-            )
-
-            val api = FocusApi.sendFocus(
-                title = "测试课程",
-                baseInfo = baseInfo,
-                hintInfo = hintInfo,
-                picbg = Icon.createWithResource(this, android.R.drawable.ic_dialog_info),
-                picInfo = Icon.createWithResource(this, android.R.drawable.ic_menu_myplaces),
-                picbgtype = 2,
-                picInfotype = 2,
-                ticker = "即将上课：高等数学",
-                picticker = Icon.createWithResource(this, android.R.drawable.ic_dialog_info),
-            )
-
-            sendNotification.addExtras(api)
-            notificationManager.notify(10001, sendNotification.build())
+            notificationManager.notify(10001, notification)
         } catch (e: Exception) {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)
         }
@@ -1955,6 +2033,7 @@ class LiveUpdateService : Service() {
     private var hasStartedForeground = false
     private var lastTickerStage: String? = null
     private var validateAgainstSchedule = true
+    private var superIslandEngine = "builtIn"
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -2074,6 +2153,7 @@ class LiveUpdateService : Service() {
                 intent?.getStringExtra("beforeClassQuickAction") ?: "none"
             validateAgainstSchedule =
                 intent?.getBooleanExtra("validateAgainstSchedule", true) ?: true
+            superIslandEngine = intent?.getStringExtra("superIslandEngine") ?: "builtIn"
             progressBreakOffsetsMillis =
                 intent?.getLongArrayExtra("progressBreakOffsetsMillis") ?: longArrayOf()
             progressMilestoneLabels =
@@ -2875,6 +2955,256 @@ class LiveUpdateService : Service() {
         }
     }
 
+    // ── HyperFocus Template System ──────────────────────────────────────
+
+    private val hfDefaultTemplates = mapOf(
+        "ticker_pre" to "课名",
+        "ticker_active" to "课名",
+        "ticker_post" to "课名",
+        "islandA_pre" to "教室",
+        "islandA_active" to "短课名",
+        "islandA_post" to "短课名",
+        "islandB_pre" to "",
+        "islandB_active" to "上课中",
+        "islandB_post" to "已下课",
+        "baseTitle_pre" to "课名",
+        "baseTitle_active" to "课名",
+        "baseTitle_post" to "课名",
+        "baseContent_pre" to "开始,结束",
+        "baseContent_active" to "开始,结束",
+        "baseContent_post" to "开始,结束",
+        "baseSubcontent_pre" to "教室",
+        "baseSubcontent_active" to "教室",
+        "baseSubcontent_post" to "教室",
+        "hintTitle_pre" to "",
+        "hintTitle_active" to "上课中",
+        "hintTitle_post" to "已下课",
+    )
+
+    private fun loadHyperFocusTemplates(): Map<String, String> {
+        val json = getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
+            .getString("templates_json", null) ?: return hfDefaultTemplates
+        return try {
+            val obj = org.json.JSONObject(json)
+            for (key in obj.keys()) {
+                val v = obj.optString(key, "")
+                if (v.contains("{")) {
+                    return hfDefaultTemplates
+                }
+            }
+            val merged = hfDefaultTemplates.toMutableMap()
+            for (key in obj.keys()) {
+                merged[key] = obj.optString(key, hfDefaultTemplates[key] ?: "")
+            }
+            merged
+        } catch (_: Exception) {
+            hfDefaultTemplates
+        }
+    }
+
+    private fun resolveTemplate(
+        tpl: String,
+        courseName: String,
+        shortName: String,
+        location: String,
+        teacher: String,
+        startTime: String,
+        endTime: String,
+        countdownText: String,
+        elapsedText: String,
+    ): String {
+        if (tpl.contains("{")) {
+            var result = tpl
+            result = result.replace("{课名}", courseName)
+            result = result.replace("{短课名}", shortName.ifBlank { courseName })
+            result = result.replace("{教室}", location.ifBlank { courseName })
+            result = result.replace("{教师}", teacher)
+            result = result.replace("{开始}", startTime)
+            result = result.replace("{结束}", endTime)
+            result = result.replace("{倒计时}", countdownText)
+            result = result.replace("{正计时}", elapsedText)
+            return result
+        }
+        val variableMap = mapOf(
+            "课名" to courseName,
+            "短课名" to shortName.ifBlank { courseName },
+            "教室" to location.ifBlank { courseName },
+            "教师" to teacher,
+            "开始" to startTime,
+            "结束" to endTime,
+            "倒计时" to countdownText,
+            "正计时" to elapsedText,
+        )
+        return tpl.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { variableMap[it] ?: "" }
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+    }
+
+    private fun formatCountdownForTemplate(millis: Long): String {
+        if (millis <= 0) return "00:00"
+        val totalSeconds = millis / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            "%d:%02d:%02d".format(hours, minutes, seconds)
+        } else {
+            "%02d:%02d".format(minutes, seconds)
+        }
+    }
+
+    private fun formatElapsedForTemplate(millis: Long): String {
+        val totalSeconds = millis / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            "%d:%02d:%02d".format(hours, minutes, seconds)
+        } else {
+            "%02d:%02d".format(minutes, seconds)
+        }
+    }
+
+    private fun buildHyperFocusBundle(
+        stage: String?,
+        remainingText: String,
+    ): Bundle? {
+        if (!isXiaomiFamilyDevice()) return null
+        val now = System.currentTimeMillis()
+        val stageKey = when (stage) {
+            "beforeClass" -> "pre"
+            "afterClass" -> "post"
+            else -> "active"
+        }
+        val targetTimerWhen = if (stageKey == "pre") startAtMillis else endAtMillis
+        if (targetTimerWhen <= now) return null
+
+        return try {
+            val templates = loadHyperFocusTemplates()
+
+            val countdownDiff = kotlin.math.max(0L, targetTimerWhen - now)
+            val elapsedDiff = kotlin.math.max(0L, now - targetTimerWhen)
+            val countdownText = formatCountdownForTemplate(countdownDiff)
+            val elapsedText = formatElapsedForTemplate(elapsedDiff)
+
+            val r = { tpl: String ->
+                resolveTemplate(
+                    tpl = tpl,
+                    courseName = courseName,
+                    shortName = shortCourseNameRaw,
+                    location = location,
+                    teacher = teacher,
+                    startTime = startTimeText,
+                    endTime = endTimeText,
+                    countdownText = countdownText,
+                    elapsedText = elapsedText,
+                )
+            }
+
+            val tickerText = r(templates["ticker_$stageKey"] ?: "{课名}")
+            val islandAText = r(templates["islandA_$stageKey"] ?: "{课名}")
+            val islandBText = r(templates["islandB_$stageKey"] ?: "")
+            val baseTitleText = r(templates["baseTitle_$stageKey"] ?: "{课名}")
+            val baseContentText = r(templates["baseContent_$stageKey"] ?: "")
+            val baseSubcontentText = r(templates["baseSubcontent_$stageKey"] ?: "")
+            val hintTitleText = r(templates["hintTitle_$stageKey"] ?: "")
+
+            val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+            val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
+
+            val extras = FocusNotification.buildV3 {
+                business = "course_schedule"
+                updatable = true
+                enableFloat = true
+                ticker = tickerText
+                aodTitle = tickerText
+                islandFirstFloat = true
+                outEffectSrc = "outer_glow"
+
+                baseInfo {
+                    type = 2
+                    title = baseTitleText
+                    content = baseContentText
+                    subContent = baseSubcontentText
+                    showDivider = baseSubcontentText.isNotBlank()
+                }
+
+                picInfo {
+                    type = 1
+                }
+
+                hintInfo {
+                    type = 2
+                    title = hintTitleText
+                    content = remainingText.ifBlank { hintTitleText }
+
+                    timerInfo {
+                        timerType = -1
+                        timerWhen = targetTimerWhen
+                        timerSystemCurrent = now
+                    }
+
+                    actionInfo {
+                        actionIntentType = 1
+                        actionIntent = openAppUri
+                        actionTitle = "查看课表"
+                    }
+                }
+
+                island {
+                    islandProperty = 1
+                    islandTimeout = if (stageKey == "pre") 300 else 600
+
+                    bigIslandArea {
+                        imageTextInfoLeft {
+                            type = 1
+                            textInfo {
+                                title = islandAText
+                                showHighlightColor = true
+                            }
+                            picInfo {
+                                type = 1
+                            }
+                        }
+
+                        sameWidthDigitInfo {
+                            timerInfo {
+                                timerType = -1
+                                timerWhen = targetTimerWhen
+                                timerSystemCurrent = now
+                            }
+                            content = islandBText
+                            turnAnim = true
+                            showHighlightColor = true
+                        }
+                    }
+
+                    smallIslandArea { }
+
+                    shareData {
+                        title = courseName
+                        content = location.ifBlank { "" }
+                    }
+                }
+            }
+
+            extras.putString("miui.bigIsland.effect.src", "outer_glow")
+            extras.putString("miui.effect.src", "outer_glow")
+
+            extras
+        } catch (e: Exception) {
+            Log.e(TAG, "buildHyperFocusBundle failed", e)
+            null
+        }
+    }
+
     private fun buildMiuiFocusParam(
         title: String,
         remainingText: String,
@@ -3349,7 +3679,15 @@ class LiveUpdateService : Service() {
             ""
         }
 
-        val miuiFocusParam = if (!shouldPromote || isDuringClassStatusBar) {
+        val hyperFocusBundle = if (superIslandEngine == "hyperFocusApi" && shouldPromote && !isDuringClassStatusBar) {
+            buildHyperFocusBundle(
+                stage = stage,
+                remainingText = miuiFocusHintText,
+            )
+        } else {
+            null
+        }
+        val miuiFocusParam = if (superIslandEngine == "hyperFocusApi" || !shouldPromote || isDuringClassStatusBar) {
             null
         } else {
             buildMiuiFocusParam(
@@ -3507,7 +3845,11 @@ class LiveUpdateService : Service() {
         }
 
         val notification = builder.build()
-        miuiFocusParam?.let { notification.extras.putString("miui.focus.param", it) }
+        if (hyperFocusBundle != null) {
+            notification.extras.putAll(hyperFocusBundle)
+        } else {
+            miuiFocusParam?.let { notification.extras.putString("miui.focus.param", it) }
+        }
 
         val canPostPromoted = if (Build.VERSION.SDK_INT >= 36) {
             getSystemService(NotificationManager::class.java)?.canPostPromotedNotifications() == true
@@ -3521,7 +3863,7 @@ class LiveUpdateService : Service() {
         }
         val isMiuiFocusIslandReady =
             isXiaomiFamilyDevice() &&
-                miuiFocusParam != null &&
+                (miuiFocusParam != null || hyperFocusBundle != null) &&
                 shouldPromote &&
                 !isDuringClassStatusBar
         val isActuallyPromotable = when {
@@ -3547,7 +3889,7 @@ class LiveUpdateService : Service() {
                 getString(R.string.debug_system_denied_promoted)
             Build.VERSION.SDK_INT >= 36 && hasPromotableCharacteristics == false && !isMiuiFocusIslandReady ->
                 getString(R.string.debug_notification_not_promotable)
-            isXiaomiFamilyDevice() && miuiFocusParam == null ->
+            isXiaomiFamilyDevice() && miuiFocusParam == null && hyperFocusBundle == null ->
                 getString(R.string.debug_miui_focus_param_missing)
             Build.VERSION.SDK_INT < 36 && !isXiaomiFamilyDevice() ->
                 getString(R.string.debug_os_not_supported)
@@ -3731,6 +4073,19 @@ class LiveUpdateService : Service() {
         durationMillis: Long,
         secondsThresholdMillis: Long = 60_000L,
     ): String = CountdownFormat.formatDuration(durationMillis, countdownTextStyle, secondsThresholdMillis)
+
+    private fun formatCountdownForFocus(millis: Long): String {
+        if (millis <= 0) return "0:00"
+        val totalSec = millis / 1000L
+        val h = totalSec / 3600L
+        val m = (totalSec % 3600L) / 60L
+        val s = totalSec % 60L
+        return if (h > 0) {
+            String.format("%d:%02d:%02d", h, m, s)
+        } else {
+            String.format("%02d:%02d", m, s)
+        }
+    }
 
     private data class DuringClassProgress(
         val progressMax: Int,

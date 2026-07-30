@@ -326,6 +326,7 @@ class MiuiLiveActivitiesService {
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
     bool validateAgainstSchedule = false,
+    String superIslandEngine = 'hyperFocusApi',
   }) async {
     await initialize();
     try {
@@ -469,8 +470,10 @@ class MiuiLiveActivitiesService {
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
     bool validateAgainstSchedule = false,
+    String superIslandEngine = 'hyperFocusApi',
   }) {
     final data = <String, dynamic>{
+      'superIslandEngine': superIslandEngine,
       'autoDismissAfterStartMinutes': autoDismissAfterStartMinutes,
       'stage': stage,
       'beforeClassLeadMillis': beforeClassLeadMillis,
@@ -625,14 +628,53 @@ class MiuiLiveActivitiesService {
     }
   }
 
-  Future<bool> sendTestFocusNotification() async {
+  Future<bool> sendTestFocusNotification({
+    String? courseName,
+    String? startTime,
+    String? endTime,
+    String? location,
+    String? teacher,
+  }) async {
     if (!Platform.isAndroid) return false;
     try {
-      await _channel.invokeMethod('sendTestFocus');
+      await _channel.invokeMethod('sendTestFocus', {
+        if (courseName != null) 'courseName': courseName,
+        if (startTime != null) 'startTime': startTime,
+        if (endTime != null) 'endTime': endTime,
+        if (location != null) 'location': location,
+        if (teacher != null) 'teacher': teacher,
+      });
       return true;
     } catch (e) {
       appDebugLog('MiuiLive', '发送测试焦点通知失败：$e');
       return false;
+    }
+  }
+
+  Future<bool> saveHyperFocusTemplates(Map<String, String> templates) async {
+    if (!Platform.isAndroid) return false;
+    try {
+      await _channel.invokeMethod(
+        'saveHyperFocusTemplates',
+        jsonEncode(templates),
+      );
+      return true;
+    } catch (e) {
+      appDebugLog('MiuiLive', '保存超级岛模板失败：$e');
+      return false;
+    }
+  }
+
+  Future<Map<String, String>> loadHyperFocusTemplates() async {
+    if (!Platform.isAndroid) return {};
+    try {
+      final json = await _channel.invokeMethod('getHyperFocusTemplates');
+      if (json == null) return {};
+      final decoded = jsonDecode(json as String) as Map<String, dynamic>;
+      return decoded.map((k, v) => MapEntry(k, v as String));
+    } catch (e) {
+      appDebugLog('MiuiLive', '加载超级岛模板失败：$e');
+      return {};
     }
   }
 }
@@ -700,6 +742,7 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
     bool validateAgainstSchedule = false,
+    String superIslandEngine = 'hyperFocusApi',
   }) async {
     startLiveUpdateCallCount++;
   }
@@ -733,7 +776,13 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
   }
 
   @override
-  Future<bool> sendTestFocusNotification() async {
+  Future<bool> sendTestFocusNotification({
+    String? courseName,
+    String? startTime,
+    String? endTime,
+    String? location,
+    String? teacher,
+  }) async {
     return true;
   }
 }

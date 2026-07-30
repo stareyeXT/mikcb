@@ -1649,7 +1649,7 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        _buildEngineSelector(context, l10n),
+        _buildEngineSelector(),
         const HyperosSectionGap(),
         if (_draft.superIslandEngine == SuperIslandEngine.builtIn)
           _buildLiveUpdatesSettings(context, l10n)
@@ -1659,21 +1659,19 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
     );
   }
 
-  Widget _buildEngineSelector(BuildContext context, AppLocalizations l10n) {
+  Widget _buildEngineSelector() {
     return HyperosSettingsBlock(
       title: '超级岛引擎',
       child: HyperosListGroup(
         children: [
           HyperosRadioTile<SuperIslandEngine>(
-            title: 'Live Updates（内置）',
-            subtitle: '当前默认引擎，支持三阶段提醒、自定义标签等全部功能',
+            title: 'Live Updates',
             value: SuperIslandEngine.builtIn,
             groupValue: _draft.superIslandEngine,
             onChanged: (v) { if (v != null) _onEngineChanged(v); },
           ),
           HyperosRadioTile<SuperIslandEngine>(
-            title: '小米超级岛（HyperFocusApi）',
-            subtitle: '基于 HyperFocusApi 的焦点通知方案，与 Live Updates 互斥',
+            title: '小米超级岛',
             value: SuperIslandEngine.hyperFocusApi,
             groupValue: _draft.superIslandEngine,
             onChanged: (v) { if (v != null) _onEngineChanged(v); },
@@ -1809,22 +1807,41 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
           },
         ),
         HyperosListTile(
-          icon: Icons.dashboard_customize_outlined,
-          title: '超级岛样式',
-          details: '（占位）',
-        ),
-        HyperosListTile(
-          icon: Icons.science_outlined,
-          title: '测试',
+          icon: Icons.text_fields,
+          title: '自定义模板',
+          details: '编辑各阶段岛文字、展开态、标签',
           onTap: () async {
             await HyperosNavigation.push(
               context,
-              builder: (_) => const HyperFocusTestScreen(),
+              builder: (_) => const HyperFocusStageTemplateScreen(),
             );
             if (!mounted) return;
             setState(() {
               _draft = context.read<TimetableProvider>().settings;
             });
+          },
+        ),
+        HyperosListTile(
+          icon: Icons.science_outlined,
+          title: '测试',
+          onTap: () async {
+            final provider = context.read<TimetableProvider>();
+            await provider.initialize();
+            final selection = provider.getTestLiveActivityCourseSelection();
+            final course = selection?.currentCourse;
+            final service = MiuiLiveActivitiesService();
+            final ok = await service.sendTestFocusNotification(
+              courseName: course?.name,
+              startTime: course?.startTime,
+              endTime: course?.endTime,
+              location: (course?.location?.isNotEmpty == true) ? course!.location : null,
+              teacher: (course?.teacher?.isNotEmpty == true) ? course!.teacher : null,
+            );
+            if (!context.mounted) return;
+            showHyperosSnackBar(
+              context,
+              message: ok ? '测试焦点通知已发送' : '发送测试焦点通知失败',
+            );
           },
         ),
       ],
@@ -4287,6 +4304,7 @@ String _liveDisplaySummary(BuildContext context, LiveDisplaySettings settings) {
   }
   return l10n.liveDisplaySummaryMore(parts.first, parts.length);
 }
+
 
 Color _colorFromHex(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
