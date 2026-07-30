@@ -50,8 +50,10 @@ import android.util.Log
 import android.util.TypedValue
 import android.webkit.URLUtil
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.hyperfocus.api.FocusApi
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -389,6 +391,11 @@ class MainActivity : FlutterActivity() {
                         } else {
                             result.error("INVALID_ARGUMENTS", "Missing suspend deadline", null)
                         }
+                    }
+
+                    "sendTestFocus" -> {
+                        sendTestFocusNotification()
+                        result.success(true)
                     }
 
                     "getPendingExternalImport" -> {
@@ -1065,6 +1072,76 @@ class MainActivity : FlutterActivity() {
         }
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         return powerManager?.isIgnoringBatteryOptimizations(packageName) == true
+    }
+
+    private fun sendTestFocusNotification() {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "hyperfocus_test_channel"
+            val channel = NotificationChannel(
+                channelId,
+                "HyperFocusApi Test",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+
+            val sendNotification = NotificationCompat.Builder(this, channelId)
+                .setContentTitle("测试课程")
+                .setContentText("高等数学")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setOngoing(true)
+                .setAutoCancel(false)
+
+            val intent = Intent()
+            intent.action = "android.settings.APPLICATION_DETAILS_SETTINGS"
+            intent.data = Uri.fromParts("package", packageName, null)
+
+            val baseInfo = FocusApi.baseinfo(
+                title = "测试课程",
+                colorTitle = "#FFFFFF",
+                basetype = 1,
+                content = "高等数学",
+                colorContent = "#FFFFFF",
+                subContent = "教科A-101",
+                colorSubContent = "#CCCCCC",
+                extraTitle = "",
+                colorExtraTitle = "#FFFFFF",
+                subTitle = "08:00 - 09:40",
+                colorsubTitle = "#AAAAAA",
+                specialTitle = "即将上课",
+                colorSpecialTitle = "#FFFFFF",
+            )
+
+            val hintInfo = FocusApi.hintInfo(
+                type = 1,
+                titleLineCount = 2,
+                title = "高等数学",
+                colortitle = "#FFFFFF",
+                content = "距离上课还有 5 分钟",
+                colorContent = "#AAAAAA",
+                actionInfo = FocusApi.actionInfo(
+                    actionIntent = intent.toUri(Intent.URI_INTENT_SCHEME),
+                    actionTitle = "查看课表",
+                ),
+            )
+
+            val api = FocusApi.sendFocus(
+                title = "测试课程",
+                baseInfo = baseInfo,
+                hintInfo = hintInfo,
+                picbg = Icon.createWithResource(this, android.R.drawable.ic_dialog_info),
+                picInfo = Icon.createWithResource(this, android.R.drawable.ic_menu_myplaces),
+                picbgtype = 2,
+                picInfotype = 2,
+                ticker = "即将上课：高等数学",
+                picticker = Icon.createWithResource(this, android.R.drawable.ic_dialog_info),
+            )
+
+            sendNotification.addExtras(api)
+            notificationManager.notify(10001, sendNotification.build())
+        } catch (e: Exception) {
+            Log.e("HyperFocusApi", "sendTestFocus failed", e)
+        }
     }
 
     private fun openNotificationSettings() {
