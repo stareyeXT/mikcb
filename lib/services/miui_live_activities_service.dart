@@ -624,6 +624,17 @@ class MiuiLiveActivitiesService {
       return false;
     }
   }
+
+  Future<bool> sendTestFocusNotification() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      await _channel.invokeMethod('sendTestFocus');
+      return true;
+    } catch (e) {
+      appDebugLog('MiuiLive', '发送测试焦点通知失败：$e');
+      return false;
+    }
+  }
 }
 
 /// Lightweight in-memory test double; does not call the native channel.
@@ -718,6 +729,11 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
 
   @override
   Future<bool> clearScheduleSnapshot() async {
+    return true;
+  }
+
+  @override
+  Future<bool> sendTestFocusNotification() async {
     return true;
   }
 }
