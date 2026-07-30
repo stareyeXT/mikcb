@@ -1346,6 +1346,10 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
     'hintTitle_post': '已下课',
   };
 
+  static const _availableVariables = [
+    '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
+  ];
+
   late Map<String, TextEditingController> _controllers;
 
   String get _s => _selectedStage;
@@ -1396,15 +1400,49 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
     await _saveTemplates();
   }
 
-  Widget _textFieldTile(String key, String label, String hint) {
+  Widget _variableChipField(String key, String label) {
+    final current = _controllers[key]?.text ?? '';
+    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: HyperosTextField(
-        controller: _controllers[key],
-        label: label,
-        hint: hint,
-        minLines: 1,
-        maxLines: 2,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: HyperosTypography.listTitle(context)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _availableVariables.map((v) {
+              final isOn = selected.contains(v);
+              return ChoiceChip(
+                label: Text(v, style: TextStyle(
+                  fontSize: 13,
+                  color: isOn ? Colors.white : null,
+                )),
+                selected: isOn,
+                onSelected: (on) {
+                  setState(() {
+                    final list = current.isEmpty
+                        ? <String>[]
+                        : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                    if (on && !list.contains(v)) {
+                      list.add(v);
+                    } else if (!on) {
+                      list.remove(v);
+                    }
+                    _controllers[key]?.text = list.join(',');
+                  });
+                },
+                selectedColor: Theme.of(context).colorScheme.primary,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -1436,40 +1474,24 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    '可用变量：{课名} {短课名} {教室} {教师} {开始} {结束} {倒计时} {正计时}',
+                    '点击选择要在各区域显示的信息',
                     style: HyperosTypography.listDetail(context),
                   ),
                   const SizedBox(height: 8),
                   HyperosSectionLabel(text: '状态栏岛'),
-                  HyperosListGroup(
-                    children: [
-                      _textFieldTile('ticker_$_s', '状态栏/息屏文本', '即将上课：{课名}'),
-                    ],
-                  ),
+                  _variableChipField('ticker_$_s', '状态栏/息屏文本'),
                   const HyperosSectionGap(),
                   HyperosSectionLabel(text: '岛内容'),
-                  HyperosListGroup(
-                    children: [
-                      _textFieldTile('islandA_$_s', '岛左侧文字', '{教室}'),
-                      _textFieldTile('islandB_$_s', '岛右侧后缀', '上课'),
-                    ],
-                  ),
+                  _variableChipField('islandA_$_s', '岛左侧文字'),
+                  _variableChipField('islandB_$_s', '岛右侧后缀'),
                   const HyperosSectionGap(),
                   HyperosSectionLabel(text: '展开态'),
-                  HyperosListGroup(
-                    children: [
-                      _textFieldTile('baseTitle_$_s', '标题', '{课名}'),
-                      _textFieldTile('baseContent_$_s', '内容', '{开始} - {结束}'),
-                      _textFieldTile('baseSubcontent_$_s', '副内容', '{教室}'),
-                    ],
-                  ),
+                  _variableChipField('baseTitle_$_s', '标题'),
+                  _variableChipField('baseContent_$_s', '内容'),
+                  _variableChipField('baseSubcontent_$_s', '副内容'),
                   const HyperosSectionGap(),
                   HyperosSectionLabel(text: '阶段标签'),
-                  HyperosListGroup(
-                    children: [
-                      _textFieldTile('hintTitle_$_s', '阶段标签文字', '即将上课'),
-                    ],
-                  ),
+                  _variableChipField('hintTitle_$_s', '阶段标签文字'),
                   const HyperosSectionGap(),
                   Row(
                     children: [

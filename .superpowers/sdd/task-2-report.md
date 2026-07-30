@@ -1,30 +1,27 @@
-# Task 2 Report: Kotlin 依赖 — 添加 JitPack 和 HyperFocusApi
+# Task 2 Report: Dart UI — 从 TextField 改为芯片选择器
 
-## Status: ✅ Complete
+## What was implemented
 
-## Changes Made
+1. **Added `_availableVariables` constant** — 8 Chinese variable names (课名, 短课名, 教室, 教师, 开始, 结束, 倒计时, 正计时) as chip options.
 
-### 1. `android/build.gradle` (line 10)
-Added JitPack repository after the Aliyun gradle-plugin maven URL:
-```groovy
-maven { url 'https://jitpack.io' }
+2. **Added `_variableChipField` method** — replaces `_textFieldTile`. Renders a `Wrap` of `ChoiceChip` widgets that toggle the comma-separated variable list in each `TextEditingController`. Reads/writes the same `_controllers[key]?.text` format.
+
+3. **Replaced build() UI** — all `HyperosListGroup` + `_textFieldTile(...)` calls replaced with direct `_variableChipField(key, label)` calls. Hint text updated to "点击选择要在各区域显示的信息".
+
+4. **Deleted `_textFieldTile` method** — no longer used.
+
+5. **No changes** to `_loadTemplates`, `_saveTemplates`, `_resetStage`, `_controllers` structure, or data format.
+
+## Files changed
+
+- `lib/screens/live_settings_subpages.dart` — only `_HyperFocusStageTemplateScreenState` class modified.
+
+## flutter analyze result
+
+```
+No issues found! (ran in 1.2s)
 ```
 
-### 2. `android/app/build.gradle` (line 142)
-Added HyperFocusApi dependency:
-```groovy
-implementation 'com.github.ghhccghk:HyperFocusApi:2.0'
-```
+## Issues or concerns
 
-## Verification
-
-Ran `.\gradlew.bat app:dependencies` — BUILD SUCCESSFUL. Dependency tree confirms `com.github.ghhccghk:HyperFocusApi:2.0` resolved successfully across all configurations.
-
-## Commit
-
-Commit `build: add JitPack repository and HyperFocusApi dependency` includes both files.
-
-## Concerns
-
-- Brief specified `implementationClasspath` configuration — that configuration does not exist in this AGP version. Used `app:dependencies` instead. HyperFocusApi is visible in both `implementation` and `runtimeClasspath` configurations.
-- Gradle warns about deprecations for Gradle 9.0 — unrelated to this change.
+None.
