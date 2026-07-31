@@ -1231,6 +1231,9 @@ class MainActivity : FlutterActivity() {
             val baseContentText = r(templates["baseContent_$templateStage"] ?: "")
             val baseSubcontentText = r(templates["baseSubcontent_$templateStage"] ?: "")
             val hintTitleText = r(templates["hintTitle_$templateStage"] ?: "")
+            val hintContentText = r(templates["hintContent_$templateStage"] ?: "")
+            val hintSubcontentText = r(templates["hintSubcontent_$templateStage"] ?: "")
+            val hintSubtitleText = r(templates["hintSubtitle_$templateStage"] ?: "")
 
             val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1247,7 +1250,8 @@ class MainActivity : FlutterActivity() {
                 ticker = tickerText
                 aodTitle = tickerText
                 islandFirstFloat = true
-                outEffectSrc = "outer_glow"
+                outEffectSrc = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
+                outEffectColor = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("outEffectStatusColor") ?: "#FFFFFFFF") else ""
 
                 baseInfo {
                     type = 2
@@ -1258,13 +1262,18 @@ class MainActivity : FlutterActivity() {
                 }
 
                 picInfo {
-                    type = 1
+                    if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                        type = 1
+                    }
                 }
 
                 hintInfo {
                     type = 2
                     title = hintTitleText
                     content = hintText
+                    subTitle = hintSubtitleText
+                    extraTitle = hintContentText
+                    specialTitle = hintSubcontentText
 
                     if (hasTimer) {
                         timerInfo {
@@ -1283,7 +1292,11 @@ class MainActivity : FlutterActivity() {
 
                 island {
                     islandProperty = 1
-                    islandTimeout = 300
+                    islandTimeout = when (templateStage) {
+                        "pre" -> (args?.get("islandTimeoutPre")?.toIntOrNull() ?: 300)
+                        "post" -> (args?.get("islandTimeoutPost")?.toIntOrNull() ?: 600)
+                        else -> (args?.get("islandTimeoutActive")?.toIntOrNull() ?: 600)
+                    }
 
                     bigIslandArea {
                         imageTextInfoLeft {
@@ -1293,7 +1306,9 @@ class MainActivity : FlutterActivity() {
                                 showHighlightColor = true
                             }
                             picInfo {
-                                type = 1
+                                if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                                    type = 1
+                                }
                             }
                         }
 
@@ -1326,8 +1341,10 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            extras.putString("miui.bigIsland.effect.src", "outer_glow")
-            extras.putString("miui.effect.src", "outer_glow")
+            if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
+                extras.putString("miui.bigIsland.effect.src", "outer_glow")
+                extras.putString("miui.effect.src", "outer_glow")
+            }
 
             notificationManager.createNotificationChannel(
                 NotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
@@ -2237,6 +2254,15 @@ class LiveUpdateService : Service() {
     private var miuiIslandLabelLogoCornerRadius = 8f
     private var miuiIslandExpandedIconMode = "app_icon"
     private var miuiIslandExpandedIconPath: String? = null
+    private var islandTimeoutPre = 300
+    private var islandTimeoutActive = 600
+    private var islandTimeoutPost = 600
+    private var iconAEnabled = true
+    private var statusTextColor = "#FFFFFFFF"
+    private var outEffectStatusEnabled = true
+    private var outEffectStatusColor = "#FFFFFFFF"
+    private var outEffectExpandEnabled = true
+    private var outEffectExpandColor = "#FFFFFFFF"
     private var startAtMillis = 0L
     private var endAtMillis = 0L
     private var beforeClassLeadMillis = 0L
@@ -3227,6 +3253,9 @@ class LiveUpdateService : Service() {
             val baseContentText = r(templates["baseContent_$stageKey"] ?: "")
             val baseSubcontentText = r(templates["baseSubcontent_$stageKey"] ?: "")
             val hintTitleText = r(templates["hintTitle_$stageKey"] ?: "")
+            val hintContentText = r(templates["hintContent_$stageKey"] ?: "")
+            val hintSubcontentText = r(templates["hintSubcontent_$stageKey"] ?: "")
+            val hintSubtitleText = r(templates["hintSubtitle_$stageKey"] ?: "")
 
             val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -3242,7 +3271,8 @@ class LiveUpdateService : Service() {
                 ticker = tickerText
                 aodTitle = tickerText
                 islandFirstFloat = true
-                outEffectSrc = "outer_glow"
+                outEffectSrc = if (outEffectStatusEnabled) "outer_glow" else ""
+                outEffectColor = if (outEffectStatusEnabled) outEffectStatusColor else ""
 
                 baseInfo {
                     type = 2
@@ -3253,13 +3283,18 @@ class LiveUpdateService : Service() {
                 }
 
                 picInfo {
-                    type = 1
+                    if (iconAEnabled) {
+                        type = 1
+                    }
                 }
 
                 hintInfo {
                     type = 2
                     title = hintTitleText
                     content = remainingText.ifBlank { hintTitleText }
+                    subTitle = hintSubtitleText
+                    extraTitle = hintContentText
+                    specialTitle = hintSubcontentText
 
                     timerInfo {
                         timerType = -1
@@ -3276,7 +3311,11 @@ class LiveUpdateService : Service() {
 
                 island {
                     islandProperty = 1
-                    islandTimeout = if (stageKey == "pre") 300 else 600
+                    islandTimeout = when (stageKey) {
+                        "pre" -> islandTimeoutPre
+                        "post" -> islandTimeoutPost
+                        else -> islandTimeoutActive
+                    }
 
                     bigIslandArea {
                         imageTextInfoLeft {
@@ -3286,7 +3325,9 @@ class LiveUpdateService : Service() {
                                 showHighlightColor = true
                             }
                             picInfo {
-                                type = 1
+                                if (iconAEnabled) {
+                                    type = 1
+                                }
                             }
                         }
 
@@ -3311,8 +3352,10 @@ class LiveUpdateService : Service() {
                 }
             }
 
-            extras.putString("miui.bigIsland.effect.src", "outer_glow")
-            extras.putString("miui.effect.src", "outer_glow")
+            if (outEffectStatusEnabled) {
+                extras.putString("miui.bigIsland.effect.src", "outer_glow")
+                extras.putString("miui.effect.src", "outer_glow")
+            }
 
             extras
         } catch (e: Exception) {
@@ -4468,6 +4511,15 @@ internal val hfDefaultTemplates = mapOf(
     "hintTitle_pre" to "",
     "hintTitle_active" to "上课中",
     "hintTitle_post" to "已下课",
+    "hintContent_pre" to "即将上课",
+    "hintContent_active" to "距离下课",
+    "hintContent_post" to "已经下课",
+    "hintSubcontent_pre" to "",
+    "hintSubcontent_active" to "",
+    "hintSubcontent_post" to "",
+    "hintSubtitle_pre" to "",
+    "hintSubtitle_active" to "",
+    "hintSubtitle_post" to "",
 )
 
 internal fun loadHyperFocusTemplates(context: Context): Map<String, String> {
