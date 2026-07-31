@@ -2943,6 +2943,15 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     final selection = provider.getTestLiveActivityCourseSelection();
     final course = selection?.currentCourse;
     appDebugLog('MiuiLive', '测试课程：${course?.name}');
+    await _hyperFocusService.recordDiagnosticEvent(
+      'send_test_focus_requested',
+      '收到超级岛测试通知发送请求',
+      extras: {
+        'stage': stage,
+        'courseName': course?.name ?? '',
+        'atMillis': DateTime.now().millisecondsSinceEpoch.toString(),
+      },
+    );
     final error = await _hyperFocusService.sendTestFocusNotification(
       courseName: course?.name,
       startTime: course?.startTime,

@@ -83,6 +83,8 @@ Future<void> _pumpToTestingEntry(WidgetTester tester) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const liveChannel = MethodChannel('com.mutx163.qingyu/miui_live');
+  const umengChannel = MethodChannel('com.mutx163.qingyu/umeng_analytics');
+  const packageInfoChannel = MethodChannel('dev.fluttercommunity.plus/package_info');
 
   setUp(() {
     StorageService().resetForTesting();
@@ -174,6 +176,36 @@ void main() {
                 return null;
             }
           });
+      final recordedCategories = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(umengChannel, (call) async {
+            if (call.method == 'recordDiagnosticEvent') {
+              recordedCategories.add((call.arguments as Map)['category'] as String);
+            }
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(umengChannel, null);
+      });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(packageInfoChannel, (call) async {
+            if (call.method == 'getAll') {
+              return {
+                'appName': 'mikcb',
+                'packageName': 'com.mutx163.qingyu',
+                'version': '1.0.0',
+                'buildNumber': '1',
+                'buildSignature': '',
+                'installerStore': null,
+              };
+            }
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(packageInfoChannel, null);
+      });
 
       await _pumpToTestingEntry(tester);
 
@@ -184,6 +216,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(sentStage, 'active');
+      expect(recordedCategories, contains('send_test_focus_requested'));
       expect(find.text('测试焦点通知已发送'), findsOneWidget);
     },
   );
