@@ -6243,12 +6243,6 @@ abstract class AppLocalizations {
   /// **'调度'**
   String get hfTestingDebugScheduling;
 
-  /// No description provided for @hfTestingDebugTemplates.
-  ///
-  /// In zh, this message translates to:
-  /// **'模板'**
-  String get hfTestingDebugTemplates;
-
   /// No description provided for @hfTestingDebugLastTest.
   ///
   /// In zh, this message translates to:
@@ -6290,24 +6284,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'无'**
   String get hfTestingNone;
-
-  /// No description provided for @hfTestingTemplateStagePre.
-  ///
-  /// In zh, this message translates to:
-  /// **'课前模板'**
-  String get hfTestingTemplateStagePre;
-
-  /// No description provided for @hfTestingTemplateStageActive.
-  ///
-  /// In zh, this message translates to:
-  /// **'课中模板'**
-  String get hfTestingTemplateStageActive;
-
-  /// No description provided for @hfTestingTemplateStagePost.
-  ///
-  /// In zh, this message translates to:
-  /// **'课后模板'**
-  String get hfTestingTemplateStagePost;
 
   /// No description provided for @hfTestingLastTestStage.
   ///

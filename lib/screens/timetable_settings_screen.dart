@@ -2852,7 +2852,6 @@ enum _HyperFocusTestingSection {
   notification,
   islandStatus,
   debugScheduling,
-  debugTemplates,
   debugLastTest,
   debugEnvironment,
   debugRecentLogs,
@@ -3026,7 +3025,6 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     _debugL10nContext = context;
     final summary = _debugSectionMap(_debugStatus?['summary']);
     final scheduling = _debugSectionMap(_debugStatus?['scheduling']);
-    final templates = _debugSectionMap(_debugStatus?['templates']);
     final test = _debugSectionMap(_debugStatus?['test']);
     final recentDiagnostics = _debugSectionMap(
       _debugStatus?['recentDiagnostics'],
@@ -3034,7 +3032,6 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     final hasPermission = summary['hasNotificationPermission'] == true;
     final channelBlocked = summary['testChannelBlocked'] == true;
     final schedulerReady = summary['schedulerReady'] == true;
-    final templatesLoaded = summary['templatesLoaded'] == true;
     final hasLastTest = summary['hasLastTestResult'] == true;
     final lastTestSucceeded = summary['lastTestSucceeded'] == true;
     final lastTestMessage = _debugValueText(summary['lastTestMessage']);
@@ -3055,13 +3052,11 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
           l10n: l10n,
           summary: summary,
           scheduling: scheduling,
-          templates: templates,
           test: test,
           recentDiagnostics: recentDiagnostics,
           hasPermission: hasPermission,
           channelBlocked: channelBlocked,
           schedulerReady: schedulerReady,
-          templatesLoaded: templatesLoaded,
           hasLastTest: hasLastTest,
           lastTestSucceeded: lastTestSucceeded,
           lastTestMessage: lastTestMessage,
@@ -3077,7 +3072,6 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     _HyperFocusTestingSection.islandStatus,
     if (_debugStatus != null) ...[
       _HyperFocusTestingSection.debugScheduling,
-      _HyperFocusTestingSection.debugTemplates,
       _HyperFocusTestingSection.debugLastTest,
       _HyperFocusTestingSection.debugEnvironment,
       _HyperFocusTestingSection.debugRecentLogs,
@@ -3092,13 +3086,11 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     required AppLocalizations l10n,
     required Map<String, dynamic> summary,
     required Map<String, dynamic> scheduling,
-    required Map<String, dynamic> templates,
     required Map<String, dynamic> test,
     required Map<String, dynamic> recentDiagnostics,
     required bool hasPermission,
     required bool channelBlocked,
     required bool schedulerReady,
-    required bool templatesLoaded,
     required bool hasLastTest,
     required bool lastTestSucceeded,
     required String lastTestMessage,
@@ -3300,16 +3292,6 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
               ),
         },
       ),
-      _HyperFocusTestingSection.debugTemplates => _buildDebugSection(
-        context: context,
-        title: l10n.hfTestingDebugTemplates,
-        entries: {
-          l10n.hfTestingTemplateStagePre: _templateSummary(templates['pre'], l10n),
-          l10n.hfTestingTemplateStageActive:
-              _templateSummary(templates['active'], l10n),
-          l10n.hfTestingTemplateStagePost: _templateSummary(templates['post'], l10n),
-        },
-      ),
       _HyperFocusTestingSection.debugLastTest => _buildDebugSection(
         context: context,
         title: l10n.hfTestingDebugLastTest,
@@ -3356,15 +3338,6 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       ),
       _HyperFocusTestingSection.localLogs => _buildLocalLogsSection(context),
     };
-  }
-
-  String _templateSummary(dynamic stageTemplates, AppLocalizations l10n) {
-    if (stageTemplates is! Map) return l10n.hfTestingNone;
-    final flags = stageTemplates.entries
-        .where((e) => e.value == true)
-        .map((e) => e.key)
-        .toList();
-    return flags.isEmpty ? l10n.hfTestingNone : flags.join(' · ');
   }
 
   Widget _buildDebugSection({

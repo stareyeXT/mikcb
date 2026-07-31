@@ -3374,9 +3374,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hfTestingDebugScheduling => '调度';
 
   @override
-  String get hfTestingDebugTemplates => '模板';
-
-  @override
   String get hfTestingDebugLastTest => '上次测试';
 
   @override
@@ -3396,15 +3393,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get hfTestingNone => '无';
-
-  @override
-  String get hfTestingTemplateStagePre => '课前模板';
-
-  @override
-  String get hfTestingTemplateStageActive => '课中模板';
-
-  @override
-  String get hfTestingTemplateStagePost => '课后模板';
 
   @override
   String get hfTestingLastTestStage => '阶段';
@@ -11474,9 +11462,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get hfTestingDebugScheduling => '排程';
 
   @override
-  String get hfTestingDebugTemplates => '範本';
-
-  @override
   String get hfTestingDebugLastTest => '上次測試';
 
   @override
@@ -11496,15 +11481,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get hfTestingNone => '無';
-
-  @override
-  String get hfTestingTemplateStagePre => '課前範本';
-
-  @override
-  String get hfTestingTemplateStageActive => '課中範本';
-
-  @override
-  String get hfTestingTemplateStagePost => '課後範本';
 
   @override
   String get hfTestingLastTestStage => '階段';
@@ -19581,9 +19557,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get hfTestingDebugScheduling => '排程';
 
   @override
-  String get hfTestingDebugTemplates => '範本';
-
-  @override
   String get hfTestingDebugLastTest => '上次測試';
 
   @override
@@ -19603,15 +19576,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get hfTestingNone => '無';
-
-  @override
-  String get hfTestingTemplateStagePre => '課前範本';
-
-  @override
-  String get hfTestingTemplateStageActive => '課中範本';
-
-  @override
-  String get hfTestingTemplateStagePost => '課後範本';
 
   @override
   String get hfTestingLastTestStage => '階段';

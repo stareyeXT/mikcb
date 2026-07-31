@@ -3595,9 +3595,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hfTestingDebugScheduling => 'Scheduling';
 
   @override
-  String get hfTestingDebugTemplates => 'Templates';
-
-  @override
   String get hfTestingDebugLastTest => 'Last Test';
 
   @override
@@ -3617,15 +3614,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hfTestingNone => 'None';
-
-  @override
-  String get hfTestingTemplateStagePre => 'Before-class template';
-
-  @override
-  String get hfTestingTemplateStageActive => 'During-class template';
-
-  @override
-  String get hfTestingTemplateStagePost => 'After-class template';
 
   @override
   String get hfTestingLastTestStage => 'Stage';

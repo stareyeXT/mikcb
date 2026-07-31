@@ -3448,9 +3448,6 @@ class AppLocalizationsKo extends AppLocalizations {
   String get hfTestingDebugScheduling => '일정';
 
   @override
-  String get hfTestingDebugTemplates => '템플릿';
-
-  @override
   String get hfTestingDebugLastTest => '마지막 테스트';
 
   @override
@@ -3470,15 +3467,6 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get hfTestingNone => '없음';
-
-  @override
-  String get hfTestingTemplateStagePre => '수업 전 템플릿';
-
-  @override
-  String get hfTestingTemplateStageActive => '수업 중 템플릿';
-
-  @override
-  String get hfTestingTemplateStagePost => '수업 후 템플릿';
 
   @override
   String get hfTestingLastTestStage => '단계';

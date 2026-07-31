@@ -3428,9 +3428,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get hfTestingDebugScheduling => 'スケジュール';
 
   @override
-  String get hfTestingDebugTemplates => 'テンプレート';
-
-  @override
   String get hfTestingDebugLastTest => '前回のテスト';
 
   @override
@@ -3450,15 +3447,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get hfTestingNone => 'なし';
-
-  @override
-  String get hfTestingTemplateStagePre => '授業前テンプレート';
-
-  @override
-  String get hfTestingTemplateStageActive => '授業中テンプレート';
-
-  @override
-  String get hfTestingTemplateStagePost => '授業後テンプレート';
 
   @override
   String get hfTestingLastTestStage => 'ステージ';
