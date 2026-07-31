@@ -19,7 +19,8 @@ Future<void> _pumpScreen(WidgetTester tester) async {
 
 void _seedInitializedPrefs() {
   final now = DateTime(2026, 4, 12);
-  final settings = TimetableSettings.defaults();
+  final settings = TimetableSettings.defaults()
+      .copyWith(superIslandEngine: SuperIslandEngine.builtIn);
   final profile = TimetableProfile(
     id: 'profile-1',
     name: '默认课表',
