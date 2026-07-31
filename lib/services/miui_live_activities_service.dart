@@ -439,7 +439,6 @@ class MiuiLiveActivitiesService {
         'summary': {
           'hasNotificationPermission': false,
           'testChannelBlocked': true,
-          'templatesLoaded': false,
           'schedulerReady': false,
           'hasLastTestResult': false,
         },
@@ -823,7 +822,6 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
       'summary': {
         'hasNotificationPermission': true,
         'testChannelBlocked': false,
-        'templatesLoaded': true,
         'schedulerReady': true,
         'hasLastTestResult': false,
       },

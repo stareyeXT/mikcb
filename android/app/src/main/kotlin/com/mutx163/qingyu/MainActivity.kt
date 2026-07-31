@@ -2059,18 +2059,7 @@ class LiveUpdateService : Service() {
             val lastSucceeded = if (testPrefs.contains("last_succeeded")) testPrefs.getBoolean("last_succeeded", false) else null
             val lastMessage = testPrefs.getString("last_message", null)
             val lastAtMillis = if (testPrefs.contains("last_at_millis")) testPrefs.getLong("last_at_millis", 0L) else null
-            val templates = loadHyperFocusTemplates(context)
             val scheduling = LiveUpdateScheduler.buildNextTriggerDebugInfo(context)
-
-            fun templateFlags(stage: String): Map<String, Boolean> = linkedMapOf(
-                "ticker" to (templates["ticker_$stage"]?.isNotBlank() == true),
-                "islandA" to (templates["islandA_$stage"]?.isNotBlank() == true),
-                "islandB" to (templates["islandB_$stage"]?.isNotBlank() == true),
-                "baseTitle" to (templates["baseTitle_$stage"]?.isNotBlank() == true),
-                "baseContent" to (templates["baseContent_$stage"]?.isNotBlank() == true),
-                "baseSubcontent" to (templates["baseSubcontent_$stage"]?.isNotBlank() == true),
-                "hintTitle" to (templates["hintTitle_$stage"]?.isNotBlank() == true),
-            )
 
             val schedulingSummary = linkedMapOf<String, Any?>(
                 "schedulerReady" to (scheduling["nextTriggerAtMillis"] != null),
@@ -2084,7 +2073,6 @@ class LiveUpdateService : Service() {
                 "summary" to linkedMapOf(
                     "hasNotificationPermission" to hasNotificationPermissionCompat(context),
                     "testChannelBlocked" to channelBlocked,
-                    "templatesLoaded" to templates.isNotEmpty(),
                     "schedulerReady" to schedulingSummary["schedulerReady"],
                     "nextTriggerCourseName" to schedulingSummary["nextTriggerCourseName"],
                     "nextTriggerStage" to schedulingSummary["nextTriggerStage"],
@@ -2097,11 +2085,6 @@ class LiveUpdateService : Service() {
                 ),
                 "environment" to buildEnvironmentSnapshot(context),
                 "scheduling" to scheduling,
-                "templates" to linkedMapOf(
-                    "pre" to templateFlags("pre"),
-                    "active" to templateFlags("active"),
-                    "post" to templateFlags("post"),
-                ),
                 "test" to linkedMapOf(
                     "lastStage" to lastStage,
                     "lastSucceeded" to lastSucceeded,
