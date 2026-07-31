@@ -1324,6 +1324,16 @@ class MainActivity : FlutterActivity() {
 
             notificationManager.notify(10001, notification)
             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+            val activeIds = notificationManager.activeNotifications.map { it.id }
+            val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+            val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
+            Log.d(
+                "HyperFocusApi",
+                "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
+            )
+            if (!activeIds.contains(10001)) {
+                return "已提交但系统未显示（activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}）"
+            }
             null
         } catch (e: Exception) {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)
