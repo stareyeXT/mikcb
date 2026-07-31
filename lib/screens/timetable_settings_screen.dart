@@ -1780,7 +1780,7 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
         HyperosListTile(
           icon: Icons.alarm_outlined,
           title: '提醒时机',
-          details: '${_draft.hfEnableBeforeClass ? "课前 " : ""}${_draft.hfEnableDuringClass ? "课中 " : ""}${_draft.hfEnableBeforeEnd ? "课后" : ""}',
+          details: '课前: ${_draft.liveEnableBeforeClass ? "开" : "关"} 课中: ${_draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd ? "开" : "关"}',
           onTap: () async {
             await HyperosNavigation.push(
               context,

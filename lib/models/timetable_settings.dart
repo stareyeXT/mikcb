@@ -1080,9 +1080,6 @@ class TimetableSettings {
   final int liveEndSecondsCountdownThreshold;
   final int liveTimeCorrectionSeconds;
   final SuperIslandEngine superIslandEngine;
-  final bool hfEnableBeforeClass;
-  final bool hfEnableDuringClass;
-  final bool hfEnableBeforeEnd;
   final bool hfShowCourseName;
   final bool hfShowLocation;
   final bool hfShowCountdown;
@@ -1240,9 +1237,6 @@ class TimetableSettings {
     this.liveTimeCorrectionSeconds = 0,
     this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
     this.superIslandEngine = SuperIslandEngine.hyperFocusApi,
-    this.hfEnableBeforeClass = true,
-    this.hfEnableDuringClass = true,
-    this.hfEnableBeforeEnd = true,
     this.hfShowCourseName = true,
     this.hfShowLocation = true,
     this.hfShowCountdown = true,
@@ -1554,9 +1548,6 @@ class TimetableSettings {
       'liveTimeCorrectionSeconds': liveTimeCorrectionSeconds,
       'liveBeforeClassQuickAction': liveBeforeClassQuickAction.value,
       'superIslandEngine': superIslandEngine.value,
-      'hfEnableBeforeClass': hfEnableBeforeClass,
-      'hfEnableDuringClass': hfEnableDuringClass,
-      'hfEnableBeforeEnd': hfEnableBeforeEnd,
       'hfShowCourseName': hfShowCourseName,
       'hfShowLocation': hfShowLocation,
       'hfShowCountdown': hfShowCountdown,
@@ -1879,9 +1870,6 @@ class TimetableSettings {
       superIslandEngine: SuperIslandEngineX.fromValue(
         json['superIslandEngine'] as String?,
       ),
-      hfEnableBeforeClass: json['hfEnableBeforeClass'] as bool? ?? true,
-      hfEnableDuringClass: json['hfEnableDuringClass'] as bool? ?? true,
-      hfEnableBeforeEnd: json['hfEnableBeforeEnd'] as bool? ?? true,
       hfShowCourseName: json['hfShowCourseName'] as bool? ?? true,
       hfShowLocation: json['hfShowLocation'] as bool? ?? true,
       hfShowCountdown: json['hfShowCountdown'] as bool? ?? true,
@@ -2099,9 +2087,6 @@ class TimetableSettings {
     int? liveTimeCorrectionSeconds,
     LiveBeforeClassQuickAction? liveBeforeClassQuickAction,
     SuperIslandEngine? superIslandEngine,
-    bool? hfEnableBeforeClass,
-    bool? hfEnableDuringClass,
-    bool? hfEnableBeforeEnd,
     bool? hfShowCourseName,
     bool? hfShowLocation,
     bool? hfShowCountdown,
@@ -2360,9 +2345,6 @@ class TimetableSettings {
       liveBeforeClassQuickAction:
           liveBeforeClassQuickAction ?? this.liveBeforeClassQuickAction,
       superIslandEngine: superIslandEngine ?? this.superIslandEngine,
-      hfEnableBeforeClass: hfEnableBeforeClass ?? this.hfEnableBeforeClass,
-      hfEnableDuringClass: hfEnableDuringClass ?? this.hfEnableDuringClass,
-      hfEnableBeforeEnd: hfEnableBeforeEnd ?? this.hfEnableBeforeEnd,
       hfShowCourseName: hfShowCourseName ?? this.hfShowCourseName,
       hfShowLocation: hfShowLocation ?? this.hfShowLocation,
       hfShowCountdown: hfShowCountdown ?? this.hfShowCountdown,
