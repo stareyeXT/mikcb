@@ -630,6 +630,15 @@ private data class LiveUpdatePayload(
     /** When true, ticker re-validates against the schedule snapshot (scheduler path). */
     val validateAgainstSchedule: Boolean = true,
     val superIslandEngine: String = "builtIn",
+    val islandTimeoutPre: Int = 300,
+    val islandTimeoutActive: Int = 600,
+    val islandTimeoutPost: Int = 600,
+    val iconAEnabled: Boolean = true,
+    val statusTextColor: String = "#FFFFFFFF",
+    val outEffectStatusEnabled: Boolean = true,
+    val outEffectStatusColor: String = "#FFFFFFFF",
+    val outEffectExpandEnabled: Boolean = true,
+    val outEffectExpandColor: String = "#FFFFFFFF",
 )
 
 private fun normalizeNullableText(value: String?): String? {
@@ -906,6 +915,15 @@ object LiveUpdateScheduler {
                 data["validateAgainstSchedule"] as? Boolean ?: false,
             superIslandEngine =
                 data["superIslandEngine"] as? String ?: "hyperFocusApi",
+            islandTimeoutPre = (islandConfig["hfIslandTimeoutPre"] as? Number)?.toInt() ?: 300,
+            islandTimeoutActive = (islandConfig["hfIslandTimeoutActive"] as? Number)?.toInt() ?: 600,
+            islandTimeoutPost = (islandConfig["hfIslandTimeoutPost"] as? Number)?.toInt() ?: 600,
+            iconAEnabled = islandConfig["hfIconAEnabled"] as? Boolean ?: true,
+            statusTextColor = islandConfig["hfStatusTextColor"] as? String ?: "#FFFFFFFF",
+            outEffectStatusEnabled = islandConfig["hfOutEffectStatusEnabled"] as? Boolean ?: true,
+            outEffectStatusColor = islandConfig["hfOutEffectStatusColor"] as? String ?: "#FFFFFFFF",
+            outEffectExpandEnabled = islandConfig["hfOutEffectExpandEnabled"] as? Boolean ?: true,
+            outEffectExpandColor = islandConfig["hfOutEffectExpandColor"] as? String ?: "#FFFFFFFF",
         )
         return buildServiceIntent(context, payload)
     }
@@ -1377,6 +1395,15 @@ object LiveUpdateScheduler {
             )
             putExtra("miuiIslandExpandedIconMode", payload.miuiIslandExpandedIconMode)
             putExtra("miuiIslandExpandedIconPath", payload.miuiIslandExpandedIconPath)
+            putExtra("hfIslandTimeoutPre", payload.islandTimeoutPre)
+            putExtra("hfIslandTimeoutActive", payload.islandTimeoutActive)
+            putExtra("hfIslandTimeoutPost", payload.islandTimeoutPost)
+            putExtra("hfIconAEnabled", payload.iconAEnabled)
+            putExtra("hfStatusTextColor", payload.statusTextColor)
+            putExtra("hfOutEffectStatusEnabled", payload.outEffectStatusEnabled)
+            putExtra("hfOutEffectStatusColor", payload.outEffectStatusColor)
+            putExtra("hfOutEffectExpandEnabled", payload.outEffectExpandEnabled)
+            putExtra("hfOutEffectExpandColor", payload.outEffectExpandColor)
             putExtra("beforeClassQuickAction", payload.beforeClassQuickAction)
             putExtra("validateAgainstSchedule", payload.validateAgainstSchedule)
             putExtra("superIslandEngine", payload.superIslandEngine)

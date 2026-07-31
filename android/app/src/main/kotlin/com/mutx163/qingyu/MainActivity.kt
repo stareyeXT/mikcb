@@ -2385,6 +2385,15 @@ class LiveUpdateService : Service() {
                 intent?.getStringExtra("miuiIslandExpandedIconMode") ?: "app_icon"
             miuiIslandExpandedIconPath =
                 intent?.getStringExtra("miuiIslandExpandedIconPath")?.takeIf { it.isNotBlank() }
+            islandTimeoutPre = intent?.getIntExtra("hfIslandTimeoutPre", 300) ?: 300
+            islandTimeoutActive = intent?.getIntExtra("hfIslandTimeoutActive", 600) ?: 600
+            islandTimeoutPost = intent?.getIntExtra("hfIslandTimeoutPost", 600) ?: 600
+            iconAEnabled = intent?.getBooleanExtra("hfIconAEnabled", true) ?: true
+            statusTextColor = intent?.getStringExtra("hfStatusTextColor") ?: "#FFFFFFFF"
+            outEffectStatusEnabled = intent?.getBooleanExtra("hfOutEffectStatusEnabled", true) ?: true
+            outEffectStatusColor = intent?.getStringExtra("hfOutEffectStatusColor") ?: "#FFFFFFFF"
+            outEffectExpandEnabled = intent?.getBooleanExtra("hfOutEffectExpandEnabled", true) ?: true
+            outEffectExpandColor = intent?.getStringExtra("hfOutEffectExpandColor") ?: "#FFFFFFFF"
             beforeClassLeadMillis =
                 intent?.getLongExtra("beforeClassLeadMillis", 0L)
                     ?.coerceAtLeast(0L)
