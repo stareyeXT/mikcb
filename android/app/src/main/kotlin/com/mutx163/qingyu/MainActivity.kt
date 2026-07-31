@@ -85,6 +85,7 @@ class MainActivity : FlutterActivity() {
         private const val SUPPORT_CHANNEL = "com.mutx163.qingyu/support"
         private const val MIGRATION_CHANNEL = "com.mutx163.qingyu/migration"
         private const val CHANNEL_ID = "live_update_channel"
+        const val HYPERFOCUS_TEST_CHANNEL_ID = "hyperfocus_test_channel"
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val PREFS_NAME = "native_runtime_prefs"
         private const val KEY_HIDE_FROM_RECENTS = "hide_from_recents"
@@ -380,6 +381,9 @@ class MainActivity : FlutterActivity() {
                     }
                     "getLiveUpdateDebugStatus" -> {
                         result.success(LiveUpdateService.buildDebugStatus(this))
+                    }
+                    "getHyperFocusDebugStatus" -> {
+                        result.success(LiveUpdateService.buildHyperFocusDebugStatus(this))
                     }
                     "syncScheduleSnapshot" -> {
                         val snapshotJson = call.arguments as? String
@@ -1106,7 +1110,29 @@ class MainActivity : FlutterActivity() {
         return powerManager?.isIgnoringBatteryOptimizations(packageName) == true
     }
 
+    private fun recordHyperFocusTestResult(stage: String, succeeded: Boolean, message: String) {
+        getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
+            .edit()
+            .putString("last_stage", stage)
+            .putBoolean("last_succeeded", succeeded)
+            .putString("last_message", message)
+            .putLong("last_at_millis", System.currentTimeMillis())
+            .apply()
+    }
+
     private fun sendTestFocusNotification(args: Map<String, String>?): String? {
+        val stage = args?.get("stage") ?: "pre"
+        val failure = try {
+            sendTestFocusNotificationInner(args)
+        } catch (e: Throwable) {
+            Log.e("HyperFocusApi", "sendTestFocus failed", e)
+            "发送失败：$e"
+        }
+        recordHyperFocusTestResult(stage, failure == null, failure ?: "")
+        return failure
+    }
+
+    private fun sendTestFocusNotificationInner(args: Map<String, String>?): String? {
         return try {
             val courseName = args?.get("courseName") ?: "高等数学"
             val shortName = args?.get("shortName") ?: courseName
@@ -1278,17 +1304,16 @@ class MainActivity : FlutterActivity() {
             extras.putString("miui.bigIsland.effect.src", "outer_glow")
             extras.putString("miui.effect.src", "outer_glow")
 
-            val testChannelId = "hyperfocus_test_channel"
             notificationManager.createNotificationChannel(
-                NotificationChannel(testChannelId, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
             )
-            val channel = notificationManager.getNotificationChannel(testChannelId)
+            val channel = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
             if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
                 Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
                 return "测试通知渠道已被关闭，请在系统通知设置中恢复该渠道"
             }
 
-            val notification = Notification.Builder(this, testChannelId)
+            val notification = Notification.Builder(this, HYPERFOCUS_TEST_CHANNEL_ID)
                 .setContentTitle(baseTitleText.ifBlank { courseName })
                 .setContentText(baseContentText.ifBlank { "查看课表" })
                 .setSmallIcon(R.mipmap.ic_launcher)
@@ -1313,7 +1338,7 @@ class MainActivity : FlutterActivity() {
                     "stage" to (args?.get("stage") ?: "pre"),
                 )
             )
-            "发送异常：${e.message ?: e.javaClass.simpleName}"
+            throw e
         }
     }
 
@@ -1964,6 +1989,72 @@ class LiveUpdateService : Service() {
                 "display" to copyStringKeyMap(snapshot["display"]),
                 "notification" to copyStringKeyMap(snapshot["notification"]),
                 "recentDiagnostics" to recentDiagnostics,
+            )
+        }
+
+        fun buildHyperFocusDebugStatus(context: Context): Map<String, Any?> {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = notificationManager.getNotificationChannel(MainActivity.HYPERFOCUS_TEST_CHANNEL_ID)
+            val channelBlocked = channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE
+            val testPrefs = context.getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
+            val hasLastTest = testPrefs.contains("last_stage")
+            val lastStage = testPrefs.getString("last_stage", null)
+            val lastSucceeded = if (testPrefs.contains("last_succeeded")) testPrefs.getBoolean("last_succeeded", false) else null
+            val lastMessage = testPrefs.getString("last_message", null)
+            val lastAtMillis = if (testPrefs.contains("last_at_millis")) testPrefs.getLong("last_at_millis", 0L) else null
+            val templates = loadHyperFocusTemplates(context)
+            val scheduling = LiveUpdateScheduler.buildNextTriggerDebugInfo(context)
+
+            fun templateFlags(stage: String): Map<String, Boolean> = linkedMapOf(
+                "ticker" to (templates["ticker_$stage"]?.isNotBlank() == true),
+                "islandA" to (templates["islandA_$stage"]?.isNotBlank() == true),
+                "islandB" to (templates["islandB_$stage"]?.isNotBlank() == true),
+                "baseTitle" to (templates["baseTitle_$stage"]?.isNotBlank() == true),
+                "baseContent" to (templates["baseContent_$stage"]?.isNotBlank() == true),
+                "baseSubcontent" to (templates["baseSubcontent_$stage"]?.isNotBlank() == true),
+                "hintTitle" to (templates["hintTitle_$stage"]?.isNotBlank() == true),
+            )
+
+            val schedulingSummary = linkedMapOf<String, Any?>(
+                "schedulerReady" to (scheduling["nextTriggerAtMillis"] != null),
+                "nextTriggerCourseName" to scheduling["nextCourseName"],
+                "nextTriggerStage" to scheduling["nextTriggerStage"],
+                "nextTriggerAtMillis" to scheduling["nextTriggerAtMillis"],
+            )
+
+            return linkedMapOf(
+                "generatedAtMillis" to System.currentTimeMillis(),
+                "summary" to linkedMapOf(
+                    "hasNotificationPermission" to hasNotificationPermissionCompat(context),
+                    "testChannelBlocked" to channelBlocked,
+                    "templatesLoaded" to templates.isNotEmpty(),
+                    "schedulerReady" to schedulingSummary["schedulerReady"],
+                    "nextTriggerCourseName" to schedulingSummary["nextTriggerCourseName"],
+                    "nextTriggerStage" to schedulingSummary["nextTriggerStage"],
+                    "nextTriggerAtMillis" to schedulingSummary["nextTriggerAtMillis"],
+                    "hasLastTestResult" to hasLastTest,
+                    "lastTestStage" to lastStage,
+                    "lastTestSucceeded" to lastSucceeded,
+                    "lastTestMessage" to lastMessage,
+                    "lastTestAtMillis" to lastAtMillis,
+                ),
+                "environment" to buildEnvironmentSnapshot(context),
+                "scheduling" to scheduling,
+                "templates" to linkedMapOf(
+                    "pre" to templateFlags("pre"),
+                    "active" to templateFlags("active"),
+                    "post" to templateFlags("post"),
+                ),
+                "test" to linkedMapOf(
+                    "lastStage" to lastStage,
+                    "lastSucceeded" to lastSucceeded,
+                    "lastMessage" to lastMessage,
+                    "lastAtMillis" to lastAtMillis,
+                ),
+                "recentDiagnostics" to linkedMapOf(
+                    "enabled" to UmengDiagnosticReporter.isLiveDiagnosticsEnabled(context),
+                    "tail" to UmengDiagnosticReporter.readLiveDiagnosticsTail(context),
+                ),
             )
         }
 

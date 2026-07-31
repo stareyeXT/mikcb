@@ -770,6 +770,23 @@ object LiveUpdateScheduler {
         }
     }
 
+    /** Read-only scheduler state for the HyperFocus diagnostics screen. */
+    fun buildNextTriggerDebugInfo(context: Context): Map<String, Any?> {
+        val snapshot = loadSnapshot(context) ?: return emptyMap()
+        val nowMillis = System.currentTimeMillis()
+        val selection = findNextSelection(context, snapshot, nowMillis)
+        val suspendedUntil = suspendedUntilMillis(context)
+        return linkedMapOf(
+            "nextCourseName" to selection?.currentCourse?.name,
+            "nextCourseStartAtMillis" to selection?.startAtMillis,
+            "nextCourseEndAtMillis" to selection?.endAtMillis,
+            "nextTriggerAtMillis" to selection?.triggerAtMillis,
+            "nextTriggerStage" to selection?.stage,
+            "hasActiveSelection" to hasActiveLiveSelection(snapshot, context, nowMillis),
+            "suspendedUntilMillis" to (suspendedUntil.takeIf { it > nowMillis }),
+        )
+    }
+
     private fun suspendedUntilMillis(context: Context): Long {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getLong(KEY_SUSPEND_UNTIL_MILLIS, 0L)
