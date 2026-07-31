@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -1428,14 +1429,52 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
   }
 
   Future<void> _loadTemplates() async {
+    final provider = context.read<TimetableProvider>();
+    final settingsJson = provider.settings.hfTemplatesJson;
+    if (settingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+        if (!mounted) return;
+        for (final key in _controllers.keys) {
+          final v = decoded[key];
+          if (v is String && v.isNotEmpty) {
+            _controllers[key]?.text = v;
+          }
+        }
+        return;
+      } catch (_) {
+        // 解析失败则回退 Kotlin prefs 迁移
+      }
+    }
     final service = MiuiLiveActivitiesService();
     final saved = await service.loadHyperFocusTemplates();
     if (!mounted) return;
+    var migrated = false;
     for (final key in _controllers.keys) {
-      if (saved.containsKey(key)) {
+      if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
         _controllers[key]?.text = saved[key]!;
+        migrated = true;
       }
     }
+    if (migrated) {
+      await _persistTemplatesToSettings(
+        provider,
+        Map.fromEntries(
+          _controllers.entries.map(
+            (e) => MapEntry(e.key, e.value.text),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _persistTemplatesToSettings(
+    TimetableProvider provider,
+    Map<String, String> map,
+  ) async {
+    await provider.updateTimetableSettings(
+      provider.settings.copyWith(hfTemplatesJson: jsonEncode(map)),
+    );
   }
 
   Future<void> _saveTemplates() async {
@@ -1444,7 +1483,9 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
       map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
     }
     final service = MiuiLiveActivitiesService();
+    final provider = context.read<TimetableProvider>();
     final ok = await service.saveHyperFocusTemplates(map);
+    await _persistTemplatesToSettings(provider, map);
     if (!mounted) return;
     showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
   }
