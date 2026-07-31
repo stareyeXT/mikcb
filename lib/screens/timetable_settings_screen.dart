@@ -1793,21 +1793,6 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
           },
         ),
         HyperosListTile(
-          icon: Icons.upcoming_outlined,
-          title: '显示设置',
-          details: '图标: ${_draft.hfIconAEnabled ? "开" : "关"}',
-          onTap: () async {
-            await HyperosNavigation.push(
-              context,
-              builder: (_) => const HyperFocusDisplayScreen(),
-            );
-            if (!mounted) return;
-            setState(() {
-              _draft = context.read<TimetableProvider>().settings;
-            });
-          },
-        ),
-        HyperosListTile(
           icon: Icons.text_fields,
           title: '自定义模板',
           details: '编辑各阶段岛文字、展开态、标签',

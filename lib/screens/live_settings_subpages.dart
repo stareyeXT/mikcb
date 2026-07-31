@@ -1370,67 +1370,6 @@ class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
   }
 }
 
-class HyperFocusDisplayScreen extends StatefulWidget {
-  const HyperFocusDisplayScreen({super.key});
-
-  @override
-  State<HyperFocusDisplayScreen> createState() => _HyperFocusDisplayScreenState();
-}
-
-class _HyperFocusDisplayScreenState extends State<HyperFocusDisplayScreen> {
-  late TimetableSettings _draft;
-
-  @override
-  void initState() {
-    super.initState();
-    _draft = context.read<TimetableProvider>().settings;
-  }
-
-  void _updateDraft(TimetableSettings next) {
-    final provider = context.read<TimetableProvider>();
-    provider.updateTimetableSettings(next);
-    setState(() => _draft = next);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return HyperosSubpage(
-      onBack: () => Navigator.pop(context),
-      title: const Text('显示设置'),
-      child: HyperosListView(
-        itemCount: 1,
-        itemBuilder: (context, index) => HyperosListGroup(
-          children: [
-            HyperosSwitchTile(
-              title: '显示课名',
-              value: _draft.hfShowCourseName,
-              onChanged: (v) => _updateDraft(
-                _draft.copyWith(hfShowCourseName: v),
-              ),
-            ),
-            HyperosSwitchTile(
-              title: '显示地点',
-              value: _draft.hfShowLocation,
-              onChanged: (v) => _updateDraft(
-                _draft.copyWith(hfShowLocation: v),
-              ),
-            ),
-            HyperosSwitchTile(
-              title: '显示倒计时',
-              value: _draft.hfShowCountdown,
-              onChanged: (v) => _updateDraft(
-                _draft.copyWith(hfShowCountdown: v),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
-
 class HyperFocusStageTemplateScreen extends StatefulWidget {
   const HyperFocusStageTemplateScreen({super.key});
 
