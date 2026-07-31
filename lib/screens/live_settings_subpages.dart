@@ -1619,6 +1619,474 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
   }
 }
 
+class HyperFocusStatusIslandScreen extends StatefulWidget {
+  const HyperFocusStatusIslandScreen({super.key});
+
+  @override
+  State<HyperFocusStatusIslandScreen> createState() => _HyperFocusStatusIslandScreenState();
+}
+
+class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScreen> {
+  String _selectedStage = 'pre';
+
+  static const _defaultTemplates = {
+    'ticker_pre': '课名',
+    'ticker_active': '课名',
+    'ticker_post': '课名',
+    'islandA_pre': '教室',
+    'islandA_active': '短课名',
+    'islandA_post': '短课名',
+    'islandB_pre': '',
+    'islandB_active': '上课中',
+    'islandB_post': '已下课',
+  };
+
+  static const _availableVariables = [
+    '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
+  ];
+
+  late Map<String, TextEditingController> _controllers;
+
+  String get _s => _selectedStage;
+
+  static const _tabOrder = ['pre', 'active', 'post'];
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = {};
+    for (final key in ['ticker', 'islandA', 'islandB']) {
+      for (final stage in _tabOrder) {
+        final k = '${key}_$stage';
+        _controllers[k] = TextEditingController(text: _defaultTemplates[k]!);
+      }
+    }
+    _loadTemplates();
+  }
+
+  Future<void> _loadTemplates() async {
+    final provider = context.read<TimetableProvider>();
+    final settingsJson = provider.settings.hfTemplatesJson;
+    if (settingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+        if (!mounted) return;
+        for (final key in _controllers.keys) {
+          final v = decoded[key];
+          if (v is String && v.isNotEmpty) {
+            _controllers[key]?.text = v;
+          }
+        }
+        return;
+      } catch (_) {
+        // 解析失败则回退 Kotlin prefs 迁移
+      }
+    }
+    final service = MiuiLiveActivitiesService();
+    final saved = await service.loadHyperFocusTemplates();
+    if (!mounted) return;
+    var migrated = false;
+    for (final key in _controllers.keys) {
+      if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
+        _controllers[key]?.text = saved[key]!;
+        migrated = true;
+      }
+    }
+    if (migrated) {
+      await _persistTemplatesToSettings(
+        provider,
+        Map.fromEntries(
+          _controllers.entries.map(
+            (e) => MapEntry(e.key, e.value.text),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _persistTemplatesToSettings(
+    TimetableProvider provider,
+    Map<String, String> map,
+  ) async {
+    await provider.updateTimetableSettings(
+      provider.settings.copyWith(hfTemplatesJson: jsonEncode(map)),
+    );
+  }
+
+  Future<void> _saveTemplates() async {
+    final map = <String, String>{};
+    for (final key in _defaultTemplates.keys) {
+      map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
+    }
+    final service = MiuiLiveActivitiesService();
+    final provider = context.read<TimetableProvider>();
+    final ok = await service.saveHyperFocusTemplates(map);
+    await _persistTemplatesToSettings(provider, map);
+    if (!mounted) return;
+    showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+  }
+
+  Future<void> _resetStage() async {
+    for (final key in _controllers.keys) {
+      if (key.endsWith('_$_s')) {
+        _controllers[key]?.text = _defaultTemplates[key]!;
+      }
+    }
+    await _saveTemplates();
+  }
+
+  Widget _variableChipField(String key, String label) {
+    final current = _controllers[key]?.text ?? '';
+    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: HyperosTypography.listTitle(context)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _availableVariables.map((v) {
+              final isOn = selected.contains(v);
+              return ChoiceChip(
+                label: Text(v, style: TextStyle(
+                  fontSize: 13,
+                  color: isOn ? Colors.white : null,
+                )),
+                selected: isOn,
+                onSelected: (on) {
+                  setState(() {
+                    final list = current.isEmpty
+                        ? <String>[]
+                        : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                    if (on && !list.contains(v)) {
+                      list.add(v);
+                    } else if (!on) {
+                      list.remove(v);
+                    }
+                    _controllers[key]?.text = list.join(',');
+                  });
+                },
+                selectedColor: Theme.of(context).colorScheme.primary,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: const Text('状态栏岛自定义'),
+      child: Column(
+        children: [
+          HyperosTabRow(
+            tabs: ['课前', '课中', '课后'],
+            selectedIndex: _tabOrder.indexOf(_selectedStage),
+            onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '点击选择要在各区域显示的信息',
+                    style: HyperosTypography.listDetail(context),
+                  ),
+                  const SizedBox(height: 8),
+                  HyperosSectionLabel(text: '状态栏岛'),
+                  _variableChipField('ticker_$_s', '状态栏/息屏文本'),
+                  _variableChipField('islandA_$_s', '岛左侧文字'),
+                  _variableChipField('islandB_$_s', '岛右侧后缀'),
+                  const HyperosSectionGap(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FButton(
+                          onPress: _saveTemplates,
+                          child: const Text('保存'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FButton(
+                          onPress: _resetStage,
+                          child: const Text('恢复默认'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HyperFocusExpandedIslandScreen extends StatefulWidget {
+  const HyperFocusExpandedIslandScreen({super.key});
+
+  @override
+  State<HyperFocusExpandedIslandScreen> createState() => _HyperFocusExpandedIslandScreenState();
+}
+
+class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslandScreen> {
+  String _selectedStage = 'pre';
+
+  static const _defaultTemplates = {
+    'baseTitle_pre': '课名',
+    'baseTitle_active': '课名',
+    'baseTitle_post': '课名',
+    'baseContent_pre': '开始,结束',
+    'baseContent_active': '开始,结束',
+    'baseContent_post': '开始,结束',
+    'baseSubcontent_pre': '教室',
+    'baseSubcontent_active': '教室',
+    'baseSubcontent_post': '教室',
+    'hintTitle_pre': '',
+    'hintTitle_active': '上课中',
+    'hintTitle_post': '已下课',
+    'hintContent_pre': '即将上课',
+    'hintContent_active': '距离下课',
+    'hintContent_post': '已经下课',
+    'hintSubcontent_pre': '',
+    'hintSubcontent_active': '',
+    'hintSubcontent_post': '',
+    'hintSubtitle_pre': '',
+    'hintSubtitle_active': '',
+    'hintSubtitle_post': '',
+  };
+
+  static const _availableVariables = [
+    '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
+  ];
+
+  late Map<String, TextEditingController> _controllers;
+
+  String get _s => _selectedStage;
+
+  static const _tabOrder = ['pre', 'active', 'post'];
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = {};
+    for (final key in ['baseTitle', 'baseContent', 'baseSubcontent', 'hintTitle', 'hintContent', 'hintSubcontent', 'hintSubtitle']) {
+      for (final stage in _tabOrder) {
+        final k = '${key}_$stage';
+        _controllers[k] = TextEditingController(text: _defaultTemplates[k]!);
+      }
+    }
+    _loadTemplates();
+  }
+
+  Future<void> _loadTemplates() async {
+    final provider = context.read<TimetableProvider>();
+    final settingsJson = provider.settings.hfTemplatesJson;
+    if (settingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+        if (!mounted) return;
+        for (final key in _controllers.keys) {
+          final v = decoded[key];
+          if (v is String && v.isNotEmpty) {
+            _controllers[key]?.text = v;
+          }
+        }
+        return;
+      } catch (_) {
+        // 解析失败则回退 Kotlin prefs 迁移
+      }
+    }
+    final service = MiuiLiveActivitiesService();
+    final saved = await service.loadHyperFocusTemplates();
+    if (!mounted) return;
+    var migrated = false;
+    for (final key in _controllers.keys) {
+      if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
+        _controllers[key]?.text = saved[key]!;
+        migrated = true;
+      }
+    }
+    if (migrated) {
+      await _persistTemplatesToSettings(
+        provider,
+        Map.fromEntries(
+          _controllers.entries.map(
+            (e) => MapEntry(e.key, e.value.text),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _persistTemplatesToSettings(
+    TimetableProvider provider,
+    Map<String, String> map,
+  ) async {
+    await provider.updateTimetableSettings(
+      provider.settings.copyWith(hfTemplatesJson: jsonEncode(map)),
+    );
+  }
+
+  Future<void> _saveTemplates() async {
+    final map = <String, String>{};
+    for (final key in _defaultTemplates.keys) {
+      map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
+    }
+    final service = MiuiLiveActivitiesService();
+    final provider = context.read<TimetableProvider>();
+    final ok = await service.saveHyperFocusTemplates(map);
+    await _persistTemplatesToSettings(provider, map);
+    if (!mounted) return;
+    showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+  }
+
+  Future<void> _resetStage() async {
+    for (final key in _controllers.keys) {
+      if (key.endsWith('_$_s')) {
+        _controllers[key]?.text = _defaultTemplates[key]!;
+      }
+    }
+    await _saveTemplates();
+  }
+
+  Widget _variableChipField(String key, String label) {
+    final current = _controllers[key]?.text ?? '';
+    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: HyperosTypography.listTitle(context)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _availableVariables.map((v) {
+              final isOn = selected.contains(v);
+              return ChoiceChip(
+                label: Text(v, style: TextStyle(
+                  fontSize: 13,
+                  color: isOn ? Colors.white : null,
+                )),
+                selected: isOn,
+                onSelected: (on) {
+                  setState(() {
+                    final list = current.isEmpty
+                        ? <String>[]
+                        : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                    if (on && !list.contains(v)) {
+                      list.add(v);
+                    } else if (!on) {
+                      list.remove(v);
+                    }
+                    _controllers[key]?.text = list.join(',');
+                  });
+                },
+                selectedColor: Theme.of(context).colorScheme.primary,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: const Text('展开态自定义'),
+      child: Column(
+        children: [
+          HyperosTabRow(
+            tabs: ['课前', '课中', '课后'],
+            selectedIndex: _tabOrder.indexOf(_selectedStage),
+            onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '点击选择要在各区域显示的信息',
+                    style: HyperosTypography.listDetail(context),
+                  ),
+                  const SizedBox(height: 8),
+                  HyperosSectionLabel(text: '展开态'),
+                  _variableChipField('baseTitle_$_s', '主要标题'),
+                  _variableChipField('baseContent_$_s', '次要文本1'),
+                  _variableChipField('baseSubcontent_$_s', '次要文本2'),
+                  _variableChipField('hintTitle_$_s', '主要小文本1'),
+                  _variableChipField('hintContent_$_s', '前置文本1'),
+                  _variableChipField('hintSubcontent_$_s', '前置文本2'),
+                  _variableChipField('hintSubtitle_$_s', '主要小文本2'),
+                  const HyperosSectionGap(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FButton(
+                          onPress: _saveTemplates,
+                          child: const Text('保存'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FButton(
+                          onPress: _resetStage,
+                          child: const Text('恢复默认'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 Color _parseColor(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
 }
