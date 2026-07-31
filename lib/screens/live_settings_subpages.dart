@@ -1371,204 +1371,34 @@ class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
   }
 }
 
-class HyperFocusStageTemplateScreen extends StatefulWidget {
-  const HyperFocusStageTemplateScreen({super.key});
+class HyperFocusIslandTimeoutScreen extends StatefulWidget {
+  const HyperFocusIslandTimeoutScreen({super.key});
 
   @override
-  State<HyperFocusStageTemplateScreen> createState() => _HyperFocusStageTemplateScreenState();
+  State<HyperFocusIslandTimeoutScreen> createState() =>
+      _HyperFocusIslandTimeoutScreenState();
 }
 
-class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateScreen> {
-  String _selectedStage = 'pre';
-
-  static const _defaultTemplates = {
-    'ticker_pre': '课名',
-    'ticker_active': '课名',
-    'ticker_post': '课名',
-    'islandA_pre': '教室',
-    'islandA_active': '短课名',
-    'islandA_post': '短课名',
-    'islandB_pre': '',
-    'islandB_active': '上课中',
-    'islandB_post': '已下课',
-    'baseTitle_pre': '课名',
-    'baseTitle_active': '课名',
-    'baseTitle_post': '课名',
-    'baseContent_pre': '开始,结束',
-    'baseContent_active': '开始,结束',
-    'baseContent_post': '开始,结束',
-    'baseSubcontent_pre': '教室',
-    'baseSubcontent_active': '教室',
-    'baseSubcontent_post': '教室',
-    'hintTitle_pre': '',
-    'hintTitle_active': '上课中',
-    'hintTitle_post': '已下课',
-  };
-
-  static const _availableVariables = [
-    '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
-  ];
-
-  late Map<String, TextEditingController> _controllers;
-
-  String get _s => _selectedStage;
-
-  static const _tabOrder = ['pre', 'active', 'post'];
+class _HyperFocusIslandTimeoutScreenState
+    extends State<HyperFocusIslandTimeoutScreen> {
+  static const int _minSeconds = 30;
+  static const int _maxSeconds = 3600;
+  late TimetableSettings _draft;
+  Timer? _autoSaveTimer;
 
   @override
   void initState() {
     super.initState();
-    _controllers = {};
-    for (final key in ['ticker', 'islandA', 'islandB', 'baseTitle', 'baseContent', 'baseSubcontent', 'hintTitle']) {
-      for (final stage in _tabOrder) {
-        final k = '${key}_$stage';
-        _controllers[k] = TextEditingController(text: _defaultTemplates[k]!);
-      }
-    }
-    _loadTemplates();
-  }
-
-  Future<void> _loadTemplates() async {
-    final provider = context.read<TimetableProvider>();
-    final settingsJson = provider.settings.hfTemplatesJson;
-    if (settingsJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
-        if (!mounted) return;
-        for (final key in _controllers.keys) {
-          final v = decoded[key];
-          if (v is String && v.isNotEmpty) {
-            _controllers[key]?.text = v;
-          }
-        }
-        return;
-      } catch (_) {
-        // 解析失败则回退 Kotlin prefs 迁移
-      }
-    }
-    final service = MiuiLiveActivitiesService();
-    final saved = await service.loadHyperFocusTemplates();
-    if (!mounted) return;
-    var migrated = false;
-    for (final key in _controllers.keys) {
-      if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
-        _controllers[key]?.text = saved[key]!;
-        migrated = true;
-      }
-    }
-    if (migrated) {
-      await _persistTemplatesToSettings(
-        provider,
-        Map.fromEntries(
-          _controllers.entries.map(
-            (e) => MapEntry(e.key, e.value.text),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _persistTemplatesToSettings(
-    TimetableProvider provider,
-    Map<String, String> map,
-  ) async {
-    await provider.updateTimetableSettings(
-      provider.settings.copyWith(hfTemplatesJson: jsonEncode(map)),
-    );
-  }
-
-  Future<void> _saveTemplates() async {
-    final service = MiuiLiveActivitiesService();
-    final provider = context.read<TimetableProvider>();
-
-    final merged = <String, String>{};
-    final settingsJson = provider.settings.hfTemplatesJson;
-    if (settingsJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
-        for (final entry in decoded.entries) {
-          if (entry.value is String) {
-            merged[entry.key] = entry.value as String;
-          }
-        }
-      } catch (_) {
-        // 解析失败则回退 Kotlin prefs 迁移
-      }
-    }
-    if (merged.isEmpty) {
-      merged.addAll(await service.loadHyperFocusTemplates());
-    }
-
-    for (final key in _defaultTemplates.keys) {
-      merged[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
-    }
-
-    final ok = await service.saveHyperFocusTemplates(merged);
-    await _persistTemplatesToSettings(provider, merged);
-    if (!mounted) return;
-    showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
-  }
-
-  Future<void> _resetStage() async {
-    for (final key in _controllers.keys) {
-      if (key.endsWith('_$_s')) {
-        _controllers[key]?.text = _defaultTemplates[key]!;
-      }
-    }
-    await _saveTemplates();
-  }
-
-  Widget _variableChipField(String key, String label) {
-    final current = _controllers[key]?.text ?? '';
-    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: HyperosTypography.listTitle(context)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _availableVariables.map((v) {
-              final isOn = selected.contains(v);
-              return ChoiceChip(
-                label: Text(v, style: TextStyle(
-                  fontSize: 13,
-                  color: isOn ? Colors.white : null,
-                )),
-                selected: isOn,
-                onSelected: (on) {
-                  setState(() {
-                    final list = current.isEmpty
-                        ? <String>[]
-                        : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-                    if (on && !list.contains(v)) {
-                      list.add(v);
-                    } else if (!on) {
-                      list.remove(v);
-                    }
-                    _controllers[key]?.text = list.join(',');
-                  });
-                },
-                selectedColor: Theme.of(context).colorScheme.primary,
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
+    _draft = context.read<TimetableProvider>().settings;
   }
 
   @override
   void dispose() {
-    for (final c in _controllers.values) {
-      c.dispose();
+    if (_autoSaveTimer?.isActive ?? false) {
+      _autoSaveTimer?.cancel();
+      _persistDraft(_draft);
+    } else {
+      _autoSaveTimer?.cancel();
     }
     super.dispose();
   }
@@ -1577,63 +1407,64 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
   Widget build(BuildContext context) {
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
-      title: const Text('自定义模板'),
-      child: Column(
+      title: const Text('岛消失时间'),
+      child: HyperosListView(
         children: [
-          HyperosTabRow(
-            tabs: ['课前', '课中', '课后'],
-            selectedIndex: _tabOrder.indexOf(_selectedStage),
-            onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '点击选择要在各区域显示的信息',
-                    style: HyperosTypography.listDetail(context),
-                  ),
-                  const SizedBox(height: 8),
-                  HyperosSectionLabel(text: '状态栏岛'),
-                  _variableChipField('ticker_$_s', '状态栏/息屏文本'),
-                  const HyperosSectionGap(),
-                  HyperosSectionLabel(text: '岛内容'),
-                  _variableChipField('islandA_$_s', '岛左侧文字'),
-                  _variableChipField('islandB_$_s', '岛右侧后缀'),
-                  const HyperosSectionGap(),
-                  HyperosSectionLabel(text: '展开态'),
-                  _variableChipField('baseTitle_$_s', '标题'),
-                  _variableChipField('baseContent_$_s', '内容'),
-                  _variableChipField('baseSubcontent_$_s', '副内容'),
-                  const HyperosSectionGap(),
-                  HyperosSectionLabel(text: '阶段标签'),
-                  _variableChipField('hintTitle_$_s', '阶段标签文字'),
-                  const HyperosSectionGap(),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FButton(
-                          onPress: _saveTemplates,
-                          child: const Text('保存'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FButton(
-                          onPress: _resetStage,
-                          child: const Text('恢复默认'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          HyperosSectionLabel(text: '状态栏岛消失时间（秒）'),
+          HyperosListGroup(
+            children: [
+              _buildTimeoutTile('课前', _draft.hfIslandTimeoutPre,
+                  (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPre: v))),
+              _buildTimeoutTile('课中', _draft.hfIslandTimeoutActive,
+                  (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutActive: v))),
+              _buildTimeoutTile('课后', _draft.hfIslandTimeoutPost,
+                  (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPost: v))),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTimeoutTile(
+    String label,
+    int value,
+    ValueChanged<int> onChanged,
+  ) {
+    return HyperosNumberPickerTile(
+      title: label,
+      picker: HyperosNumberPicker(
+        min: _minSeconds,
+        max: _maxSeconds,
+        value: value,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  void _updateDraft(TimetableSettings next, {bool debounce = true}) {
+    setState(() => _draft = next);
+    _autoSaveTimer?.cancel();
+    if (debounce) {
+      _autoSaveTimer = Timer(
+        const Duration(milliseconds: 250),
+        () => _persistDraft(next),
+      );
+      return;
+    }
+    _persistDraft(next);
+  }
+
+  void _persistDraft(TimetableSettings next) {
+    final provider = context.read<TimetableProvider>();
+    unawaited(
+      provider.updateTimetableSettings(next).then((message) {
+        if (!mounted) return;
+        if (message != null) {
+          showAppToast(context, message: message);
+          setState(() => _draft = provider.settings);
+        }
+      }).catchError((_) {}),
     );
   }
 }

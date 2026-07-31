@@ -555,6 +555,15 @@ Future<void> _liveUpdateActivityBody(
       progressMilestoneTimeTexts: progressMilestones
           .map((milestone) => milestone['timeText'] as String)
           .toList(),
+      hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
+      hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
+      hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
+      hfIconAEnabled: settings.hfIconAEnabled,
+      hfStatusTextColor: settings.hfStatusTextColor,
+      hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
+      hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
+      hfOutEffectExpandEnabled: settings.hfOutEffectExpandEnabled,
+      hfOutEffectExpandColor: settings.hfOutEffectExpandColor,
     );
   } else {
     host._currentLiveCourseId = null;
