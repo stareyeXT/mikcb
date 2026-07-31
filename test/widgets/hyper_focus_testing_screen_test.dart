@@ -100,7 +100,6 @@ void main() {
                 'summary': {
                   'hasNotificationPermission': true,
                   'testChannelBlocked': false,
-                  'templatesLoaded': true,
                   'schedulerReady': true,
                   'hasLastTestResult': false,
                 },
@@ -111,11 +110,6 @@ void main() {
                   'nextTriggerAtMillis': 0,
                   'nextTriggerStage': 'pre',
                   'hasActiveSelection': true,
-                },
-                'templates': {
-                  'pre': {'ticker': true},
-                  'active': {'ticker': true},
-                  'post': {'ticker': true},
                 },
                 'test': {
                   'lastStage': null,
@@ -163,7 +157,6 @@ void main() {
                   'summary': {
                     'hasNotificationPermission': true,
                     'testChannelBlocked': false,
-                    'templatesLoaded': true,
                     'schedulerReady': true,
                     'hasLastTestResult': false,
                   },
