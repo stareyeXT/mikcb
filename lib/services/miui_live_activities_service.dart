@@ -422,6 +422,31 @@ class MiuiLiveActivitiesService {
     }
   }
 
+  Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
+    await initialize();
+    try {
+      final result = await _channel.invokeMethod('getHyperFocusDebugStatus');
+      return Map<String, dynamic>.from(result as Map);
+    } catch (e, stackTrace) {
+      await UmengAnalyticsService.reportDiagnostic(
+        'hyper_focus_debug_status_failed',
+        AppLogMessages.liveUpdateDebugStatusFailed,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      appDebugLog('MiuiLive', '获取超级岛调试状态失败：$e');
+      return {
+        'summary': {
+          'hasNotificationPermission': false,
+          'testChannelBlocked': true,
+          'templatesLoaded': false,
+          'schedulerReady': false,
+          'hasLastTestResult': false,
+        },
+      };
+    }
+  }
+
   Map<String, dynamic> _buildData(
     Course currentCourse,
     Course? nextCourse, {
@@ -787,5 +812,34 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     String stage = 'pre',
   }) async {
     return null;
+  }
+
+  @override
+  Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
+    return const {
+      'generatedAtMillis': 0,
+      'summary': {
+        'hasNotificationPermission': true,
+        'testChannelBlocked': false,
+        'templatesLoaded': true,
+        'schedulerReady': true,
+        'hasLastTestResult': false,
+      },
+      'scheduling': {
+        'nextCourseName': '高等数学',
+        'nextCourseStartAtMillis': 0,
+        'nextCourseEndAtMillis': 0,
+        'nextTriggerAtMillis': 0,
+        'nextTriggerStage': 'pre',
+        'hasActiveSelection': true,
+      },
+      'templates': {
+        'pre': {'ticker': true, 'islandA': true, 'islandB': true, 'baseTitle': true, 'baseContent': true, 'baseSubcontent': true, 'hintTitle': true},
+        'active': {'ticker': true, 'islandA': true, 'islandB': true, 'baseTitle': true, 'baseContent': true, 'baseSubcontent': true, 'hintTitle': true},
+        'post': {'ticker': true, 'islandA': true, 'islandB': true, 'baseTitle': true, 'baseContent': true, 'baseSubcontent': true, 'hintTitle': true},
+      },
+      'test': {'lastStage': null, 'lastSucceeded': null, 'lastMessage': null, 'lastAtMillis': null},
+      'recentDiagnostics': {'enabled': false, 'tail': ''},
+    };
   }
 }
