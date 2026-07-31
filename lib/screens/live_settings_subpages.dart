@@ -1478,14 +1478,33 @@ class _HyperFocusStageTemplateScreenState extends State<HyperFocusStageTemplateS
   }
 
   Future<void> _saveTemplates() async {
-    final map = <String, String>{};
-    for (final key in _defaultTemplates.keys) {
-      map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
-    }
     final service = MiuiLiveActivitiesService();
     final provider = context.read<TimetableProvider>();
-    final ok = await service.saveHyperFocusTemplates(map);
-    await _persistTemplatesToSettings(provider, map);
+
+    final merged = <String, String>{};
+    final settingsJson = provider.settings.hfTemplatesJson;
+    if (settingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+        for (final entry in decoded.entries) {
+          if (entry.value is String) {
+            merged[entry.key] = entry.value as String;
+          }
+        }
+      } catch (_) {
+        // 解析失败则回退 Kotlin prefs 迁移
+      }
+    }
+    if (merged.isEmpty) {
+      merged.addAll(await service.loadHyperFocusTemplates());
+    }
+
+    for (final key in _defaultTemplates.keys) {
+      merged[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
+    }
+
+    final ok = await service.saveHyperFocusTemplates(merged);
+    await _persistTemplatesToSettings(provider, merged);
     if (!mounted) return;
     showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
   }
@@ -1714,14 +1733,33 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
   }
 
   Future<void> _saveTemplates() async {
-    final map = <String, String>{};
-    for (final key in _defaultTemplates.keys) {
-      map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
-    }
     final service = MiuiLiveActivitiesService();
     final provider = context.read<TimetableProvider>();
-    final ok = await service.saveHyperFocusTemplates(map);
-    await _persistTemplatesToSettings(provider, map);
+
+    final merged = <String, String>{};
+    final settingsJson = provider.settings.hfTemplatesJson;
+    if (settingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+        for (final entry in decoded.entries) {
+          if (entry.value is String) {
+            merged[entry.key] = entry.value as String;
+          }
+        }
+      } catch (_) {
+        // 解析失败则回退 Kotlin prefs 迁移
+      }
+    }
+    if (merged.isEmpty) {
+      merged.addAll(await service.loadHyperFocusTemplates());
+    }
+
+    for (final key in _defaultTemplates.keys) {
+      merged[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
+    }
+
+    final ok = await service.saveHyperFocusTemplates(merged);
+    await _persistTemplatesToSettings(provider, merged);
     if (!mounted) return;
     showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
   }
@@ -1952,14 +1990,33 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
   }
 
   Future<void> _saveTemplates() async {
-    final map = <String, String>{};
-    for (final key in _defaultTemplates.keys) {
-      map[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
-    }
     final service = MiuiLiveActivitiesService();
     final provider = context.read<TimetableProvider>();
-    final ok = await service.saveHyperFocusTemplates(map);
-    await _persistTemplatesToSettings(provider, map);
+
+    final merged = <String, String>{};
+    final settingsJson = provider.settings.hfTemplatesJson;
+    if (settingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+        for (final entry in decoded.entries) {
+          if (entry.value is String) {
+            merged[entry.key] = entry.value as String;
+          }
+        }
+      } catch (_) {
+        // 解析失败则回退 Kotlin prefs 迁移
+      }
+    }
+    if (merged.isEmpty) {
+      merged.addAll(await service.loadHyperFocusTemplates());
+    }
+
+    for (final key in _defaultTemplates.keys) {
+      merged[key] = _controllers[key]?.text ?? _defaultTemplates[key]!;
+    }
+
+    final ok = await service.saveHyperFocusTemplates(merged);
+    await _persistTemplatesToSettings(provider, merged);
     if (!mounted) return;
     showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
   }
