@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../logging/app_debug_log.dart';
 import '../logging/app_log_messages.dart';
 import '../models/course.dart';
 import '../models/holiday_entry.dart';
@@ -1824,24 +1825,75 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
         HyperosListTile(
           icon: Icons.science_outlined,
           title: '测试',
+          details: '发送课前/课中/课后阶段的超级岛测试通知',
           onTap: () async {
-            final provider = context.read<TimetableProvider>();
-            await provider.initialize();
-            final selection = provider.getTestLiveActivityCourseSelection();
-            final course = selection?.currentCourse;
-            final service = MiuiLiveActivitiesService();
-            final ok = await service.sendTestFocusNotification(
-              courseName: course?.name,
-              startTime: course?.startTime,
-              endTime: course?.endTime,
-              location: (course?.location?.isNotEmpty == true) ? course!.location : null,
-              teacher: (course?.teacher?.isNotEmpty == true) ? course!.teacher : null,
-            );
-            if (!context.mounted) return;
-            showHyperosSnackBar(
-              context,
-              message: ok ? '测试焦点通知已发送' : '发送测试焦点通知失败',
-            );
+            try {
+              final stage = await showModalBottomSheet<String>(
+                context: context,
+                builder: (sheetContext) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          '选择测试阶段',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.alarm),
+                        title: const Text('课前 5 分钟'),
+                        subtitle: const Text('倒计时到上课，验证提醒模板'),
+                        onTap: () => Navigator.pop(sheetContext, 'pre'),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.school),
+                        title: const Text('课中'),
+                        subtitle: const Text('上课中，倒计时到下课'),
+                        onTap: () => Navigator.pop(sheetContext, 'active'),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.flag),
+                        title: const Text('课后'),
+                        subtitle: const Text('已下课，无倒计时，验证课后模板'),
+                        onTap: () => Navigator.pop(sheetContext, 'post'),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              );
+              if (stage == null) return;
+              appDebugLog('MiuiLive', '测试阶段：$stage');
+              final provider = context.read<TimetableProvider>();
+              await provider.initialize();
+              final selection = provider.getTestLiveActivityCourseSelection();
+              final course = selection?.currentCourse;
+              appDebugLog('MiuiLive', '测试课程：${course?.name}');
+              final service = MiuiLiveActivitiesService();
+              final error = await service.sendTestFocusNotification(
+                courseName: course?.name,
+                startTime: course?.startTime,
+                endTime: course?.endTime,
+                location: (course?.location?.isNotEmpty == true) ? course!.location : null,
+                teacher: (course?.teacher?.isNotEmpty == true) ? course!.teacher : null,
+                stage: stage,
+              );
+              appDebugLog('MiuiLive', '发送结果：${error ?? '成功'}');
+              if (!context.mounted) return;
+              showHyperosSnackBar(
+                context,
+                message: error == null ? '测试焦点通知已发送' : error,
+              );
+            } catch (e, stackTrace) {
+              appDebugLog('MiuiLive', '测试发送流程异常：$e\n$stackTrace');
+              if (!context.mounted) return;
+              showHyperosSnackBar(
+                context,
+                message: '发送异常：$e',
+              );
+            }
           },
         ),
       ],

@@ -628,14 +628,15 @@ class MiuiLiveActivitiesService {
     }
   }
 
-  Future<bool> sendTestFocusNotification({
+  Future<String?> sendTestFocusNotification({
     String? courseName,
     String? startTime,
     String? endTime,
     String? location,
     String? teacher,
+    String stage = 'pre',
   }) async {
-    if (!Platform.isAndroid) return false;
+    if (!Platform.isAndroid) return '非 Android 设备';
     try {
       await _channel.invokeMethod('sendTestFocus', {
         if (courseName != null) 'courseName': courseName,
@@ -643,11 +644,12 @@ class MiuiLiveActivitiesService {
         if (endTime != null) 'endTime': endTime,
         if (location != null) 'location': location,
         if (teacher != null) 'teacher': teacher,
+        'stage': stage,
       });
-      return true;
+      return null;
     } catch (e) {
       appDebugLog('MiuiLive', '发送测试焦点通知失败：$e');
-      return false;
+      return '发送失败：$e';
     }
   }
 
@@ -776,13 +778,14 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
   }
 
   @override
-  Future<bool> sendTestFocusNotification({
+  Future<String?> sendTestFocusNotification({
     String? courseName,
     String? startTime,
     String? endTime,
     String? location,
     String? teacher,
+    String stage = 'pre',
   }) async {
-    return true;
+    return null;
   }
 }

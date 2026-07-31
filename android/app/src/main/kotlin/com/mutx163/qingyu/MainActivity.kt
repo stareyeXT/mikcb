@@ -407,8 +407,12 @@ class MainActivity : FlutterActivity() {
 
                     "sendTestFocus" -> {
                         val args = call.arguments as? Map<String, String>
-                        sendTestFocusNotification(args)
-                        result.success(true)
+                        val failure = sendTestFocusNotification(args)
+                        if (failure == null) {
+                            result.success(true)
+                        } else {
+                            result.error("SEND_TEST_FOCUS_FAILED", failure, null)
+                        }
                     }
 
                     "saveHyperFocusTemplates" -> {
@@ -1102,18 +1106,80 @@ class MainActivity : FlutterActivity() {
         return powerManager?.isIgnoringBatteryOptimizations(packageName) == true
     }
 
-    private fun sendTestFocusNotification(args: Map<String, String>?) {
-        try {
+    private fun sendTestFocusNotification(args: Map<String, String>?): String? {
+        return try {
             val courseName = args?.get("courseName") ?: "高等数学"
+            val shortName = args?.get("shortName") ?: courseName
             val startTime = args?.get("startTime") ?: "08:00"
             val endTime = args?.get("endTime") ?: "09:40"
             val location = args?.get("location") ?: "教科A-101"
             val teacher = args?.get("teacher") ?: ""
+            val stage = args?.get("stage") ?: "pre"
+            Log.d("HyperFocusApi", "sendTestFocus stage=$stage")
+
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!notificationManager.areNotificationsEnabled()) {
+                Log.e("HyperFocusApi", "notifications disabled")
+                return "系统通知权限未开启，请先在设置中开启通知权限"
+            }
 
             val now = System.currentTimeMillis()
-            val startAt = now + 60_000L
-            val endAt = startAt + 100 * 60_000L
-            val timeRange = "$startTime - $endTime"
+            val templateStage = when (stage) {
+                "active", "beforeEnd" -> "active"
+                "post" -> "post"
+                else -> "pre"
+            }
+            val classStartAt: Long
+            val classEndAt: Long
+            val timerTarget: Long
+            val hintText: String
+            when (templateStage) {
+                "active" -> {
+                    classStartAt = now - 10 * 60_000L
+                    classEndAt = now + 5 * 60_000L
+                    timerTarget = classEndAt
+                    hintText = "距下课还有 5 分钟"
+                }
+                "post" -> {
+                    classStartAt = now - 20 * 60_000L
+                    classEndAt = now - 60_000L
+                    timerTarget = 0L
+                    hintText = "已下课"
+                }
+                else -> {
+                    classStartAt = now + 5 * 60_000L
+                    classEndAt = classStartAt + 100 * 60_000L
+                    timerTarget = classStartAt
+                    hintText = "距离上课还有 5 分钟"
+                }
+            }
+
+            val templates = loadHyperFocusTemplates(this)
+
+            val countdownText = formatCountdownForTemplate(kotlin.math.max(0L, timerTarget - now))
+            val elapsedText = formatElapsedForTemplate(kotlin.math.max(0L, now - timerTarget))
+
+            val r = { tpl: String ->
+                resolveTemplate(
+                    tpl = tpl,
+                    courseName = courseName,
+                    shortName = shortName,
+                    location = location,
+                    teacher = teacher,
+                    startTime = startTime,
+                    endTime = endTime,
+                    countdownText = countdownText,
+                    elapsedText = elapsedText,
+                )
+            }
+
+            val tickerText = r(templates["ticker_$templateStage"] ?: "")
+            val islandAText = r(templates["islandA_$templateStage"] ?: "")
+            val islandBText = r(templates["islandB_$templateStage"] ?: "")
+            val baseTitleText = r(templates["baseTitle_$templateStage"] ?: "")
+            val baseContentText = r(templates["baseContent_$templateStage"] ?: "")
+            val baseSubcontentText = r(templates["baseSubcontent_$templateStage"] ?: "")
+            val hintTitleText = r(templates["hintTitle_$templateStage"] ?: "")
 
             val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1122,21 +1188,22 @@ class MainActivity : FlutterActivity() {
             }
             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
 
+            val hasTimer = timerTarget > 0L && timerTarget > now
             val extras = FocusNotification.buildV3 {
                 business = "course_schedule"
                 updatable = true
                 enableFloat = true
-                ticker = "即将上课：$courseName"
-                aodTitle = "即将上课：$courseName"
+                ticker = tickerText
+                aodTitle = tickerText
                 islandFirstFloat = true
                 outEffectSrc = "outer_glow"
 
                 baseInfo {
                     type = 2
-                    title = courseName
-                    content = timeRange
-                    subContent = location
-                    showDivider = true
+                    title = baseTitleText
+                    content = baseContentText
+                    subContent = baseSubcontentText
+                    showDivider = baseSubcontentText.isNotBlank()
                 }
 
                 picInfo {
@@ -1145,13 +1212,15 @@ class MainActivity : FlutterActivity() {
 
                 hintInfo {
                     type = 2
-                    title = "即将上课"
-                    content = "距离上课还有 5 分钟"
+                    title = hintTitleText
+                    content = hintText
 
-                    timerInfo {
-                        timerType = -1
-                        timerWhen = startAt
-                        timerSystemCurrent = now
+                    if (hasTimer) {
+                        timerInfo {
+                            timerType = -1
+                            timerWhen = timerTarget
+                            timerSystemCurrent = now
+                        }
                     }
 
                     actionInfo {
@@ -1169,7 +1238,7 @@ class MainActivity : FlutterActivity() {
                         imageTextInfoLeft {
                             type = 1
                             textInfo {
-                                title = courseName
+                                title = islandAText
                                 showHighlightColor = true
                             }
                             picInfo {
@@ -1177,15 +1246,23 @@ class MainActivity : FlutterActivity() {
                             }
                         }
 
-                        sameWidthDigitInfo {
-                            timerInfo {
-                                timerType = -1
-                                timerWhen = startAt
-                                timerSystemCurrent = now
+                        if (hasTimer) {
+                            sameWidthDigitInfo {
+                                timerInfo {
+                                    timerType = -1
+                                    timerWhen = timerTarget
+                                    timerSystemCurrent = now
+                                }
+                                content = islandBText
+                                turnAnim = true
+                                showHighlightColor = true
                             }
-                            content = "上课"
-                            turnAnim = true
-                            showHighlightColor = true
+                        } else {
+                            sameWidthDigitInfo {
+                                content = islandBText
+                                turnAnim = true
+                                showHighlightColor = true
+                            }
                         }
                     }
 
@@ -1202,23 +1279,41 @@ class MainActivity : FlutterActivity() {
             extras.putString("miui.effect.src", "outer_glow")
 
             val testChannelId = "hyperfocus_test_channel"
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(
                 NotificationChannel(testChannelId, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
             )
+            val channel = notificationManager.getNotificationChannel(testChannelId)
+            if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
+                return "测试通知渠道已被关闭，请在系统通知设置中恢复该渠道"
+            }
 
             val notification = Notification.Builder(this, testChannelId)
-                .setContentTitle(courseName)
-                .setContentText(timeRange)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(baseTitleText.ifBlank { courseName })
+                .setContentText(baseContentText.ifBlank { "查看课表" })
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setOngoing(true)
                 .setAutoCancel(false)
                 .addExtras(extras)
                 .build()
 
             notificationManager.notify(10001, notification)
+            Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+            null
         } catch (e: Exception) {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)
+            UmengDiagnosticReporter.report(
+                context = applicationContext,
+                category = "send_test_focus_failed",
+                message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_START_FAILED,
+                throwable = e,
+                dedupeKey = "send_test_focus_failed",
+                extras = mapOf(
+                    "courseName" to (args?.get("courseName") ?: "高等数学"),
+                    "stage" to (args?.get("stage") ?: "pre"),
+                )
+            )
+            "发送异常：${e.message ?: e.javaClass.simpleName}"
         }
     }
 
@@ -2955,119 +3050,6 @@ class LiveUpdateService : Service() {
         }
     }
 
-    // ── HyperFocus Template System ──────────────────────────────────────
-
-    private val hfDefaultTemplates = mapOf(
-        "ticker_pre" to "课名",
-        "ticker_active" to "课名",
-        "ticker_post" to "课名",
-        "islandA_pre" to "教室",
-        "islandA_active" to "短课名",
-        "islandA_post" to "短课名",
-        "islandB_pre" to "",
-        "islandB_active" to "上课中",
-        "islandB_post" to "已下课",
-        "baseTitle_pre" to "课名",
-        "baseTitle_active" to "课名",
-        "baseTitle_post" to "课名",
-        "baseContent_pre" to "开始,结束",
-        "baseContent_active" to "开始,结束",
-        "baseContent_post" to "开始,结束",
-        "baseSubcontent_pre" to "教室",
-        "baseSubcontent_active" to "教室",
-        "baseSubcontent_post" to "教室",
-        "hintTitle_pre" to "",
-        "hintTitle_active" to "上课中",
-        "hintTitle_post" to "已下课",
-    )
-
-    private fun loadHyperFocusTemplates(): Map<String, String> {
-        val json = getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
-            .getString("templates_json", null) ?: return hfDefaultTemplates
-        return try {
-            val obj = org.json.JSONObject(json)
-            for (key in obj.keys()) {
-                val v = obj.optString(key, "")
-                if (v.contains("{")) {
-                    return hfDefaultTemplates
-                }
-            }
-            val merged = hfDefaultTemplates.toMutableMap()
-            for (key in obj.keys()) {
-                merged[key] = obj.optString(key, hfDefaultTemplates[key] ?: "")
-            }
-            merged
-        } catch (_: Exception) {
-            hfDefaultTemplates
-        }
-    }
-
-    private fun resolveTemplate(
-        tpl: String,
-        courseName: String,
-        shortName: String,
-        location: String,
-        teacher: String,
-        startTime: String,
-        endTime: String,
-        countdownText: String,
-        elapsedText: String,
-    ): String {
-        if (tpl.contains("{")) {
-            var result = tpl
-            result = result.replace("{课名}", courseName)
-            result = result.replace("{短课名}", shortName.ifBlank { courseName })
-            result = result.replace("{教室}", location.ifBlank { courseName })
-            result = result.replace("{教师}", teacher)
-            result = result.replace("{开始}", startTime)
-            result = result.replace("{结束}", endTime)
-            result = result.replace("{倒计时}", countdownText)
-            result = result.replace("{正计时}", elapsedText)
-            return result
-        }
-        val variableMap = mapOf(
-            "课名" to courseName,
-            "短课名" to shortName.ifBlank { courseName },
-            "教室" to location.ifBlank { courseName },
-            "教师" to teacher,
-            "开始" to startTime,
-            "结束" to endTime,
-            "倒计时" to countdownText,
-            "正计时" to elapsedText,
-        )
-        return tpl.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { variableMap[it] ?: "" }
-            .filter { it.isNotEmpty() }
-            .joinToString(" ")
-    }
-
-    private fun formatCountdownForTemplate(millis: Long): String {
-        if (millis <= 0) return "00:00"
-        val totalSeconds = millis / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        return if (hours > 0) {
-            "%d:%02d:%02d".format(hours, minutes, seconds)
-        } else {
-            "%02d:%02d".format(minutes, seconds)
-        }
-    }
-
-    private fun formatElapsedForTemplate(millis: Long): String {
-        val totalSeconds = millis / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        return if (hours > 0) {
-            "%d:%02d:%02d".format(hours, minutes, seconds)
-        } else {
-            "%02d:%02d".format(minutes, seconds)
-        }
-    }
-
     private fun buildHyperFocusBundle(
         stage: String?,
         remainingText: String,
@@ -3080,10 +3062,13 @@ class LiveUpdateService : Service() {
             else -> "active"
         }
         val targetTimerWhen = if (stageKey == "pre") startAtMillis else endAtMillis
-        if (targetTimerWhen <= now) return null
+        val expired = targetTimerWhen <= now
+        if (expired) {
+            return buildHyperFocusDismissBundle()
+        }
 
         return try {
-            val templates = loadHyperFocusTemplates()
+            val templates = loadHyperFocusTemplates(this)
 
             val countdownDiff = kotlin.math.max(0L, targetTimerWhen - now)
             val elapsedDiff = kotlin.math.max(0L, now - targetTimerWhen)
@@ -3147,7 +3132,7 @@ class LiveUpdateService : Service() {
 
                     timerInfo {
                         timerType = -1
-                        timerWhen = targetTimerWhen
+                                timerWhen = targetTimerWhen
                         timerSystemCurrent = now
                     }
 
@@ -3177,7 +3162,7 @@ class LiveUpdateService : Service() {
                         sameWidthDigitInfo {
                             timerInfo {
                                 timerType = -1
-                                timerWhen = targetTimerWhen
+                    timerWhen = targetTimerWhen
                                 timerSystemCurrent = now
                             }
                             content = islandBText
@@ -3201,6 +3186,45 @@ class LiveUpdateService : Service() {
             extras
         } catch (e: Exception) {
             Log.e(TAG, "buildHyperFocusBundle failed", e)
+            null
+        }
+
+    }
+
+    private fun buildHyperFocusDismissBundle(): Bundle? {
+        return try {
+            FocusNotification.buildV3 {
+                business = "course_schedule"
+                updatable = false
+                enableFloat = false
+                ticker = ""
+                aodTitle = ""
+
+                baseInfo {
+                    type = 2
+                    title = courseName.ifBlank { "" }
+                    content = ""
+                    subContent = ""
+                }
+                picInfo { type = 1 }
+                hintInfo {
+                    type = 2
+                    title = ""
+                    content = ""
+                }
+                island {
+                    islandProperty = 0
+                    islandTimeout = 0
+                    bigIslandArea { }
+                    smallIslandArea { }
+                    shareData {
+                        title = ""
+                        content = ""
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "buildHyperFocusDismissBundle failed", e)
             null
         }
     }
@@ -4286,5 +4310,118 @@ class LiveUpdateService : Service() {
             else -> 60_000L
         }
         return stageDelay.coerceIn(1_000L, 60_000L)
+    }
+}
+
+// ── HyperFocus Template System (top-level, shared by MainActivity and LiveUpdateService) ──
+
+internal val hfDefaultTemplates = mapOf(
+    "ticker_pre" to "课名",
+    "ticker_active" to "课名",
+    "ticker_post" to "课名",
+    "islandA_pre" to "教室",
+    "islandA_active" to "短课名",
+    "islandA_post" to "短课名",
+    "islandB_pre" to "",
+    "islandB_active" to "上课中",
+    "islandB_post" to "已下课",
+    "baseTitle_pre" to "课名",
+    "baseTitle_active" to "课名",
+    "baseTitle_post" to "课名",
+    "baseContent_pre" to "开始,结束",
+    "baseContent_active" to "开始,结束",
+    "baseContent_post" to "开始,结束",
+    "baseSubcontent_pre" to "教室",
+    "baseSubcontent_active" to "教室",
+    "baseSubcontent_post" to "教室",
+    "hintTitle_pre" to "",
+    "hintTitle_active" to "上课中",
+    "hintTitle_post" to "已下课",
+)
+
+internal fun loadHyperFocusTemplates(context: Context): Map<String, String> {
+    val json = context.getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
+        .getString("templates_json", null) ?: return hfDefaultTemplates
+    return try {
+        val obj = org.json.JSONObject(json)
+        for (key in obj.keys()) {
+            val v = obj.optString(key, "")
+            if (v.contains("{")) {
+                return hfDefaultTemplates
+            }
+        }
+        val merged = hfDefaultTemplates.toMutableMap()
+        for (key in obj.keys()) {
+            merged[key] = obj.optString(key, hfDefaultTemplates[key] ?: "")
+        }
+        merged
+    } catch (_: Exception) {
+        hfDefaultTemplates
+    }
+}
+
+internal fun resolveTemplate(
+    tpl: String,
+    courseName: String,
+    shortName: String,
+    location: String,
+    teacher: String,
+    startTime: String,
+    endTime: String,
+    countdownText: String,
+    elapsedText: String,
+): String {
+    if (tpl.contains("{")) {
+        var result = tpl
+        result = result.replace("{课名}", courseName)
+        result = result.replace("{短课名}", shortName.ifBlank { courseName })
+        result = result.replace("{教室}", location.ifBlank { courseName })
+        result = result.replace("{教师}", teacher)
+        result = result.replace("{开始}", startTime)
+        result = result.replace("{结束}", endTime)
+        result = result.replace("{倒计时}", countdownText)
+        result = result.replace("{正计时}", elapsedText)
+        return result
+    }
+    val variableMap = mapOf(
+        "课名" to courseName,
+        "短课名" to shortName.ifBlank { courseName },
+        "教室" to location.ifBlank { courseName },
+        "教师" to teacher,
+        "开始" to startTime,
+        "结束" to endTime,
+        "倒计时" to countdownText,
+        "正计时" to elapsedText,
+    )
+    return tpl.split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { variableMap[it] ?: "" }
+        .filter { it.isNotEmpty() }
+        .joinToString(" ")
+}
+
+internal fun formatCountdownForTemplate(millis: Long): String {
+    if (millis <= 0) return "00:00"
+    val totalSeconds = millis / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
+    }
+}
+
+internal fun formatElapsedForTemplate(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
     }
 }
