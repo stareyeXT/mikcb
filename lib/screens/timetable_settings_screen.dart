@@ -1795,7 +1795,7 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
         HyperosListTile(
           icon: Icons.upcoming_outlined,
           title: '显示设置',
-          details: '课名: ${_draft.hfShowCourseName ? "开" : "关"} 地点: ${_draft.hfShowLocation ? "开" : "关"} 倒计时: ${_draft.hfShowCountdown ? "开" : "关"}',
+          details: '图标: ${_draft.hfIconAEnabled ? "开" : "关"}',
           onTap: () async {
             await HyperosNavigation.push(
               context,

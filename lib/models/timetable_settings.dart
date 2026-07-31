@@ -1080,12 +1080,16 @@ class TimetableSettings {
   final int liveEndSecondsCountdownThreshold;
   final int liveTimeCorrectionSeconds;
   final SuperIslandEngine superIslandEngine;
-  final bool hfShowCourseName;
-  final bool hfShowLocation;
-  final bool hfShowCountdown;
-  final String hfCustomTitle;
-  final String hfCustomTitleColor;
   final String hfTemplatesJson;
+  final int hfIslandTimeoutPre;
+  final int hfIslandTimeoutActive;
+  final int hfIslandTimeoutPost;
+  final bool hfIconAEnabled;
+  final String hfStatusTextColor;
+  final bool hfOutEffectStatusEnabled;
+  final String hfOutEffectStatusColor;
+  final bool hfOutEffectExpandEnabled;
+  final String hfOutEffectExpandColor;
   final LiveBeforeClassQuickAction liveBeforeClassQuickAction;
   final String themeSeedColor;
   final ForuiTheme foruiTheme;
@@ -1237,12 +1241,16 @@ class TimetableSettings {
     this.liveTimeCorrectionSeconds = 0,
     this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
     this.superIslandEngine = SuperIslandEngine.hyperFocusApi,
-    this.hfShowCourseName = true,
-    this.hfShowLocation = true,
-    this.hfShowCountdown = true,
-    this.hfCustomTitle = '',
-    this.hfCustomTitleColor = '#FFFFFF',
     this.hfTemplatesJson = '',
+    this.hfIslandTimeoutPre = 300,
+    this.hfIslandTimeoutActive = 600,
+    this.hfIslandTimeoutPost = 600,
+    this.hfIconAEnabled = true,
+    this.hfStatusTextColor = '#FFFFFFFF',
+    this.hfOutEffectStatusEnabled = true,
+    this.hfOutEffectStatusColor = '#FFFFFFFF',
+    this.hfOutEffectExpandEnabled = true,
+    this.hfOutEffectExpandColor = '#FFFFFFFF',
     this.themeSeedColor = '#2563EB',
     this.foruiTheme = ForuiTheme.blue,
     this.timetablePageBackgroundColor = '#F8FAFC',
@@ -1548,12 +1556,16 @@ class TimetableSettings {
       'liveTimeCorrectionSeconds': liveTimeCorrectionSeconds,
       'liveBeforeClassQuickAction': liveBeforeClassQuickAction.value,
       'superIslandEngine': superIslandEngine.value,
-      'hfShowCourseName': hfShowCourseName,
-      'hfShowLocation': hfShowLocation,
-      'hfShowCountdown': hfShowCountdown,
-      'hfCustomTitle': hfCustomTitle,
-      'hfCustomTitleColor': hfCustomTitleColor,
       'hfTemplatesJson': hfTemplatesJson,
+      'hfIslandTimeoutPre': hfIslandTimeoutPre,
+      'hfIslandTimeoutActive': hfIslandTimeoutActive,
+      'hfIslandTimeoutPost': hfIslandTimeoutPost,
+      'hfIconAEnabled': hfIconAEnabled,
+      'hfStatusTextColor': hfStatusTextColor,
+      'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled,
+      'hfOutEffectStatusColor': hfOutEffectStatusColor,
+      'hfOutEffectExpandEnabled': hfOutEffectExpandEnabled,
+      'hfOutEffectExpandColor': hfOutEffectExpandColor,
       'themeSeedColor': themeSeedColor,
       'foruiTheme': foruiTheme.value,
       'timetablePageBackgroundColor': timetablePageBackgroundColor,
@@ -1870,12 +1882,21 @@ class TimetableSettings {
       superIslandEngine: SuperIslandEngineX.fromValue(
         json['superIslandEngine'] as String?,
       ),
-      hfShowCourseName: json['hfShowCourseName'] as bool? ?? true,
-      hfShowLocation: json['hfShowLocation'] as bool? ?? true,
-      hfShowCountdown: json['hfShowCountdown'] as bool? ?? true,
-      hfCustomTitle: json['hfCustomTitle'] as String? ?? '',
-      hfCustomTitleColor: json['hfCustomTitleColor'] as String? ?? '#FFFFFF',
       hfTemplatesJson: json['hfTemplatesJson'] as String? ?? '',
+      hfIslandTimeoutPre: (json['hfIslandTimeoutPre'] as num?)?.toInt() ?? 300,
+      hfIslandTimeoutActive:
+          (json['hfIslandTimeoutActive'] as num?)?.toInt() ?? 600,
+      hfIslandTimeoutPost: (json['hfIslandTimeoutPost'] as num?)?.toInt() ?? 600,
+      hfIconAEnabled: json['hfIconAEnabled'] as bool? ?? true,
+      hfStatusTextColor: json['hfStatusTextColor'] as String? ?? '#FFFFFFFF',
+      hfOutEffectStatusEnabled:
+          json['hfOutEffectStatusEnabled'] as bool? ?? true,
+      hfOutEffectStatusColor:
+          json['hfOutEffectStatusColor'] as String? ?? '#FFFFFFFF',
+      hfOutEffectExpandEnabled:
+          json['hfOutEffectExpandEnabled'] as bool? ?? true,
+      hfOutEffectExpandColor:
+          json['hfOutEffectExpandColor'] as String? ?? '#FFFFFFFF',
       themeSeedColor: json['themeSeedColor'] as String? ?? '#2563EB',
       foruiTheme: ForuiThemeX.fromValue(json['foruiTheme'] as String?),
       timetablePageBackgroundColor:
@@ -2087,12 +2108,16 @@ class TimetableSettings {
     int? liveTimeCorrectionSeconds,
     LiveBeforeClassQuickAction? liveBeforeClassQuickAction,
     SuperIslandEngine? superIslandEngine,
-    bool? hfShowCourseName,
-    bool? hfShowLocation,
-    bool? hfShowCountdown,
-    String? hfCustomTitle,
-    String? hfCustomTitleColor,
     String? hfTemplatesJson,
+    int? hfIslandTimeoutPre,
+    int? hfIslandTimeoutActive,
+    int? hfIslandTimeoutPost,
+    bool? hfIconAEnabled,
+    String? hfStatusTextColor,
+    bool? hfOutEffectStatusEnabled,
+    String? hfOutEffectStatusColor,
+    bool? hfOutEffectExpandEnabled,
+    String? hfOutEffectExpandColor,
     String? themeSeedColor,
     ForuiTheme? foruiTheme,
     String? timetablePageBackgroundColor,
@@ -2345,12 +2370,21 @@ class TimetableSettings {
       liveBeforeClassQuickAction:
           liveBeforeClassQuickAction ?? this.liveBeforeClassQuickAction,
       superIslandEngine: superIslandEngine ?? this.superIslandEngine,
-      hfShowCourseName: hfShowCourseName ?? this.hfShowCourseName,
-      hfShowLocation: hfShowLocation ?? this.hfShowLocation,
-      hfShowCountdown: hfShowCountdown ?? this.hfShowCountdown,
-      hfCustomTitle: hfCustomTitle ?? this.hfCustomTitle,
-      hfCustomTitleColor: hfCustomTitleColor ?? this.hfCustomTitleColor,
       hfTemplatesJson: hfTemplatesJson ?? this.hfTemplatesJson,
+      hfIslandTimeoutPre: hfIslandTimeoutPre ?? this.hfIslandTimeoutPre,
+      hfIslandTimeoutActive:
+          hfIslandTimeoutActive ?? this.hfIslandTimeoutActive,
+      hfIslandTimeoutPost: hfIslandTimeoutPost ?? this.hfIslandTimeoutPost,
+      hfIconAEnabled: hfIconAEnabled ?? this.hfIconAEnabled,
+      hfStatusTextColor: hfStatusTextColor ?? this.hfStatusTextColor,
+      hfOutEffectStatusEnabled:
+          hfOutEffectStatusEnabled ?? this.hfOutEffectStatusEnabled,
+      hfOutEffectStatusColor:
+          hfOutEffectStatusColor ?? this.hfOutEffectStatusColor,
+      hfOutEffectExpandEnabled:
+          hfOutEffectExpandEnabled ?? this.hfOutEffectExpandEnabled,
+      hfOutEffectExpandColor:
+          hfOutEffectExpandColor ?? this.hfOutEffectExpandColor,
       themeSeedColor: themeSeedColor ?? this.themeSeedColor,
       foruiTheme: foruiTheme ?? this.foruiTheme,
       timetablePageBackgroundColor:
