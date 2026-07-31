@@ -3507,27 +3507,6 @@ class AppLocalizationsKo extends AppLocalizations {
   }
 
   @override
-  String get hfTestingStageSheetTitle => '테스트 단계 선택';
-
-  @override
-  String get hfTestingStagePreTitle => '수업 5분 전';
-
-  @override
-  String get hfTestingStagePreSubtitle => '수업 시작까지 카운트다운. 알림 템플릿을 검증합니다';
-
-  @override
-  String get hfTestingStageActiveTitle => '수업 중';
-
-  @override
-  String get hfTestingStageActiveSubtitle => '수업 중. 수업 종료까지 카운트다운';
-
-  @override
-  String get hfTestingStagePostTitle => '수업 후';
-
-  @override
-  String get hfTestingStagePostSubtitle => '수업 종료. 카운트다운 없음. 수업 후 템플릿을 검증합니다';
-
-  @override
   String get hfTestingEntryDetails => '수업 전/중/후 테스트 알림 전송 및 슈퍼아일랜드 진단 상태 확인';
 
   @override

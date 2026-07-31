@@ -6357,48 +6357,6 @@ abstract class AppLocalizations {
   /// **'上次测试：{time}'**
   String hfTestingLastTestAt(Object time);
 
-  /// No description provided for @hfTestingStageSheetTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'选择测试阶段'**
-  String get hfTestingStageSheetTitle;
-
-  /// No description provided for @hfTestingStagePreTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'课前 5 分钟'**
-  String get hfTestingStagePreTitle;
-
-  /// No description provided for @hfTestingStagePreSubtitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'倒计时到上课，验证提醒模板'**
-  String get hfTestingStagePreSubtitle;
-
-  /// No description provided for @hfTestingStageActiveTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'课中'**
-  String get hfTestingStageActiveTitle;
-
-  /// No description provided for @hfTestingStageActiveSubtitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'上课中，倒计时到下课'**
-  String get hfTestingStageActiveSubtitle;
-
-  /// No description provided for @hfTestingStagePostTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'课后'**
-  String get hfTestingStagePostTitle;
-
-  /// No description provided for @hfTestingStagePostSubtitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'已下课，无倒计时，验证课后模板'**
-  String get hfTestingStagePostSubtitle;
-
   /// No description provided for @hfTestingEntryDetails.
   ///
   /// In zh, this message translates to:

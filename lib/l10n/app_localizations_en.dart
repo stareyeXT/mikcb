@@ -3654,29 +3654,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get hfTestingStageSheetTitle => 'Choose a test stage';
-
-  @override
-  String get hfTestingStagePreTitle => '5 min before class';
-
-  @override
-  String get hfTestingStagePreSubtitle =>
-      'Countdown to class start; verifies the reminder template';
-
-  @override
-  String get hfTestingStageActiveTitle => 'During class';
-
-  @override
-  String get hfTestingStageActiveSubtitle => 'In class; countdown to class end';
-
-  @override
-  String get hfTestingStagePostTitle => 'After class';
-
-  @override
-  String get hfTestingStagePostSubtitle =>
-      'Class over; no countdown; verifies the after-class template';
-
-  @override
   String get hfTestingEntryDetails =>
       'Send before/during/after-class test notifications and view HyperFocus diagnostics';
 

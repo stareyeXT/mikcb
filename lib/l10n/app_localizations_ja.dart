@@ -3487,27 +3487,6 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get hfTestingStageSheetTitle => 'テスト段階を選択';
-
-  @override
-  String get hfTestingStagePreTitle => '授業前 5 分';
-
-  @override
-  String get hfTestingStagePreSubtitle => '授業開始までのカウントダウン。リマインダーテンプレートを検証します';
-
-  @override
-  String get hfTestingStageActiveTitle => '授業中';
-
-  @override
-  String get hfTestingStageActiveSubtitle => '授業中。授業終了までのカウントダウン';
-
-  @override
-  String get hfTestingStagePostTitle => '授業後';
-
-  @override
-  String get hfTestingStagePostSubtitle => '授業終了。カウントダウンなし。授業後テンプレートを検証します';
-
-  @override
   String get hfTestingEntryDetails =>
       '授業前/授業中/授業後のテスト通知を送信し、スーパーアイランドの診断状態を確認します';
 

@@ -3433,27 +3433,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get hfTestingStageSheetTitle => '选择测试阶段';
-
-  @override
-  String get hfTestingStagePreTitle => '课前 5 分钟';
-
-  @override
-  String get hfTestingStagePreSubtitle => '倒计时到上课，验证提醒模板';
-
-  @override
-  String get hfTestingStageActiveTitle => '课中';
-
-  @override
-  String get hfTestingStageActiveSubtitle => '上课中，倒计时到下课';
-
-  @override
-  String get hfTestingStagePostTitle => '课后';
-
-  @override
-  String get hfTestingStagePostSubtitle => '已下课，无倒计时，验证课后模板';
-
-  @override
   String get hfTestingEntryDetails => '发送课前/课中/课后测试通知、查看超级岛诊断状态';
 
   @override
@@ -11552,27 +11531,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String hfTestingLastTestAt(Object time) {
     return '上次測試：$time';
   }
-
-  @override
-  String get hfTestingStageSheetTitle => '選擇測試階段';
-
-  @override
-  String get hfTestingStagePreTitle => '課前 5 分鐘';
-
-  @override
-  String get hfTestingStagePreSubtitle => '倒數到上課，驗證提醒範本';
-
-  @override
-  String get hfTestingStageActiveTitle => '課中';
-
-  @override
-  String get hfTestingStageActiveSubtitle => '上課中，倒數到下課';
-
-  @override
-  String get hfTestingStagePostTitle => '課後';
-
-  @override
-  String get hfTestingStagePostSubtitle => '已下課，無倒數，驗證課後範本';
 
   @override
   String get hfTestingEntryDetails => '發送課前/課中/課後測試通知、查看超級島診斷狀態';
@@ -19680,27 +19638,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String hfTestingLastTestAt(Object time) {
     return '上次測試：$time';
   }
-
-  @override
-  String get hfTestingStageSheetTitle => '選擇測試階段';
-
-  @override
-  String get hfTestingStagePreTitle => '課前 5 分鐘';
-
-  @override
-  String get hfTestingStagePreSubtitle => '倒數計時到上課，驗證提醒範本';
-
-  @override
-  String get hfTestingStageActiveTitle => '課中';
-
-  @override
-  String get hfTestingStageActiveSubtitle => '上課中，倒數計時到下課';
-
-  @override
-  String get hfTestingStagePostTitle => '課後';
-
-  @override
-  String get hfTestingStagePostSubtitle => '已下課，無倒數計時，驗證課後範本';
 
   @override
   String get hfTestingEntryDetails => '發送課前/課中/課後測試通知、查看超級島診斷狀態';

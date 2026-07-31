@@ -148,7 +148,7 @@ void main() {
   );
 
   _testOnAndroid(
-    'hyper focus testing screen opens stage sheet and sends test',
+    'hyper focus testing screen sends test with scheduled stage',
     (tester) async {
       String? sentStage;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -165,6 +165,7 @@ void main() {
                     'schedulerReady': true,
                     'hasLastTestResult': false,
                   },
+                  'scheduling': {'nextTriggerStage': 'active'},
                 };
               case 'sendTestFocus':
                 sentStage = (call.arguments as Map)['stage'] as String?;
@@ -177,8 +178,6 @@ void main() {
       await _pumpToTestingEntry(tester);
 
       await tester.tap(find.text('发送测试通知'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('课中'));
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );

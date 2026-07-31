@@ -2931,47 +2931,12 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
   }
 
   Future<void> _sendTestNotification() async {
-    final l10n = AppLocalizations.of(context)!;
-    final stage = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                l10n.hfTestingStageSheetTitle,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.alarm),
-              title: Text(l10n.hfTestingStagePreTitle),
-              subtitle: Text(l10n.hfTestingStagePreSubtitle),
-              onTap: () => Navigator.pop(sheetContext, 'pre'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.school),
-              title: Text(l10n.hfTestingStageActiveTitle),
-              subtitle: Text(l10n.hfTestingStageActiveSubtitle),
-              onTap: () => Navigator.pop(sheetContext, 'active'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.flag),
-              title: Text(l10n.hfTestingStagePostTitle),
-              subtitle: Text(l10n.hfTestingStagePostSubtitle),
-              onTap: () => Navigator.pop(sheetContext, 'post'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (stage == null || !mounted) return;
+    final scheduledStage = _debugStatus?['scheduling']?['nextTriggerStage'];
+    final stage = switch (scheduledStage) {
+      'pre' || 'active' || 'post' => scheduledStage as String,
+      _ => 'pre',
+    };
+    if (!mounted) return;
     appDebugLog('MiuiLive', '测试阶段：$stage');
     final provider = context.read<TimetableProvider>();
     await provider.initialize();
