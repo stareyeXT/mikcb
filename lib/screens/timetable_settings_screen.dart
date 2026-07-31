@@ -3025,6 +3025,7 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
         'atMillis': DateTime.now().millisecondsSinceEpoch.toString(),
       },
     );
+    final settings = provider.settings;
     final error = await _hyperFocusService.sendTestFocusNotification(
       courseName: course?.name,
       startTime: course?.startTime,
@@ -3032,6 +3033,15 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
       stage: stage,
+      hfIconAEnabled: settings.hfIconAEnabled,
+      hfStatusTextColor: settings.hfStatusTextColor,
+      hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
+      hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
+      hfOutEffectExpandEnabled: settings.hfOutEffectExpandEnabled,
+      hfOutEffectExpandColor: settings.hfOutEffectExpandColor,
+      hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
+      hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
+      hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
     );
     appDebugLog('MiuiLive', '发送结果：${error ?? '成功'}');
     if (!mounted) return;

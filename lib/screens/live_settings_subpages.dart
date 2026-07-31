@@ -1496,14 +1496,25 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
   ];
 
   late Map<String, TextEditingController> _controllers;
+  late TimetableSettings _draft;
 
   String get _s => _selectedStage;
 
   static const _tabOrder = ['pre', 'active', 'post'];
 
+  static const _glowColors = [
+    '#FFFFFF',
+    '#BFDBFE',
+    '#A7F3D0',
+    '#FDE68A',
+    '#F9A8D4',
+    '#FBCFE8',
+  ];
+
   @override
   void initState() {
     super.initState();
+    _draft = context.read<TimetableProvider>().settings;
     _controllers = {};
     for (final key in ['ticker', 'islandA', 'islandB']) {
       for (final stage in _tabOrder) {
@@ -1512,6 +1523,14 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
       }
     }
     _loadTemplates();
+  }
+
+  void _updateDraft(TimetableSettings next) {
+    setState(() => _draft = next);
+    final provider = context.read<TimetableProvider>();
+    unawaited(
+      provider.updateTimetableSettings(next).then<void>((_) {}).catchError((_) {}),
+    );
   }
 
   Future<void> _loadTemplates() async {
@@ -1543,14 +1562,7 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
       }
     }
     if (migrated) {
-      await _persistTemplatesToSettings(
-        provider,
-        Map.fromEntries(
-          _controllers.entries.map(
-            (e) => MapEntry(e.key, e.value.text),
-          ),
-        ),
-      );
+      await _persistTemplatesToSettings(provider, Map.from(saved));
     }
   }
 
@@ -1704,6 +1716,39 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
                       ),
                     ],
                   ),
+                  const HyperosSectionGap(),
+                  HyperosSectionLabel(text: '岛视觉'),
+                  HyperosListGroup(
+                    children: [
+                      HyperosSwitchTile(
+                        title: '岛A图标',
+                        value: _draft.hfIconAEnabled,
+                        onChanged: (v) =>
+                            _updateDraft(_draft.copyWith(hfIconAEnabled: v)),
+                      ),
+                      HyperosSwitchTile(
+                        title: '发光效果',
+                        value: _draft.hfOutEffectStatusEnabled,
+                        onChanged: (v) => _updateDraft(
+                          _draft.copyWith(hfOutEffectStatusEnabled: v),
+                        ),
+                      ),
+                      if (_draft.hfOutEffectStatusEnabled)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: HyperosHexColorChipGroup(
+                            colorHexes: _glowColors,
+                            selectedHex: _normalizeHexForSelection(
+                              _draft.hfOutEffectStatusColor,
+                            ),
+                            colorParser: _parseColor,
+                            onSelectedHex: (hex) => _updateDraft(
+                              _draft.copyWith(hfOutEffectStatusColor: hex),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1800,14 +1845,7 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
       }
     }
     if (migrated) {
-      await _persistTemplatesToSettings(
-        provider,
-        Map.fromEntries(
-          _controllers.entries.map(
-            (e) => MapEntry(e.key, e.value.text),
-          ),
-        ),
-      );
+      await _persistTemplatesToSettings(provider, Map.from(saved));
     }
   }
 
@@ -1977,4 +2015,12 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
 
 Color _parseColor(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
+}
+
+String _normalizeHexForSelection(String hex) {
+  final h = hex.trim();
+  if (h.startsWith('#') && h.length == 9) {
+    return '#${h.substring(3)}';
+  }
+  return h;
 }

@@ -695,6 +695,15 @@ class MiuiLiveActivitiesService {
     String? location,
     String? teacher,
     String stage = 'pre',
+    bool hfIconAEnabled = true,
+    String hfStatusTextColor = '#FFFFFFFF',
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
+    bool hfOutEffectExpandEnabled = true,
+    String hfOutEffectExpandColor = '#FFFFFFFF',
+    int hfIslandTimeoutPre = 300,
+    int hfIslandTimeoutActive = 600,
+    int hfIslandTimeoutPost = 600,
   }) async {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return '非 Android 设备';
@@ -707,6 +716,15 @@ class MiuiLiveActivitiesService {
         if (location != null) 'location': location,
         if (teacher != null) 'teacher': teacher,
         'stage': stage,
+        'hfIconAEnabled': hfIconAEnabled.toString(),
+        'hfStatusTextColor': hfStatusTextColor,
+        'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled.toString(),
+        'hfOutEffectStatusColor': hfOutEffectStatusColor,
+        'hfOutEffectExpandEnabled': hfOutEffectExpandEnabled.toString(),
+        'hfOutEffectExpandColor': hfOutEffectExpandColor,
+        'hfIslandTimeoutPre': hfIslandTimeoutPre.toString(),
+        'hfIslandTimeoutActive': hfIslandTimeoutActive.toString(),
+        'hfIslandTimeoutPost': hfIslandTimeoutPost.toString(),
       });
       return null;
     } catch (e) {
@@ -856,6 +874,15 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     String? location,
     String? teacher,
     String stage = 'pre',
+    bool hfIconAEnabled = true,
+    String hfStatusTextColor = '#FFFFFFFF',
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
+    bool hfOutEffectExpandEnabled = true,
+    String hfOutEffectExpandColor = '#FFFFFFFF',
+    int hfIslandTimeoutPre = 300,
+    int hfIslandTimeoutActive = 600,
+    int hfIslandTimeoutPost = 600,
   }) async {
     return null;
   }

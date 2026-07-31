@@ -1250,8 +1250,8 @@ class MainActivity : FlutterActivity() {
                 ticker = tickerText
                 aodTitle = tickerText
                 islandFirstFloat = true
-                outEffectSrc = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
-                outEffectColor = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("outEffectStatusColor") ?: "#FFFFFFFF") else ""
+                outEffectSrc = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
+                outEffectColor = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("hfOutEffectStatusColor") ?: "#FFFFFFFF") else ""
 
                 baseInfo {
                     type = 2
@@ -1262,7 +1262,7 @@ class MainActivity : FlutterActivity() {
                 }
 
                 picInfo {
-                    if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                    if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: true) {
                         type = 1
                     }
                 }
@@ -1293,9 +1293,9 @@ class MainActivity : FlutterActivity() {
                 island {
                     islandProperty = 1
                     islandTimeout = when (templateStage) {
-                        "pre" -> (args?.get("islandTimeoutPre")?.toIntOrNull() ?: 300)
-                        "post" -> (args?.get("islandTimeoutPost")?.toIntOrNull() ?: 600)
-                        else -> (args?.get("islandTimeoutActive")?.toIntOrNull() ?: 600)
+                        "pre" -> (args?.get("hfIslandTimeoutPre")?.toIntOrNull() ?: 300)
+                        "post" -> (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600)
+                        else -> (args?.get("hfIslandTimeoutActive")?.toIntOrNull() ?: 600)
                     }
 
                     bigIslandArea {
@@ -1306,7 +1306,7 @@ class MainActivity : FlutterActivity() {
                                 showHighlightColor = true
                             }
                             picInfo {
-                                if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                                if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: true) {
                                     type = 1
                                 }
                             }
@@ -1341,7 +1341,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
+            if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
                 extras.putString("miui.bigIsland.effect.src", "outer_glow")
                 extras.putString("miui.effect.src", "outer_glow")
             }
