@@ -1126,7 +1126,7 @@ class MainActivity : FlutterActivity() {
             sendTestFocusNotificationInner(args)
         } catch (e: Throwable) {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)
-            "发送失败：$e"
+            "发送异常：${e.message ?: e.javaClass.simpleName}"
         }
         recordHyperFocusTestResult(stage, failure == null, failure ?: "")
         return failure
