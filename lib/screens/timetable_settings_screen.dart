@@ -1865,6 +1865,7 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
                 ),
               );
               if (stage == null) return;
+              if (!context.mounted) return;
               appDebugLog('MiuiLive', '测试阶段：$stage');
               final provider = context.read<TimetableProvider>();
               await provider.initialize();
@@ -1876,15 +1877,15 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
                 courseName: course?.name,
                 startTime: course?.startTime,
                 endTime: course?.endTime,
-                location: (course?.location?.isNotEmpty == true) ? course!.location : null,
-                teacher: (course?.teacher?.isNotEmpty == true) ? course!.teacher : null,
+                location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
+                teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
                 stage: stage,
               );
               appDebugLog('MiuiLive', '发送结果：${error ?? '成功'}');
               if (!context.mounted) return;
               showHyperosSnackBar(
                 context,
-                message: error == null ? '测试焦点通知已发送' : error,
+                message: error ?? '测试焦点通知已发送',
               );
             } catch (e, stackTrace) {
               appDebugLog('MiuiLive', '测试发送流程异常：$e\n$stackTrace');
