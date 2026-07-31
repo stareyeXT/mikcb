@@ -70,4 +70,10 @@ object DiagnosticLogMessages {
     const val LOG_BUILD_ROUNDED_LAUNCHER_ICON_FAILED = "构建圆角启动图标失败"
     const val LOG_FGS_START_BLOCKED = "前台服务启动被阻止，回退为仅调度"
     const val LOG_LIVE_UPDATE_REFRESH_WORKER_FAILED = "超级岛刷新 Worker 失败"
+
+    // 超级岛测试通知发送诊断
+    const val SEND_TEST_FOCUS_STARTED = "收到超级岛测试通知发送请求"
+    const val SEND_TEST_FOCUS_PERMISSION_BLOCKED = "超级岛测试发送被拦截：系统通知权限未开启"
+    const val SEND_TEST_FOCUS_CHANNEL_BLOCKED = "超级岛测试发送被拦截：测试通知渠道已被关闭"
+    const val SEND_TEST_FOCUS_SUBMITTED = "超级岛测试通知已提交并检查系统接收结果"
 }

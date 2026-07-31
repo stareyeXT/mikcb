@@ -1146,6 +1146,12 @@ class MainActivity : FlutterActivity() {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (!notificationManager.areNotificationsEnabled()) {
                 Log.e("HyperFocusApi", "notifications disabled")
+                UmengDiagnosticReporter.record(
+                    context = applicationContext,
+                    category = "send_test_focus_permission_blocked",
+                    message = DiagnosticLogMessages.SEND_TEST_FOCUS_PERMISSION_BLOCKED,
+                    extras = mapOf("stage" to stage)
+                )
                 return "系统通知权限未开启，请先在设置中开启通知权限"
             }
 
@@ -1179,6 +1185,25 @@ class MainActivity : FlutterActivity() {
                     hintText = "距离上课还有 5 分钟"
                 }
             }
+
+            UmengDiagnosticReporter.record(
+                context = applicationContext,
+                category = "send_test_focus_started",
+                message = DiagnosticLogMessages.SEND_TEST_FOCUS_STARTED,
+                extras = mapOf(
+                    "stage" to stage,
+                    "courseName" to courseName,
+                    "shortName" to shortName,
+                    "startTime" to startTime,
+                    "endTime" to endTime,
+                    "location" to location,
+                    "templateStage" to templateStage,
+                    "classStartAt" to classStartAt,
+                    "classEndAt" to classEndAt,
+                    "timerTarget" to timerTarget,
+                    "now" to now,
+                )
+            )
 
             val templates = loadHyperFocusTemplates(this)
 
@@ -1310,6 +1335,15 @@ class MainActivity : FlutterActivity() {
             val channel = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
             if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
                 Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
+                UmengDiagnosticReporter.record(
+                    context = applicationContext,
+                    category = "send_test_focus_channel_blocked",
+                    message = DiagnosticLogMessages.SEND_TEST_FOCUS_CHANNEL_BLOCKED,
+                    extras = mapOf(
+                        "stage" to stage,
+                        "channelImportance" to (channel?.importance ?: -1),
+                    )
+                )
                 return "测试通知渠道已被关闭，请在系统通知设置中恢复该渠道"
             }
 
@@ -1331,7 +1365,20 @@ class MainActivity : FlutterActivity() {
                 "HyperFocusApi",
                 "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
             )
-            if (!activeIds.contains(10001)) {
+            val activeContainsTest = activeIds.contains(10001)
+            UmengDiagnosticReporter.record(
+                context = applicationContext,
+                category = "send_test_focus_submitted",
+                message = DiagnosticLogMessages.SEND_TEST_FOCUS_SUBMITTED,
+                extras = mapOf(
+                    "stage" to stage,
+                    "activeIds" to activeIds,
+                    "activeContainsTest" to activeContainsTest,
+                    "testChannelImportance" to (testChannelState?.importance ?: -1),
+                    "liveChannelImportance" to (liveChannelState?.importance ?: -1),
+                )
+            )
+            if (!activeContainsTest) {
                 return "已提交但系统未显示（activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}）"
             }
             null
