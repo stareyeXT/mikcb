@@ -3546,6 +3546,141 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveTestingAnrAction => 'ANR test';
 
   @override
+  String get hfTestingTitle => 'HyperFocus Testing & Diagnostics';
+
+  @override
+  String get hfTestingNotificationTitle => 'Notification Test';
+
+  @override
+  String get hfTestingNotificationSubtitle =>
+      'Send a test HyperFocus island notification for the before-class, during-class, or after-class stage';
+
+  @override
+  String get hfTestingIslandStatusTitle => 'HyperFocus Island Status';
+
+  @override
+  String get hfTestingIslandStatusSubtitle =>
+      'Notification permission, test channel, and scheduler status';
+
+  @override
+  String get hfTestingPermissionGranted => 'Notification permission granted';
+
+  @override
+  String get hfTestingPermissionDenied => 'Notification permission denied';
+
+  @override
+  String get hfTestingChannelOk => 'Test channel OK';
+
+  @override
+  String get hfTestingChannelBlocked => 'Test channel blocked';
+
+  @override
+  String get hfTestingChannelMissing => 'Test channel missing';
+
+  @override
+  String get hfTestingSchedulerScheduled => 'Scheduler ready';
+
+  @override
+  String get hfTestingSchedulerNoData => 'No schedule data';
+
+  @override
+  String get hfTestingNoScheduleHint =>
+      'No schedule snapshot synced yet. Save your timetable first.';
+
+  @override
+  String get hfTestingChannelBlockedHint =>
+      'The test notification channel is blocked; test notifications will not appear.';
+
+  @override
+  String get hfTestingDebugScheduling => 'Scheduling';
+
+  @override
+  String get hfTestingDebugTemplates => 'Templates';
+
+  @override
+  String get hfTestingDebugLastTest => 'Last Test';
+
+  @override
+  String get hfTestingNextCourse => 'Next course';
+
+  @override
+  String get hfTestingNextTrigger => 'Next trigger';
+
+  @override
+  String get hfTestingCurrentStage => 'Current stage';
+
+  @override
+  String get hfTestingBeforeClassBlockedUntil => 'Before-class blocked until';
+
+  @override
+  String get hfTestingSuspendedUntil => 'Suspended until';
+
+  @override
+  String get hfTestingNone => 'None';
+
+  @override
+  String get hfTestingTemplateStagePre => 'Before-class template';
+
+  @override
+  String get hfTestingTemplateStageActive => 'During-class template';
+
+  @override
+  String get hfTestingTemplateStagePost => 'After-class template';
+
+  @override
+  String get hfTestingLastTestStage => 'Stage';
+
+  @override
+  String get hfTestingLastTestResult => 'Result';
+
+  @override
+  String get hfTestingLastTestTime => 'Time';
+
+  @override
+  String get hfTestingLastTestMessage => 'Reason';
+
+  @override
+  String get hfTestingLastTestNever => 'No test notification sent yet';
+
+  @override
+  String get hfTestingLastTestSucceeded => 'Sent';
+
+  @override
+  String get hfTestingLastTestFailed => 'Failed';
+
+  @override
+  String hfTestingLastTestAt(Object time) {
+    return 'Last test: $time';
+  }
+
+  @override
+  String get hfTestingStageSheetTitle => 'Choose a test stage';
+
+  @override
+  String get hfTestingStagePreTitle => '5 min before class';
+
+  @override
+  String get hfTestingStagePreSubtitle =>
+      'Countdown to class start; verifies the reminder template';
+
+  @override
+  String get hfTestingStageActiveTitle => 'During class';
+
+  @override
+  String get hfTestingStageActiveSubtitle => 'In class; countdown to class end';
+
+  @override
+  String get hfTestingStagePostTitle => 'After class';
+
+  @override
+  String get hfTestingStagePostSubtitle =>
+      'Class over; no countdown; verifies the after-class template';
+
+  @override
+  String get hfTestingEntryDetails =>
+      'Send before/during/after-class test notifications and view HyperFocus diagnostics';
+
+  @override
   String get liveTestingIslandStatusTitle => 'Island status diagnostics';
 
   @override

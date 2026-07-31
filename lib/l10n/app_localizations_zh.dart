@@ -3329,6 +3329,134 @@ class AppLocalizationsZh extends AppLocalizations {
   String get liveTestingAnrAction => '异常卡顿测试';
 
   @override
+  String get hfTestingTitle => '超级岛测试与诊断';
+
+  @override
+  String get hfTestingNotificationTitle => '通知测试';
+
+  @override
+  String get hfTestingNotificationSubtitle => '发送课前、课中、课后阶段的超级岛测试通知';
+
+  @override
+  String get hfTestingIslandStatusTitle => '超级岛状态';
+
+  @override
+  String get hfTestingIslandStatusSubtitle => '通知权限、测试渠道与调度器状态';
+
+  @override
+  String get hfTestingPermissionGranted => '通知权限已开启';
+
+  @override
+  String get hfTestingPermissionDenied => '通知权限未开启';
+
+  @override
+  String get hfTestingChannelOk => '测试渠道正常';
+
+  @override
+  String get hfTestingChannelBlocked => '测试渠道被屏蔽';
+
+  @override
+  String get hfTestingChannelMissing => '测试渠道未创建';
+
+  @override
+  String get hfTestingSchedulerScheduled => '调度已就绪';
+
+  @override
+  String get hfTestingSchedulerNoData => '暂无课表数据';
+
+  @override
+  String get hfTestingNoScheduleHint => '尚未同步课表快照，请先保存课表';
+
+  @override
+  String get hfTestingChannelBlockedHint => '测试通知渠道已被系统屏蔽，测试通知不会显示';
+
+  @override
+  String get hfTestingDebugScheduling => '调度';
+
+  @override
+  String get hfTestingDebugTemplates => '模板';
+
+  @override
+  String get hfTestingDebugLastTest => '上次测试';
+
+  @override
+  String get hfTestingNextCourse => '下一节课';
+
+  @override
+  String get hfTestingNextTrigger => '下次触发';
+
+  @override
+  String get hfTestingCurrentStage => '当前阶段';
+
+  @override
+  String get hfTestingBeforeClassBlockedUntil => '课前屏蔽截止';
+
+  @override
+  String get hfTestingSuspendedUntil => '挂起截止';
+
+  @override
+  String get hfTestingNone => '无';
+
+  @override
+  String get hfTestingTemplateStagePre => '课前模板';
+
+  @override
+  String get hfTestingTemplateStageActive => '课中模板';
+
+  @override
+  String get hfTestingTemplateStagePost => '课后模板';
+
+  @override
+  String get hfTestingLastTestStage => '阶段';
+
+  @override
+  String get hfTestingLastTestResult => '结果';
+
+  @override
+  String get hfTestingLastTestTime => '时间';
+
+  @override
+  String get hfTestingLastTestMessage => '原因';
+
+  @override
+  String get hfTestingLastTestNever => '尚未发送过测试通知';
+
+  @override
+  String get hfTestingLastTestSucceeded => '发送成功';
+
+  @override
+  String get hfTestingLastTestFailed => '发送失败';
+
+  @override
+  String hfTestingLastTestAt(Object time) {
+    return '上次测试：$time';
+  }
+
+  @override
+  String get hfTestingStageSheetTitle => '选择测试阶段';
+
+  @override
+  String get hfTestingStagePreTitle => '课前 5 分钟';
+
+  @override
+  String get hfTestingStagePreSubtitle => '倒计时到上课，验证提醒模板';
+
+  @override
+  String get hfTestingStageActiveTitle => '课中';
+
+  @override
+  String get hfTestingStageActiveSubtitle => '上课中，倒计时到下课';
+
+  @override
+  String get hfTestingStagePostTitle => '课后';
+
+  @override
+  String get hfTestingStagePostSubtitle => '已下课，无倒计时，验证课后模板';
+
+  @override
+  String get hfTestingEntryDetails => '发送课前/课中/课后测试通知、查看超级岛诊断状态';
+
+  @override
   String get liveTestingIslandStatusTitle => '上岛状态诊断';
 
   @override
@@ -11320,6 +11448,134 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get liveTestingAnrAction => '異常卡顿測試';
+
+  @override
+  String get hfTestingTitle => '超級島測試與診斷';
+
+  @override
+  String get hfTestingNotificationTitle => '通知測試';
+
+  @override
+  String get hfTestingNotificationSubtitle => '發送課前、課中、課後階段的超級島測試通知';
+
+  @override
+  String get hfTestingIslandStatusTitle => '超級島狀態';
+
+  @override
+  String get hfTestingIslandStatusSubtitle => '通知權限、測試頻道與排程器狀態';
+
+  @override
+  String get hfTestingPermissionGranted => '通知權限已開啟';
+
+  @override
+  String get hfTestingPermissionDenied => '通知權限未開啟';
+
+  @override
+  String get hfTestingChannelOk => '測試頻道正常';
+
+  @override
+  String get hfTestingChannelBlocked => '測試頻道已被封鎖';
+
+  @override
+  String get hfTestingChannelMissing => '測試頻道未建立';
+
+  @override
+  String get hfTestingSchedulerScheduled => '排程已就緒';
+
+  @override
+  String get hfTestingSchedulerNoData => '暫無課表資料';
+
+  @override
+  String get hfTestingNoScheduleHint => '未同步課表快照，請先儲存課表';
+
+  @override
+  String get hfTestingChannelBlockedHint => '測試通知頻道已被系統封鎖，測試通知不會顯示';
+
+  @override
+  String get hfTestingDebugScheduling => '排程';
+
+  @override
+  String get hfTestingDebugTemplates => '範本';
+
+  @override
+  String get hfTestingDebugLastTest => '上次測試';
+
+  @override
+  String get hfTestingNextCourse => '下一節課';
+
+  @override
+  String get hfTestingNextTrigger => '下次觸發';
+
+  @override
+  String get hfTestingCurrentStage => '目前階段';
+
+  @override
+  String get hfTestingBeforeClassBlockedUntil => '課前封鎖截止';
+
+  @override
+  String get hfTestingSuspendedUntil => '暫停截止';
+
+  @override
+  String get hfTestingNone => '無';
+
+  @override
+  String get hfTestingTemplateStagePre => '課前範本';
+
+  @override
+  String get hfTestingTemplateStageActive => '課中範本';
+
+  @override
+  String get hfTestingTemplateStagePost => '課後範本';
+
+  @override
+  String get hfTestingLastTestStage => '階段';
+
+  @override
+  String get hfTestingLastTestResult => '結果';
+
+  @override
+  String get hfTestingLastTestTime => '時間';
+
+  @override
+  String get hfTestingLastTestMessage => '原因';
+
+  @override
+  String get hfTestingLastTestNever => '尚未發送過測試通知';
+
+  @override
+  String get hfTestingLastTestSucceeded => '發送成功';
+
+  @override
+  String get hfTestingLastTestFailed => '發送失敗';
+
+  @override
+  String hfTestingLastTestAt(Object time) {
+    return '上次測試：$time';
+  }
+
+  @override
+  String get hfTestingStageSheetTitle => '選擇測試階段';
+
+  @override
+  String get hfTestingStagePreTitle => '課前 5 分鐘';
+
+  @override
+  String get hfTestingStagePreSubtitle => '倒數到上課，驗證提醒範本';
+
+  @override
+  String get hfTestingStageActiveTitle => '課中';
+
+  @override
+  String get hfTestingStageActiveSubtitle => '上課中，倒數到下課';
+
+  @override
+  String get hfTestingStagePostTitle => '課後';
+
+  @override
+  String get hfTestingStagePostSubtitle => '已下課，無倒數，驗證課後範本';
+
+  @override
+  String get hfTestingEntryDetails => '發送課前/課中/課後測試通知、查看超級島診斷狀態';
 
   @override
   String get liveTestingIslandStatusTitle => '上島狀態診斷';
@@ -19320,6 +19576,134 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get liveTestingAnrAction => '異常卡顿測試';
+
+  @override
+  String get hfTestingTitle => '超級島測試與診斷';
+
+  @override
+  String get hfTestingNotificationTitle => '通知測試';
+
+  @override
+  String get hfTestingNotificationSubtitle => '發送課前、課中、課後階段的超級島測試通知';
+
+  @override
+  String get hfTestingIslandStatusTitle => '超級島狀態';
+
+  @override
+  String get hfTestingIslandStatusSubtitle => '通知權限、測試管道與排程器狀態';
+
+  @override
+  String get hfTestingPermissionGranted => '通知權限已開啟';
+
+  @override
+  String get hfTestingPermissionDenied => '通知權限未開啟';
+
+  @override
+  String get hfTestingChannelOk => '測試管道正常';
+
+  @override
+  String get hfTestingChannelBlocked => '測試管道已遭封鎖';
+
+  @override
+  String get hfTestingChannelMissing => '測試管道尚未建立';
+
+  @override
+  String get hfTestingSchedulerScheduled => '排程已就緒';
+
+  @override
+  String get hfTestingSchedulerNoData => '暫無課表資料';
+
+  @override
+  String get hfTestingNoScheduleHint => '尚未同步課表快照，請先儲存課表';
+
+  @override
+  String get hfTestingChannelBlockedHint => '測試通知管道已遭系統封鎖，測試通知不會顯示';
+
+  @override
+  String get hfTestingDebugScheduling => '排程';
+
+  @override
+  String get hfTestingDebugTemplates => '範本';
+
+  @override
+  String get hfTestingDebugLastTest => '上次測試';
+
+  @override
+  String get hfTestingNextCourse => '下一節課';
+
+  @override
+  String get hfTestingNextTrigger => '下次觸發';
+
+  @override
+  String get hfTestingCurrentStage => '目前階段';
+
+  @override
+  String get hfTestingBeforeClassBlockedUntil => '課前封鎖截止';
+
+  @override
+  String get hfTestingSuspendedUntil => '掛起截止';
+
+  @override
+  String get hfTestingNone => '無';
+
+  @override
+  String get hfTestingTemplateStagePre => '課前範本';
+
+  @override
+  String get hfTestingTemplateStageActive => '課中範本';
+
+  @override
+  String get hfTestingTemplateStagePost => '課後範本';
+
+  @override
+  String get hfTestingLastTestStage => '階段';
+
+  @override
+  String get hfTestingLastTestResult => '結果';
+
+  @override
+  String get hfTestingLastTestTime => '時間';
+
+  @override
+  String get hfTestingLastTestMessage => '原因';
+
+  @override
+  String get hfTestingLastTestNever => '尚未發送過測試通知';
+
+  @override
+  String get hfTestingLastTestSucceeded => '發送成功';
+
+  @override
+  String get hfTestingLastTestFailed => '發送失敗';
+
+  @override
+  String hfTestingLastTestAt(Object time) {
+    return '上次測試：$time';
+  }
+
+  @override
+  String get hfTestingStageSheetTitle => '選擇測試階段';
+
+  @override
+  String get hfTestingStagePreTitle => '課前 5 分鐘';
+
+  @override
+  String get hfTestingStagePreSubtitle => '倒數計時到上課，驗證提醒範本';
+
+  @override
+  String get hfTestingStageActiveTitle => '課中';
+
+  @override
+  String get hfTestingStageActiveSubtitle => '上課中，倒數計時到下課';
+
+  @override
+  String get hfTestingStagePostTitle => '課後';
+
+  @override
+  String get hfTestingStagePostSubtitle => '已下課，無倒數計時，驗證課後範本';
+
+  @override
+  String get hfTestingEntryDetails => '發送課前/課中/課後測試通知、查看超級島診斷狀態';
 
   @override
   String get liveTestingIslandStatusTitle => '上島狀態診斷';

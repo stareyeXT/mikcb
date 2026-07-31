@@ -3400,6 +3400,137 @@ class AppLocalizationsKo extends AppLocalizations {
   String get liveTestingAnrAction => '비정상 프리즈 테스트';
 
   @override
+  String get hfTestingTitle => 'HyperFocus 테스트 및 진단';
+
+  @override
+  String get hfTestingNotificationTitle => '알림 테스트';
+
+  @override
+  String get hfTestingNotificationSubtitle =>
+      '수업 전·수업 중·수업 후 단계의 슈퍼아일랜드 테스트 알림을 전송합니다';
+
+  @override
+  String get hfTestingIslandStatusTitle => '슈퍼아일랜드 상태';
+
+  @override
+  String get hfTestingIslandStatusSubtitle => '알림 권한, 테스트 채널, 스케줄러 상태';
+
+  @override
+  String get hfTestingPermissionGranted => '알림 권한 허용됨';
+
+  @override
+  String get hfTestingPermissionDenied => '알림 권한 거부됨';
+
+  @override
+  String get hfTestingChannelOk => '테스트 채널 정상';
+
+  @override
+  String get hfTestingChannelBlocked => '테스트 채널 차단됨';
+
+  @override
+  String get hfTestingChannelMissing => '테스트 채널 생성되지 않음';
+
+  @override
+  String get hfTestingSchedulerScheduled => '일정 준비 완료';
+
+  @override
+  String get hfTestingSchedulerNoData => '시간표 데이터 없음';
+
+  @override
+  String get hfTestingNoScheduleHint =>
+      '아직 시간표 스냅샷이 동기화되지 않았습니다. 먼저 시간표를 저장하세요';
+
+  @override
+  String get hfTestingChannelBlockedHint =>
+      '테스트 알림 채널이 시스템에 의해 차단되어 테스트 알림이 표시되지 않습니다';
+
+  @override
+  String get hfTestingDebugScheduling => '일정';
+
+  @override
+  String get hfTestingDebugTemplates => '템플릿';
+
+  @override
+  String get hfTestingDebugLastTest => '마지막 테스트';
+
+  @override
+  String get hfTestingNextCourse => '다음 수업';
+
+  @override
+  String get hfTestingNextTrigger => '다음 트리거';
+
+  @override
+  String get hfTestingCurrentStage => '현재 단계';
+
+  @override
+  String get hfTestingBeforeClassBlockedUntil => '수업 전 차단 기한';
+
+  @override
+  String get hfTestingSuspendedUntil => '일시 중지 기한';
+
+  @override
+  String get hfTestingNone => '없음';
+
+  @override
+  String get hfTestingTemplateStagePre => '수업 전 템플릿';
+
+  @override
+  String get hfTestingTemplateStageActive => '수업 중 템플릿';
+
+  @override
+  String get hfTestingTemplateStagePost => '수업 후 템플릿';
+
+  @override
+  String get hfTestingLastTestStage => '단계';
+
+  @override
+  String get hfTestingLastTestResult => '결과';
+
+  @override
+  String get hfTestingLastTestTime => '시간';
+
+  @override
+  String get hfTestingLastTestMessage => '사유';
+
+  @override
+  String get hfTestingLastTestNever => '아직 테스트 알림을 보낸 적이 없습니다';
+
+  @override
+  String get hfTestingLastTestSucceeded => '전송 성공';
+
+  @override
+  String get hfTestingLastTestFailed => '전송 실패';
+
+  @override
+  String hfTestingLastTestAt(Object time) {
+    return '마지막 테스트: $time';
+  }
+
+  @override
+  String get hfTestingStageSheetTitle => '테스트 단계 선택';
+
+  @override
+  String get hfTestingStagePreTitle => '수업 5분 전';
+
+  @override
+  String get hfTestingStagePreSubtitle => '수업 시작까지 카운트다운. 알림 템플릿을 검증합니다';
+
+  @override
+  String get hfTestingStageActiveTitle => '수업 중';
+
+  @override
+  String get hfTestingStageActiveSubtitle => '수업 중. 수업 종료까지 카운트다운';
+
+  @override
+  String get hfTestingStagePostTitle => '수업 후';
+
+  @override
+  String get hfTestingStagePostSubtitle => '수업 종료. 카운트다운 없음. 수업 후 템플릿을 검증합니다';
+
+  @override
+  String get hfTestingEntryDetails => '수업 전/중/후 테스트 알림 전송 및 슈퍼아일랜드 진단 상태 확인';
+
+  @override
   String get liveTestingIslandStatusTitle => '아일랜드 상태 진단';
 
   @override

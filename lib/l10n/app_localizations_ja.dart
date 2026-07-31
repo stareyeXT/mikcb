@@ -3381,6 +3381,137 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveTestingAnrAction => '異常フリーズテスト';
 
   @override
+  String get hfTestingTitle => 'HyperFocus テストと診断';
+
+  @override
+  String get hfTestingNotificationTitle => '通知テスト';
+
+  @override
+  String get hfTestingNotificationSubtitle =>
+      '授業前・授業中・授業後の各ステージでスーパーアイランドのテスト通知を送信します';
+
+  @override
+  String get hfTestingIslandStatusTitle => 'スーパーアイランドの状態';
+
+  @override
+  String get hfTestingIslandStatusSubtitle => '通知権限、テストチャンネル、スケジューラーの状態';
+
+  @override
+  String get hfTestingPermissionGranted => '通知権限が許可されています';
+
+  @override
+  String get hfTestingPermissionDenied => '通知権限が許可されていません';
+
+  @override
+  String get hfTestingChannelOk => 'テストチャンネルは正常です';
+
+  @override
+  String get hfTestingChannelBlocked => 'テストチャンネルがブロックされています';
+
+  @override
+  String get hfTestingChannelMissing => 'テストチャンネルが作成されていません';
+
+  @override
+  String get hfTestingSchedulerScheduled => 'スケジュール準備完了';
+
+  @override
+  String get hfTestingSchedulerNoData => '課表データがありません';
+
+  @override
+  String get hfTestingNoScheduleHint => '課表スナップショットがまだ同期されていません。先に課表を保存してください';
+
+  @override
+  String get hfTestingChannelBlockedHint =>
+      'テスト通知チャンネルがシステムによりブロックされているため、テスト通知は表示されません';
+
+  @override
+  String get hfTestingDebugScheduling => 'スケジュール';
+
+  @override
+  String get hfTestingDebugTemplates => 'テンプレート';
+
+  @override
+  String get hfTestingDebugLastTest => '前回のテスト';
+
+  @override
+  String get hfTestingNextCourse => '次の授業';
+
+  @override
+  String get hfTestingNextTrigger => '次回のトリガー';
+
+  @override
+  String get hfTestingCurrentStage => '現在のステージ';
+
+  @override
+  String get hfTestingBeforeClassBlockedUntil => '授業前ブロックの期限';
+
+  @override
+  String get hfTestingSuspendedUntil => '一時停止の期限';
+
+  @override
+  String get hfTestingNone => 'なし';
+
+  @override
+  String get hfTestingTemplateStagePre => '授業前テンプレート';
+
+  @override
+  String get hfTestingTemplateStageActive => '授業中テンプレート';
+
+  @override
+  String get hfTestingTemplateStagePost => '授業後テンプレート';
+
+  @override
+  String get hfTestingLastTestStage => 'ステージ';
+
+  @override
+  String get hfTestingLastTestResult => '結果';
+
+  @override
+  String get hfTestingLastTestTime => '時間';
+
+  @override
+  String get hfTestingLastTestMessage => '理由';
+
+  @override
+  String get hfTestingLastTestNever => 'テスト通知はまだ送信されていません';
+
+  @override
+  String get hfTestingLastTestSucceeded => '送信成功';
+
+  @override
+  String get hfTestingLastTestFailed => '送信失敗';
+
+  @override
+  String hfTestingLastTestAt(Object time) {
+    return '前回のテスト：$time';
+  }
+
+  @override
+  String get hfTestingStageSheetTitle => 'テスト段階を選択';
+
+  @override
+  String get hfTestingStagePreTitle => '授業前 5 分';
+
+  @override
+  String get hfTestingStagePreSubtitle => '授業開始までのカウントダウン。リマインダーテンプレートを検証します';
+
+  @override
+  String get hfTestingStageActiveTitle => '授業中';
+
+  @override
+  String get hfTestingStageActiveSubtitle => '授業中。授業終了までのカウントダウン';
+
+  @override
+  String get hfTestingStagePostTitle => '授業後';
+
+  @override
+  String get hfTestingStagePostSubtitle => '授業終了。カウントダウンなし。授業後テンプレートを検証します';
+
+  @override
+  String get hfTestingEntryDetails =>
+      '授業前/授業中/授業後のテスト通知を送信し、スーパーアイランドの診断状態を確認します';
+
+  @override
   String get liveTestingIslandStatusTitle => 'アイランドステータス診断';
 
   @override

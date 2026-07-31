@@ -6153,6 +6153,258 @@ abstract class AppLocalizations {
   /// **'异常卡顿测试'**
   String get liveTestingAnrAction;
 
+  /// No description provided for @hfTestingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'超级岛测试与诊断'**
+  String get hfTestingTitle;
+
+  /// No description provided for @hfTestingNotificationTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知测试'**
+  String get hfTestingNotificationTitle;
+
+  /// No description provided for @hfTestingNotificationSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送课前、课中、课后阶段的超级岛测试通知'**
+  String get hfTestingNotificationSubtitle;
+
+  /// No description provided for @hfTestingIslandStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'超级岛状态'**
+  String get hfTestingIslandStatusTitle;
+
+  /// No description provided for @hfTestingIslandStatusSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知权限、测试渠道与调度器状态'**
+  String get hfTestingIslandStatusSubtitle;
+
+  /// No description provided for @hfTestingPermissionGranted.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知权限已开启'**
+  String get hfTestingPermissionGranted;
+
+  /// No description provided for @hfTestingPermissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知权限未开启'**
+  String get hfTestingPermissionDenied;
+
+  /// No description provided for @hfTestingChannelOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试渠道正常'**
+  String get hfTestingChannelOk;
+
+  /// No description provided for @hfTestingChannelBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试渠道被屏蔽'**
+  String get hfTestingChannelBlocked;
+
+  /// No description provided for @hfTestingChannelMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试渠道未创建'**
+  String get hfTestingChannelMissing;
+
+  /// No description provided for @hfTestingSchedulerScheduled.
+  ///
+  /// In zh, this message translates to:
+  /// **'调度已就绪'**
+  String get hfTestingSchedulerScheduled;
+
+  /// No description provided for @hfTestingSchedulerNoData.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无课表数据'**
+  String get hfTestingSchedulerNoData;
+
+  /// No description provided for @hfTestingNoScheduleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未同步课表快照，请先保存课表'**
+  String get hfTestingNoScheduleHint;
+
+  /// No description provided for @hfTestingChannelBlockedHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试通知渠道已被系统屏蔽，测试通知不会显示'**
+  String get hfTestingChannelBlockedHint;
+
+  /// No description provided for @hfTestingDebugScheduling.
+  ///
+  /// In zh, this message translates to:
+  /// **'调度'**
+  String get hfTestingDebugScheduling;
+
+  /// No description provided for @hfTestingDebugTemplates.
+  ///
+  /// In zh, this message translates to:
+  /// **'模板'**
+  String get hfTestingDebugTemplates;
+
+  /// No description provided for @hfTestingDebugLastTest.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次测试'**
+  String get hfTestingDebugLastTest;
+
+  /// No description provided for @hfTestingNextCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一节课'**
+  String get hfTestingNextCourse;
+
+  /// No description provided for @hfTestingNextTrigger.
+  ///
+  /// In zh, this message translates to:
+  /// **'下次触发'**
+  String get hfTestingNextTrigger;
+
+  /// No description provided for @hfTestingCurrentStage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前阶段'**
+  String get hfTestingCurrentStage;
+
+  /// No description provided for @hfTestingBeforeClassBlockedUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'课前屏蔽截止'**
+  String get hfTestingBeforeClassBlockedUntil;
+
+  /// No description provided for @hfTestingSuspendedUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'挂起截止'**
+  String get hfTestingSuspendedUntil;
+
+  /// No description provided for @hfTestingNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'无'**
+  String get hfTestingNone;
+
+  /// No description provided for @hfTestingTemplateStagePre.
+  ///
+  /// In zh, this message translates to:
+  /// **'课前模板'**
+  String get hfTestingTemplateStagePre;
+
+  /// No description provided for @hfTestingTemplateStageActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'课中模板'**
+  String get hfTestingTemplateStageActive;
+
+  /// No description provided for @hfTestingTemplateStagePost.
+  ///
+  /// In zh, this message translates to:
+  /// **'课后模板'**
+  String get hfTestingTemplateStagePost;
+
+  /// No description provided for @hfTestingLastTestStage.
+  ///
+  /// In zh, this message translates to:
+  /// **'阶段'**
+  String get hfTestingLastTestStage;
+
+  /// No description provided for @hfTestingLastTestResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'结果'**
+  String get hfTestingLastTestResult;
+
+  /// No description provided for @hfTestingLastTestTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'时间'**
+  String get hfTestingLastTestTime;
+
+  /// No description provided for @hfTestingLastTestMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'原因'**
+  String get hfTestingLastTestMessage;
+
+  /// No description provided for @hfTestingLastTestNever.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未发送过测试通知'**
+  String get hfTestingLastTestNever;
+
+  /// No description provided for @hfTestingLastTestSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送成功'**
+  String get hfTestingLastTestSucceeded;
+
+  /// No description provided for @hfTestingLastTestFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送失败'**
+  String get hfTestingLastTestFailed;
+
+  /// No description provided for @hfTestingLastTestAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次测试：{time}'**
+  String hfTestingLastTestAt(Object time);
+
+  /// No description provided for @hfTestingStageSheetTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择测试阶段'**
+  String get hfTestingStageSheetTitle;
+
+  /// No description provided for @hfTestingStagePreTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'课前 5 分钟'**
+  String get hfTestingStagePreTitle;
+
+  /// No description provided for @hfTestingStagePreSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'倒计时到上课，验证提醒模板'**
+  String get hfTestingStagePreSubtitle;
+
+  /// No description provided for @hfTestingStageActiveTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'课中'**
+  String get hfTestingStageActiveTitle;
+
+  /// No description provided for @hfTestingStageActiveSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'上课中，倒计时到下课'**
+  String get hfTestingStageActiveSubtitle;
+
+  /// No description provided for @hfTestingStagePostTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'课后'**
+  String get hfTestingStagePostTitle;
+
+  /// No description provided for @hfTestingStagePostSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已下课，无倒计时，验证课后模板'**
+  String get hfTestingStagePostSubtitle;
+
+  /// No description provided for @hfTestingEntryDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送课前/课中/课后测试通知、查看超级岛诊断状态'**
+  String get hfTestingEntryDetails;
+
   /// No description provided for @liveTestingIslandStatusTitle.
   ///
   /// In zh, this message translates to:
