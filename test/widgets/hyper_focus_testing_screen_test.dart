@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,16 +8,15 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:university_timetable/models/timetable_profile.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
-import 'package:university_timetable/providers/timetable_provider.dart';
 import 'package:university_timetable/screens/timetable_settings_screen.dart';
 import 'package:university_timetable/services/storage_service.dart';
-import 'package:university_timetable/ui/hyperos/hyperos.dart';
 import '../helpers_test_app.dart';
 
 void _seedInitializedPrefs() {
   final now = DateTime(2026, 4, 12);
-  final settings = TimetableSettings.defaults()
-      .copyWith(superIslandEngine: SuperIslandEngine.hyperFocusApi);
+  final settings = TimetableSettings.defaults().copyWith(
+    superIslandEngine: SuperIslandEngine.hyperFocusApi,
+  );
   final profile = TimetableProfile(
     id: 'profile-1',
     name: '默认课表',
@@ -32,6 +32,20 @@ void _seedInitializedPrefs() {
     'timetable_profiles': jsonEncode([profile.toJson()]),
     'active_timetable_profile_id': profile.id,
     'time_schemes': '[]',
+  });
+}
+
+void _testOnAndroid(
+  String name,
+  Future<void> Function(WidgetTester tester) body,
+) {
+  testWidgets(name, (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      await body(tester);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
 
@@ -120,53 +134,58 @@ void main() {
         .setMockMethodCallHandler(liveChannel, null);
   });
 
-  testWidgets('hyper focus testing screen renders status chips and refresh switch', (
-    tester,
-  ) async {
-    await _pumpToTestingEntry(tester);
+  _testOnAndroid(
+    'hyper focus testing screen renders status chips and refresh switch',
+    (tester) async {
+      await _pumpToTestingEntry(tester);
 
-    expect(find.text('超级岛测试与诊断'), findsOneWidget);
-    expect(find.text('通知权限已开启'), findsOneWidget);
-    expect(find.text('测试渠道正常'), findsOneWidget);
-    expect(find.text('调度已就绪'), findsOneWidget);
-    expect(find.text('自动刷新'), findsOneWidget);
-  });
+      expect(find.text('超级岛测试与诊断'), findsOneWidget);
+      expect(find.text('通知权限已开启'), findsOneWidget);
+      expect(find.text('测试渠道正常'), findsOneWidget);
+      expect(find.text('调度已就绪'), findsOneWidget);
+      expect(find.text('自动刷新'), findsOneWidget);
+    },
+  );
 
-  testWidgets('hyper focus testing screen opens stage sheet and sends test', (
-    tester,
-  ) async {
-    String? sentStage;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(liveChannel, (call) async {
-          switch (call.method) {
-            case 'initialize':
-              return null;
-            case 'getHyperFocusDebugStatus':
-              return {
-                'summary': {
-                  'hasNotificationPermission': true,
-                  'testChannelBlocked': false,
-                  'templatesLoaded': true,
-                  'schedulerReady': true,
-                  'hasLastTestResult': false,
-                },
-              };
-            case 'sendTestFocus':
-              sentStage = (call.arguments as Map)['stage'] as String?;
-              return null;
-            default:
-              return null;
-          }
-        });
+  _testOnAndroid(
+    'hyper focus testing screen opens stage sheet and sends test',
+    (tester) async {
+      String? sentStage;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(liveChannel, (call) async {
+            switch (call.method) {
+              case 'initialize':
+                return null;
+              case 'getHyperFocusDebugStatus':
+                return {
+                  'summary': {
+                    'hasNotificationPermission': true,
+                    'testChannelBlocked': false,
+                    'templatesLoaded': true,
+                    'schedulerReady': true,
+                    'hasLastTestResult': false,
+                  },
+                };
+              case 'sendTestFocus':
+                sentStage = (call.arguments as Map)['stage'] as String?;
+                return null;
+              default:
+                return null;
+            }
+          });
 
-    await _pumpToTestingEntry(tester);
+      await _pumpToTestingEntry(tester);
 
-    await tester.tap(find.text('发送测试通知'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('课中'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('发送测试通知'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('课中'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
 
-    expect(sentStage, 'active');
-    expect(find.text('测试焦点通知已发送'), findsOneWidget);
-  });
+      expect(sentStage, 'active');
+      expect(find.text('测试焦点通知已发送'), findsOneWidget);
+    },
+  );
 }

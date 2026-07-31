@@ -661,7 +661,9 @@ class MiuiLiveActivitiesService {
     String? teacher,
     String stage = 'pre',
   }) async {
-    if (!Platform.isAndroid) return '非 Android 设备';
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return '非 Android 设备';
+    }
     try {
       await _channel.invokeMethod('sendTestFocus', {
         if (courseName != null) 'courseName': courseName,
@@ -834,11 +836,40 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
         'hasActiveSelection': true,
       },
       'templates': {
-        'pre': {'ticker': true, 'islandA': true, 'islandB': true, 'baseTitle': true, 'baseContent': true, 'baseSubcontent': true, 'hintTitle': true},
-        'active': {'ticker': true, 'islandA': true, 'islandB': true, 'baseTitle': true, 'baseContent': true, 'baseSubcontent': true, 'hintTitle': true},
-        'post': {'ticker': true, 'islandA': true, 'islandB': true, 'baseTitle': true, 'baseContent': true, 'baseSubcontent': true, 'hintTitle': true},
+        'pre': {
+          'ticker': true,
+          'islandA': true,
+          'islandB': true,
+          'baseTitle': true,
+          'baseContent': true,
+          'baseSubcontent': true,
+          'hintTitle': true,
+        },
+        'active': {
+          'ticker': true,
+          'islandA': true,
+          'islandB': true,
+          'baseTitle': true,
+          'baseContent': true,
+          'baseSubcontent': true,
+          'hintTitle': true,
+        },
+        'post': {
+          'ticker': true,
+          'islandA': true,
+          'islandB': true,
+          'baseTitle': true,
+          'baseContent': true,
+          'baseSubcontent': true,
+          'hintTitle': true,
+        },
       },
-      'test': {'lastStage': null, 'lastSucceeded': null, 'lastMessage': null, 'lastAtMillis': null},
+      'test': {
+        'lastStage': null,
+        'lastSucceeded': null,
+        'lastMessage': null,
+        'lastAtMillis': null,
+      },
       'recentDiagnostics': {'enabled': false, 'tail': ''},
     };
   }
