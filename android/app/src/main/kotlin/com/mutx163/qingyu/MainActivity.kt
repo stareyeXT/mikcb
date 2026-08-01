@@ -1161,6 +1161,9 @@ class MainActivity : FlutterActivity() {
                 "post" -> "post"
                 else -> "pre"
             }
+            val realStart = buildCourseTimeMillis(startTime)
+            val realEnd = buildCourseTimeMillis(endTime)
+            val hasRealTime = realStart != null && realEnd != null && realEnd > realStart
             val classStartAt: Long
             val classEndAt: Long
             val timerTarget: Long
@@ -1179,10 +1182,17 @@ class MainActivity : FlutterActivity() {
                     hintText = "已下课"
                 }
                 else -> {
-                    classStartAt = now + 5 * 60_000L
-                    classEndAt = classStartAt + 100 * 60_000L
-                    timerTarget = classStartAt
-                    hintText = "距离上课还有 5 分钟"
+                    if (hasRealTime && realStart!! > now) {
+                        classStartAt = realStart
+                        classEndAt = realEnd!!
+                        timerTarget = classStartAt
+                        hintText = "距离上课还有 ${((classStartAt - now) / 60_000L + 1)} 分钟"
+                    } else {
+                        classStartAt = now + 5 * 60_000L
+                        classEndAt = classStartAt + 100 * 60_000L
+                        timerTarget = classStartAt
+                        hintText = "距离上课还有 5 分钟"
+                    }
                 }
             }
 
@@ -1374,6 +1384,11 @@ class MainActivity : FlutterActivity() {
                 .build()
 
             notificationManager.notify(10001, notification)
+            if (timerTarget > 0L && timerTarget > now) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    notificationManager.cancel(10001)
+                }, timerTarget - now)
+            }
             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
             val activeIds = notificationManager.activeNotifications.map { it.id }
             val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
@@ -1983,6 +1998,23 @@ class MainActivity : FlutterActivity() {
             @Suppress("DEPRECATION")
             getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
+    }
+
+    private fun buildCourseTimeMillis(timeText: String): Long? {
+        val parts = timeText.split(":")
+        if (parts.size != 2) {
+            return null
+        }
+
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 }
 
