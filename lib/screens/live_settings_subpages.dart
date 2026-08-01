@@ -1710,6 +1710,7 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
       ),
     );
     if (result == null) return;
+    if (!mounted) return;
     setState(() {
       _controllers[key]?.text = result.join(',');
     });
@@ -1977,6 +1978,7 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
       ),
     );
     if (result == null) return;
+    if (!mounted) return;
     setState(() {
       _controllers[key]?.text = result.join(',');
     });

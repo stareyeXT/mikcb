@@ -118,6 +118,7 @@ class MainActivity : FlutterActivity() {
     private var pendingDebugRoute: Map<String, Any?>? = null
     private var flutterChannel: MethodChannel? = null
     private var lanEditChannel: MethodChannel? = null
+    private var testFocusDismissRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Fix: when launched via ACTION_SEND / ACTION_VIEW from another app (e.g.
@@ -1385,9 +1386,13 @@ class MainActivity : FlutterActivity() {
 
             notificationManager.notify(10001, notification)
             if (timerTarget > 0L && timerTarget > now) {
-                Handler(Looper.getMainLooper()).postDelayed({
-                    notificationManager.cancel(10001)
-                }, timerTarget - now)
+                val runnable = Runnable {
+                    (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                        .cancel(10001)
+                }
+                testFocusDismissRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                testFocusDismissRunnable = runnable
+                Handler(Looper.getMainLooper()).postDelayed(runnable, timerTarget - now)
             }
             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
             val activeIds = notificationManager.activeNotifications.map { it.id }
@@ -2008,6 +2013,8 @@ class MainActivity : FlutterActivity() {
 
         val hour = parts[0].toIntOrNull() ?: return null
         val minute = parts[1].toIntOrNull() ?: return null
+
+        if (hour !in 0..23 || minute !in 0..59) return null
 
         return Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
@@ -4299,6 +4306,8 @@ class LiveUpdateService : Service() {
 
         val hour = parts[0].toIntOrNull() ?: return null
         val minute = parts[1].toIntOrNull() ?: return null
+
+        if (hour !in 0..23 || minute !in 0..59) return null
 
         return Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
