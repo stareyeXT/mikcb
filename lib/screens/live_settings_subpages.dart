@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/enum_localizations.dart';
@@ -1381,19 +1382,32 @@ class HyperFocusIslandTimeoutScreen extends StatefulWidget {
 
 class _HyperFocusIslandTimeoutScreenState
     extends State<HyperFocusIslandTimeoutScreen> {
-  static const int _minSeconds = 30;
-  static const int _maxSeconds = 3600;
   late TimetableSettings _draft;
+  late final TextEditingController _preMinutesCtrl;
+  late final TextEditingController _activeMinutesCtrl;
+  late final TextEditingController _postMinutesCtrl;
   Timer? _autoSaveTimer;
 
   @override
   void initState() {
     super.initState();
     _draft = context.read<TimetableProvider>().settings;
+    _preMinutesCtrl = TextEditingController(
+      text: (_draft.hfIslandTimeoutPre / 60).round().toString(),
+    );
+    _activeMinutesCtrl = TextEditingController(
+      text: (_draft.hfIslandTimeoutActive / 60).round().toString(),
+    );
+    _postMinutesCtrl = TextEditingController(
+      text: (_draft.hfIslandTimeoutPost / 60).round().toString(),
+    );
   }
 
   @override
   void dispose() {
+    _preMinutesCtrl.dispose();
+    _activeMinutesCtrl.dispose();
+    _postMinutesCtrl.dispose();
     if (_autoSaveTimer?.isActive ?? false) {
       _autoSaveTimer?.cancel();
       _persistDraft(_draft);
@@ -1410,14 +1424,14 @@ class _HyperFocusIslandTimeoutScreenState
       title: const Text('岛消失时间'),
       child: HyperosListView(
         children: [
-          HyperosSectionLabel(text: '状态栏岛消失时间（秒）'),
+          HyperosSectionLabel(text: '状态栏岛消失时间（分钟）'),
           HyperosListGroup(
             children: [
-              _buildTimeoutTile('课前', _draft.hfIslandTimeoutPre,
+              _buildTimeoutTile('课前', _preMinutesCtrl,
                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPre: v))),
-              _buildTimeoutTile('课中', _draft.hfIslandTimeoutActive,
+              _buildTimeoutTile('课中', _activeMinutesCtrl,
                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutActive: v))),
-              _buildTimeoutTile('课后', _draft.hfIslandTimeoutPost,
+              _buildTimeoutTile('课后', _postMinutesCtrl,
                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPost: v))),
             ],
           ),
@@ -1428,16 +1442,21 @@ class _HyperFocusIslandTimeoutScreenState
 
   Widget _buildTimeoutTile(
     String label,
-    int value,
+    TextEditingController controller,
     ValueChanged<int> onChanged,
   ) {
-    return HyperosNumberPickerTile(
-      title: label,
-      picker: HyperosNumberPicker(
-        min: _minSeconds,
-        max: _maxSeconds,
-        value: value,
-        onChanged: onChanged,
+    return HyperosTextFieldTile(
+      cardTitle: label,
+      cardSubtitle: '分钟（1~60）',
+      field: HyperosTextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9]'))],
+        onChanged: (text) {
+          final minutes = int.tryParse(text) ?? 0;
+          final clamped = minutes.clamp(1, 60);
+          onChanged(clamped * 60);
+        },
       ),
     );
   }
