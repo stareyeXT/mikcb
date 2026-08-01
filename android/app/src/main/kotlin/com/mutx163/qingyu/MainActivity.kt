@@ -1385,12 +1385,12 @@ class MainActivity : FlutterActivity() {
                 .build()
 
             notificationManager.notify(10001, notification)
+            testFocusDismissRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
             if (timerTarget > 0L && timerTarget > now) {
                 val runnable = Runnable {
                     (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                         .cancel(10001)
                 }
-                testFocusDismissRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
                 testFocusDismissRunnable = runnable
                 Handler(Looper.getMainLooper()).postDelayed(runnable, timerTarget - now)
             }
