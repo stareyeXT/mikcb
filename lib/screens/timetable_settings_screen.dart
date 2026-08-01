@@ -1831,42 +1831,6 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
                 });
               },
             ),
-            HyperosListTile(
-              icon: Icons.image_outlined,
-              title: '岛视觉',
-              details: '岛标签图、Logo、字号、偏移、展开图标',
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => LiveDisplaySettingsScreen(
-                    title: '岛视觉（课前）',
-                    forDuringEnd: false,
-                  ),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-            HyperosListTile(
-              icon: Icons.image_outlined,
-              title: '岛视觉（课中/课后）',
-              details: '岛标签图、Logo、字号、偏移、展开图标',
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => LiveDisplaySettingsScreen(
-                    title: '岛视觉（课中/课后）',
-                    forDuringEnd: true,
-                  ),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
           ],
         ),
         const HyperosSectionGap(),
@@ -3424,6 +3388,12 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     };
   }
 
+  String _ellipsize(String? value, {int max = 24}) {
+    final v = value?.trim() ?? '';
+    if (v.length <= max) return v;
+    return '${v.substring(0, max)}…';
+  }
+
   Widget _buildDebugSection({
     required BuildContext context,
     required String title,
@@ -3440,13 +3410,13 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
               HyperosListTile(
                 icon: Icons.label_outline,
                 title: entry.key,
-                details: entry.value,
+                details: _ellipsize(entry.value),
               ),
             if (trailingJson.isNotEmpty)
               HyperosListTile(
                 icon: Icons.data_object,
                 title: 'JSON',
-                details: trailingJson,
+                details: _ellipsize(trailingJson, max: 60),
               ),
           ],
         ),
