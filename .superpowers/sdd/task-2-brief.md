@@ -1,135 +1,214 @@
-# Task 2: Dart UI — 从 TextField 改为芯片选择器
+### Task 2: 重写 HyperFocusTimingScreen
 
 **Files:**
-- Modify: `lib/screens/live_settings_subpages.dart` (仅 `_HyperFocusStageTemplateScreenState` 类)
+- Modify: `lib/screens/live_settings_subpages.dart:1195-1252`（`HyperFocusTimingScreen` 类及其 State 整体替换）
 
-## 目标
+**Interfaces:**
+- Consumes: 本文件已有顶层函数 `_formatLiveTimeCorrection(l10n, seconds)` 与 `_buildLiveClassReminderLeadSummary(l10n, settings)`（Live 页在用，勿改动）；同文件 Live 页的 `_beforeClassMinutesOptions/_endSecondsOptions/_timeCorrectionMin/_timeCorrectionMax` 常量；`HyperosListView/HyperosSectionLabel/HyperosListGroup/HyperosSwitchTile/HyperosSelectTile/HyperosSliderTile/HyperosSectionGap/HyperosSubpage`（已在文件顶部 import）；`TimetableSettings`、`Timer`、`showAppToast`（均已在文件作用域可用）。
+- Produces: 新 `_HyperFocusTimingScreenState`，读写字段：`liveEnableBeforeClass`、`liveEnableDuringClass`、`liveEnableBeforeEnd`、`liveClassReminderStartMinutes`、`liveShowBeforeClassMinutes`、`liveEndSecondsCountdownThreshold`、`liveTimeCorrectionSeconds`。Task 3 依赖：本页不再引用 `hfEnable*`。
 
-将 `HyperFocusStageTemplateScreen` 中每个字段的 `HyperosTextField` 替换为 8 个变量芯片（`ChoiceChip`），用户点击芯片切换选中/未选中。
+- [ ] **Step 1: 替换 `HyperFocusTimingScreen` 类**
 
-## 具体变更
-
-### 1. 添加变量列表常量
-
-```dart
-static const _availableVariables = [
-  '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
-];
-```
-
-### 2. 添加 `_variableChipField` 方法替换 `_textFieldTile`
+把 `lib/screens/live_settings_subpages.dart` 中 `class HyperFocusTimingScreen`（1195 行起）到 `_HyperFocusTimingScreenState` 结束（1252 行 `}`）的整段，替换为：
 
 ```dart
-Widget _variableChipField(String key, String label) {
-  final current = _controllers[key]?.text ?? '';
-  final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: HyperosTypography.listTitle(context)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _availableVariables.map((v) {
-            final isOn = selected.contains(v);
-            return ChoiceChip(
-              label: Text(v, style: TextStyle(
-                fontSize: 13,
-                color: isOn ? Colors.white : null,
-              )),
-              selected: isOn,
-              onSelected: (on) {
-                setState(() {
-                  final list = current.isEmpty
-                      ? <String>[]
-                      : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-                  if (on && !list.contains(v)) {
-                    list.add(v);
-                  } else if (!on) {
-                    list.remove(v);
-                  }
-                  _controllers[key]?.text = list.join(',');
-                });
-              },
-              selectedColor: Theme.of(context).colorScheme.primary,
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            );
-          }).toList(),
-        ),
-      ],
-    ),
-  );
+class HyperFocusTimingScreen extends StatefulWidget {
+  const HyperFocusTimingScreen({super.key});
+
+  @override
+  State<HyperFocusTimingScreen> createState() => _HyperFocusTimingScreenState();
+}
+
+class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
+  static const List<int> _beforeClassMinutesOptions = [
+    1,
+    5,
+    10,
+    15,
+    20,
+    30,
+    40,
+    50,
+    60,
+  ];
+  static const List<int> _endSecondsOptions = [15, 30, 45, 60, 90];
+  static const double _timeCorrectionMin = -30;
+  static const double _timeCorrectionMax = 30;
+
+  late TimetableSettings _draft;
+  Timer? _autoSaveTimer;
+  Future<void> _saveQueue = Future<void>.value();
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = context.read<TimetableProvider>().settings;
+  }
+
+  @override
+  void dispose() {
+    if (_autoSaveTimer?.isActive ?? false) {
+      _autoSaveTimer?.cancel();
+      _enqueuePersist(_draft);
+    } else {
+      _autoSaveTimer?.cancel();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final duringClassEnabled =
+        _draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd;
+    final timeCorrectionText = _formatLiveTimeCorrection(
+      l10n,
+      _draft.liveTimeCorrectionSeconds,
+    );
+    return HyperosSubpage(
+      onBack: () => Navigator.pop(context),
+      title: const Text('提醒时机'),
+      child: HyperosListView(
+        children: [
+          HyperosSectionLabel(text: l10n.liveReminderSwitchesTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSwitchTile(
+                title: l10n.beforeClassReminderTitle,
+                subtitle: l10n.beforeClassReminderSubtitle(
+                  _draft.liveShowBeforeClassMinutes,
+                ),
+                value: _draft.liveEnableBeforeClass,
+                onChanged: (value) =>
+                    _updateDraft(_draft.copyWith(liveEnableBeforeClass: value)),
+              ),
+              HyperosSwitchTile(
+                title: l10n.duringClassReminderTitle,
+                subtitle: l10n.duringClassReminderSubtitle,
+                value: duringClassEnabled,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(
+                    liveEnableDuringClass: value,
+                    liveEnableBeforeEnd: value,
+                  ),
+                ),
+              ),
+              if (duringClassEnabled)
+                HyperosSelectTile<int>(
+                  label: l10n.liveClassReminderLeadTitle,
+                  subtitle: _buildLiveClassReminderLeadSummary(l10n, _draft),
+                  items: {
+                    l10n.liveClassReminderLeadOptionImmediate: 0,
+                    l10n.liveClassReminderLeadOptionMinutes(5): 5,
+                    l10n.liveClassReminderLeadOptionMinutes(10): 10,
+                    l10n.liveClassReminderLeadOptionMinutes(15): 15,
+                    l10n.liveClassReminderLeadOptionMinutes(20): 20,
+                    l10n.liveClassReminderLeadOptionMinutes(30): 30,
+                  },
+                  value: _draft.liveClassReminderStartMinutes,
+                  onChanged: (value) => _updateDraft(
+                    _draft.copyWith(liveClassReminderStartMinutes: value),
+                  ),
+                ),
+            ],
+          ),
+          const HyperosSectionGap(),
+          HyperosSectionLabel(text: l10n.liveTimeThresholdTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSelectTile<int>(
+                label: l10n.beforeClassPopupLabel,
+                items: {
+                  for (final value in _beforeClassMinutesOptions)
+                    l10n.beforeClassMinutesOption(value): value,
+                },
+                value: _draft.liveShowBeforeClassMinutes,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveShowBeforeClassMinutes: value),
+                ),
+              ),
+              HyperosSelectTile<int>(
+                label: l10n.beforeEndSecondsLabel,
+                items: {
+                  for (final value in _endSecondsOptions)
+                    l10n.beforeEndSecondsOption(value): value,
+                },
+                value: _draft.liveEndSecondsCountdownThreshold,
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveEndSecondsCountdownThreshold: value),
+                ),
+              ),
+            ],
+          ),
+          const HyperosSectionGap(),
+          HyperosSectionLabel(text: l10n.timeCorrectionTitle),
+          HyperosListGroup(
+            children: [
+              HyperosSliderTile(
+                title: l10n.timeCorrectionLabel(timeCorrectionText),
+                dialogTitle: l10n.timeCorrectionTitle,
+                dialogHelper: l10n.timeCorrectionHelp,
+                value: _draft.liveTimeCorrectionSeconds.toDouble(),
+                min: _timeCorrectionMin,
+                max: _timeCorrectionMax,
+                divisions: (_timeCorrectionMax - _timeCorrectionMin).round(),
+                onChanged: (value) => _updateDraft(
+                  _draft.copyWith(liveTimeCorrectionSeconds: value.round()),
+                  debounce: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateDraft(TimetableSettings next, {bool debounce = false}) {
+    setState(() => _draft = next);
+    _autoSaveTimer?.cancel();
+    if (debounce) {
+      _autoSaveTimer = Timer(
+        const Duration(milliseconds: 250),
+        () => _enqueuePersist(next),
+      );
+      return;
+    }
+    _enqueuePersist(next);
+  }
+
+  void _enqueuePersist(TimetableSettings next) {
+    _saveQueue = _saveQueue.catchError((_) {}).then((_) => _persistDraft(next));
+  }
+
+  Future<void> _persistDraft(TimetableSettings next) async {
+    final provider = context.read<TimetableProvider>();
+    final message = await provider.updateTimetableSettings(next);
+    if (!mounted) return;
+    if (message != null) {
+      showAppToast(context, message: message);
+      setState(() => _draft = provider.settings);
+    }
+  }
 }
 ```
 
-### 3. 替换 build() 中的 UI
+- [ ] **Step 2: 运行测试确认通过**
 
-将 build() 中的每个 `_textFieldTile` 及其 `HyperosListGroup` 包装替换为直接调用 `_variableChipField`。
+Run: `flutter test test\widgets\hyperfocus_timing_screen_test.dart`
+Expected: 2 个用例全部 PASS。
 
-当前：
-```
-HyperosSectionLabel('状态栏岛')
-HyperosListGroup → _textFieldTile('ticker_$_s')
+- [ ] **Step 3: 跑一遍相关既有测试防回归**
 
-HyperosSectionLabel('岛内容')
-HyperosListGroup → _textFieldTile('islandA_$_s') + 'islandB_$_s'
+Run: `flutter test test\widgets\timetable_settings_screen_test.dart`
+Expected: 全部 PASS（该文件不触碰超级岛页）。
 
-HyperosSectionLabel('展开态')
-HyperosListGroup → _textFieldTile('baseTitle_$_s') + 'baseContent_$_s' + 'baseSubcontent_$_s'
+- [ ] **Step 4: 提交**
 
-HyperosSectionLabel('阶段标签')
-HyperosListGroup → _textFieldTile('hintTitle_$_s')
+```bash
+git add lib/screens/live_settings_subpages.dart
+git commit -m "feat: align HyperFocus timing screen with Live Updates settings"
 ```
 
-新结构（删除 HyperosListGroup 和 _textFieldTile，改用 _variableChipField）：
-```
-HyperosSectionLabel('状态栏岛')
-_variableChipField('ticker_$_s', '状态栏/息屏文本')
+---
 
-HyperosSectionLabel('岛内容')
-_variableChipField('islandA_$_s', '岛左侧文字')
-_variableChipField('islandB_$_s', '岛右侧后缀')
-
-HyperosSectionLabel('展开态')
-_variableChipField('baseTitle_$_s', '标题')
-_variableChipField('baseContent_$_s', '内容')
-_variableChipField('baseSubcontent_$_s', '副内容')
-
-HyperosSectionLabel('阶段标签')
-_variableChipField('hintTitle_$_s', '阶段标签文字')
-```
-
-### 4. 删除 `_textFieldTile` 方法
-
-删除约第 1399-1410 行的 `_textFieldTile` 方法（不再需要）。
-
-### 5. 更新提示文字
-
-将 build() 中原来的
-```dart
-Text('可用变量：{课名} {短课名} {教室} {教师} {开始} {结束} {倒计时} {正计时}')
-```
-改为
-```dart
-Text('点击选择要在各区域显示的信息')
-```
-
-## 注意事项
-
-- `_controllers` 结构不变，仍然是 `Map<String, TextEditingController>`
-- 值格式保持逗号分隔字符串（如 `"课名,教室"`）
-- `_loadTemplates`, `_saveTemplates`, `_resetStage` 方法不需要修改
-- 导入可能需要添加 `import 'package:flutter/material.dart';`（如果不在文件顶部）
-
-## 报告要求
-
-写入 `.superpowers/sdd/task-2-report.md`：
-1. 修改的文件及变更摘要
-2. `flutter analyze` 结果
-3. 任何问题或注意事项

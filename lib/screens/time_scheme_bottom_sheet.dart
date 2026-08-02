@@ -10,6 +10,7 @@ import '../models/timetable_settings.dart';
 import '../providers/timetable_provider.dart';
 import '../utils/app_toast.dart';
 import '../widgets/app_dialogs.dart';
+import '../widgets/miuix_time_picker_sheet.dart';
 import '../widgets/time_scheme_quick_generate_sheet.dart';
 import '../ui/hyperos/hyperos.dart';
 
@@ -76,7 +77,6 @@ class _TimeSchemeBottomSheetState extends State<_TimeSchemeBottomSheet> {
         chrome: HyperosSheetChrome.floating,
         frosted: true,
         maxHeight: maxSheetHeight,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: _editingSchemeId == null
             ? _buildSchemeList(context)
             : _buildEditor(context),
@@ -605,32 +605,22 @@ class _TimeSchemeBottomSheetState extends State<_TimeSchemeBottomSheet> {
     required bool isCurrent,
   }) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final iconAccent = isCurrent
+        ? HyperosIconColors.teal
+        : HyperosIconColors.blue;
 
     final content = Padding(
       padding: const EdgeInsets.all(12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color:
-                  (isCurrent
-                          ? colorScheme.primary
-                          : colorScheme.secondaryContainer)
-                      .withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              isCurrent ? Icons.schedule_rounded : Icons.access_time_rounded,
-              color: isCurrent
-                  ? colorScheme.primary
-                  : colorScheme.onSecondaryContainer,
-            ),
+          HyperosIconBadge(
+            icon: isCurrent
+                ? Icons.schedule_rounded
+                : Icons.access_time_rounded,
+            accent: iconAccent,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: HyperosTokens.rowContentGap),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -639,9 +629,7 @@ class _TimeSchemeBottomSheetState extends State<_TimeSchemeBottomSheet> {
                   scheme.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: HyperosTypography.listTitle(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.w700),
+                  style: HyperosTypography.listTitle(context),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -752,19 +740,21 @@ class _TimeSchemeBottomSheetState extends State<_TimeSchemeBottomSheet> {
 
   Future<void> _editSectionTime(int index) async {
     final l10n = AppLocalizations.of(context)!;
-    final start = await showTimePicker(
-      context: context,
+    final start = await showMiuixTimePickerSheet(
+      context,
       useRootNavigator: true,
       initialTime: _parseTimeOfDay(_sections[index].startTime),
+      title: l10n.selectStartTimeTitle,
     );
     if (start == null || !mounted) {
       return;
     }
 
-    final end = await showTimePicker(
-      context: context,
+    final end = await showMiuixTimePickerSheet(
+      context,
       useRootNavigator: true,
       initialTime: _parseTimeOfDay(_sections[index].endTime),
+      title: l10n.selectEndTimeTitle,
     );
     if (end == null || !mounted) {
       return;
@@ -999,10 +989,9 @@ class _TimeSchemeBadge extends StatelessWidget {
     return HyperosTag(
       label: text,
       backgroundColor: primary.withValues(alpha: 0.12),
-      textStyle: TextStyle(
-        fontSize: HyperosMiuixTypography.footnote2,
-        fontWeight: FontWeight.w700,
+      textStyle: HyperosTypography.listDetail(context).copyWith(
         color: primary,
+        fontSize: HyperosTokens.sectionDescriptionSize,
       ),
     );
   }

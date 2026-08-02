@@ -1,0 +1,128 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt
+index c525080..35c603c 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt
+@@ -623,20 +623,29 @@ private data class LiveUpdatePayload(
+     val miuiIslandLabelLogoCornerRadius: Float,
+     val miuiIslandExpandedIconMode: String,
+     val miuiIslandExpandedIconPath: String?,
+     val beforeClassQuickAction: String,
+     val progressBreakOffsetsMillis: LongArray,
+     val progressMilestoneLabels: List<String>,
+     val progressMilestoneTimeTexts: List<String>,
+     /** When true, ticker re-validates against the schedule snapshot (scheduler path). */
+     val validateAgainstSchedule: Boolean = true,
+     val superIslandEngine: String = "builtIn",
++    val islandTimeoutPre: Int = 300,
++    val islandTimeoutActive: Int = 600,
++    val islandTimeoutPost: Int = 600,
++    val iconAEnabled: Boolean = true,
++    val statusTextColor: String = "#FFFFFFFF",
++    val outEffectStatusEnabled: Boolean = true,
++    val outEffectStatusColor: String = "#FFFFFFFF",
++    val outEffectExpandEnabled: Boolean = true,
++    val outEffectExpandColor: String = "#FFFFFFFF",
+ )
+ 
+ private fun normalizeNullableText(value: String?): String? {
+     val normalized = value?.trim() ?: return null
+     if (normalized.isEmpty() || normalized.equals("null", ignoreCase = true)) {
+         return null
+     }
+     return normalized
+ }
+ 
+@@ -899,20 +908,29 @@ object LiveUpdateScheduler {
+             progressMilestoneLabels = progressMilestoneLabels,
+             progressMilestoneTimeTexts = progressMilestoneTimeTexts,
+             // Production Flutter starts pass true so the ticker keeps
+             // re-validating against the schedule snapshot after the app goes
+             // to the background. Test sessions omit the flag (false) because
+             // their fixture course is intentionally absent from the snapshot.
+             validateAgainstSchedule =
+                 data["validateAgainstSchedule"] as? Boolean ?: false,
+             superIslandEngine =
+                 data["superIslandEngine"] as? String ?: "hyperFocusApi",
++            islandTimeoutPre = (islandConfig["hfIslandTimeoutPre"] as? Number)?.toInt() ?: 300,
++            islandTimeoutActive = (islandConfig["hfIslandTimeoutActive"] as? Number)?.toInt() ?: 600,
++            islandTimeoutPost = (islandConfig["hfIslandTimeoutPost"] as? Number)?.toInt() ?: 600,
++            iconAEnabled = islandConfig["hfIconAEnabled"] as? Boolean ?: true,
++            statusTextColor = islandConfig["hfStatusTextColor"] as? String ?: "#FFFFFFFF",
++            outEffectStatusEnabled = islandConfig["hfOutEffectStatusEnabled"] as? Boolean ?: true,
++            outEffectStatusColor = islandConfig["hfOutEffectStatusColor"] as? String ?: "#FFFFFFFF",
++            outEffectExpandEnabled = islandConfig["hfOutEffectExpandEnabled"] as? Boolean ?: true,
++            outEffectExpandColor = islandConfig["hfOutEffectExpandColor"] as? String ?: "#FFFFFFFF",
+         )
+         return buildServiceIntent(context, payload)
+     }
+ 
+     fun reschedule(
+         context: Context,
+         allowImmediateStart: Boolean,
+         stopStaleSessions: Boolean = false,
+     ): Boolean {
+         cancelScheduledAlarm(context)
+@@ -1370,20 +1388,29 @@ object LiveUpdateScheduler {
+             putExtra("miuiIslandLabelFontSize", payload.miuiIslandLabelFontSize)
+             putExtra("miuiIslandLabelOffsetX", payload.miuiIslandLabelOffsetX)
+             putExtra("miuiIslandLabelOffsetY", payload.miuiIslandLabelOffsetY)
+             putExtra("miuiIslandLabelLogoPath", payload.miuiIslandLabelLogoPath)
+             putExtra(
+                 "miuiIslandLabelLogoCornerRadius",
+                 payload.miuiIslandLabelLogoCornerRadius,
+             )
+             putExtra("miuiIslandExpandedIconMode", payload.miuiIslandExpandedIconMode)
+             putExtra("miuiIslandExpandedIconPath", payload.miuiIslandExpandedIconPath)
++            putExtra("hfIslandTimeoutPre", payload.islandTimeoutPre)
++            putExtra("hfIslandTimeoutActive", payload.islandTimeoutActive)
++            putExtra("hfIslandTimeoutPost", payload.islandTimeoutPost)
++            putExtra("hfIconAEnabled", payload.iconAEnabled)
++            putExtra("hfStatusTextColor", payload.statusTextColor)
++            putExtra("hfOutEffectStatusEnabled", payload.outEffectStatusEnabled)
++            putExtra("hfOutEffectStatusColor", payload.outEffectStatusColor)
++            putExtra("hfOutEffectExpandEnabled", payload.outEffectExpandEnabled)
++            putExtra("hfOutEffectExpandColor", payload.outEffectExpandColor)
+             putExtra("beforeClassQuickAction", payload.beforeClassQuickAction)
+             putExtra("validateAgainstSchedule", payload.validateAgainstSchedule)
+             putExtra("superIslandEngine", payload.superIslandEngine)
+         }
+     }
+ 
+     private fun mapToNativeCourse(data: Map<String, Any>): NativeCourse {
+         return NativeCourse(
+             id = normalizeText(data["id"] as? String),
+             name = normalizeText(data["name"] as? String),
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index f97c328..af3cb2d 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -2378,20 +2378,29 @@ class LiveUpdateService : Service() {
+             miuiIslandLabelOffsetY =
+                 intent?.getFloatExtra("miuiIslandLabelOffsetY", 0f) ?: 0f
+             miuiIslandLabelLogoPath =
+                 intent?.getStringExtra("miuiIslandLabelLogoPath")?.takeIf { it.isNotBlank() }
+             miuiIslandLabelLogoCornerRadius =
+                 intent?.getFloatExtra("miuiIslandLabelLogoCornerRadius", 8f) ?: 8f
+             miuiIslandExpandedIconMode =
+                 intent?.getStringExtra("miuiIslandExpandedIconMode") ?: "app_icon"
+             miuiIslandExpandedIconPath =
+                 intent?.getStringExtra("miuiIslandExpandedIconPath")?.takeIf { it.isNotBlank() }
++            islandTimeoutPre = intent?.getIntExtra("hfIslandTimeoutPre", 300) ?: 300
++            islandTimeoutActive = intent?.getIntExtra("hfIslandTimeoutActive", 600) ?: 600
++            islandTimeoutPost = intent?.getIntExtra("hfIslandTimeoutPost", 600) ?: 600
++            iconAEnabled = intent?.getBooleanExtra("hfIconAEnabled", true) ?: true
++            statusTextColor = intent?.getStringExtra("hfStatusTextColor") ?: "#FFFFFFFF"
++            outEffectStatusEnabled = intent?.getBooleanExtra("hfOutEffectStatusEnabled", true) ?: true
++            outEffectStatusColor = intent?.getStringExtra("hfOutEffectStatusColor") ?: "#FFFFFFFF"
++            outEffectExpandEnabled = intent?.getBooleanExtra("hfOutEffectExpandEnabled", true) ?: true
++            outEffectExpandColor = intent?.getStringExtra("hfOutEffectExpandColor") ?: "#FFFFFFFF"
+             beforeClassLeadMillis =
+                 intent?.getLongExtra("beforeClassLeadMillis", 0L)
+                     ?.coerceAtLeast(0L)
+                     ?: 0L
+             endReminderLeadMillis =
+                 intent?.getLongExtra("endReminderLeadMillis", 600_000L)
+                     ?.coerceAtLeast(0L)
+                     ?: 600_000L
+             liveClassReminderStartMinutes =
+                 intent?.getIntExtra("liveClassReminderStartMinutes", 0)?.coerceAtLeast(0) ?: 0

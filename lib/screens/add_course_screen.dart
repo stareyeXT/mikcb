@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:university_timetable/l10n/enum_localizations.dart';
@@ -17,6 +16,7 @@ import '../widgets/course_color_picker_sheet.dart';
 import '../widgets/course_field_picker_sheet.dart';
 import '../widgets/course_template_picker_sheet.dart';
 import '../ui/hyperos/hyperos.dart';
+import '../widgets/miuix_number_picker_sheet.dart';
 import '../widgets/time_scheme_picker_sheet.dart';
 
 enum _WeekSelectionMode { range, custom }
@@ -58,6 +58,7 @@ class _ScheduleEntryData {
   Set<int> selectedCustomWeeks;
   List<int>? suspendedWeeks;
   String? note;
+  Map<int, CourseSessionNote>? sessionNotes;
   String? timeSchemeIdOverride;
 
   _ScheduleEntryData({
@@ -75,6 +76,7 @@ class _ScheduleEntryData {
     Set<int>? selectedCustomWeeks,
     this.suspendedWeeks,
     this.note,
+    this.sessionNotes,
     this.timeSchemeIdOverride,
   }) : selectedCustomWeeks = selectedCustomWeeks ?? <int>{};
 
@@ -97,6 +99,7 @@ class _ScheduleEntryData {
       selectedCustomWeeks: customWeeks?.toSet() ?? <int>{},
       suspendedWeeks: course.normalizedSuspendedWeeks,
       note: course.note,
+      sessionNotes: course.sessionNotes,
       timeSchemeIdOverride: course.timeSchemeIdOverride,
     );
   }
@@ -136,6 +139,7 @@ class _ScheduleEntryData {
       courseNature: courseNature,
       description: description,
       note: note,
+      sessionNotes: sessionNotes,
       timeSchemeIdOverride: timeSchemeIdOverride,
     );
   }
@@ -387,6 +391,30 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     onSelected(selected);
   }
 
+  /// Miuix wheel sheet for numeric ranges (sections / weeks) — same picker as
+  /// the semester week count sheet on the settings home page.
+  Future<void> _pickFromNumberWheelSheet({
+    required String title,
+    required int currentValue,
+    required int minValue,
+    required int maxValue,
+    required String Function(int value) label,
+    required ValueChanged<int> onSelected,
+  }) async {
+    final selected = await showMiuixNumberPickerSheet(
+      context,
+      title: title,
+      currentValue: currentValue,
+      minValue: minValue,
+      maxValue: maxValue,
+      label: label,
+    );
+    if (!mounted || selected == null || selected == currentValue) {
+      return;
+    }
+    onSelected(selected);
+  }
+
   Widget _buildGroupEditingBody(
     TimetableProvider provider,
     TimetableSettings settings,
@@ -409,61 +437,97 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final typo = context.theme.typography.body;
     final colors = context.theme.colors;
     return HyperosControlCard(
+      // Mixed inset fields + full-bleed [HyperosSelectTile]: edge-to-edge card
+      // so the select row applies its own 16dp padding once (not stacked on
+      // [HyperosControlCard.headerlessBodyPadding]).
+      edgeToEdge: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.sharedInfoTitle,
-                    style: typo.sm.copyWith(fontWeight: FontWeight.w600),
+            padding: const EdgeInsets.fromLTRB(
+              HyperosControlCardScope.defaultHorizontalPadding,
+              HyperosControlCardScope.defaultHorizontalPadding,
+              HyperosControlCardScope.defaultHorizontalPadding,
+              0,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.sharedInfoTitle,
+                      style: typo.sm.copyWith(fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    tooltip: l10n.sharedInfoHint,
+                    onPressed: () => _showSharedInfoHintSheet(l10n),
+                    icon: Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: colors.mutedForeground,
+                    ),
                   ),
-                  tooltip: l10n.sharedInfoHint,
-                  onPressed: () => _showSharedInfoHintSheet(l10n),
-                  icon: Icon(
-                    Icons.info_outline_rounded,
-                    size: 18,
-                    color: colors.mutedForeground,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          ..._withSpacing([
-            _buildCourseNameField(provider, l10n),
-            _buildShortNameField(l10n),
-            HyperosSelectTile<CourseNature>(
-              label: l10n.courseNatureLabel,
-              items: {
-                for (final item in CourseNature.values)
-                  courseNatureLabel(l10n, item): item,
-              },
-              value: _courseNature,
-              onChanged: (value) => setState(() => _courseNature = value),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: HyperosControlCardScope.defaultHorizontalPadding,
             ),
-            HyperosTextField(
-              controller: _descriptionController,
-              label: l10n.courseDescriptionOptional,
-              minLines: 2,
-              maxLines: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _withSpacing([
+                _buildCourseNameField(provider, l10n),
+                _buildShortNameField(l10n),
+              ], spacing: 8),
             ),
-            Text(
-              l10n.courseColorTitle,
-              style: typo.xs2.copyWith(color: colors.mutedForeground),
+          ),
+          const SizedBox(height: 8),
+          // Full-bleed preference row; owns its own horizontal insets.
+          HyperosSelectTile<CourseNature>(
+            label: l10n.courseNatureLabel,
+            items: {
+              for (final item in CourseNature.values)
+                courseNatureLabel(l10n, item): item,
+            },
+            value: _courseNature,
+            onChanged: (value) => setState(() => _courseNature = value),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              HyperosControlCardScope.defaultHorizontalPadding,
+              0,
+              HyperosControlCardScope.defaultHorizontalPadding,
+              HyperosControlCardScope.defaultBodyBottomInset,
             ),
-            _buildCompactColorPalette(l10n),
-          ], spacing: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _withSpacing([
+                HyperosTextField(
+                  controller: _descriptionController,
+                  label: l10n.courseDescriptionOptional,
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                Text(
+                  l10n.courseColorTitle,
+                  style: typo.xs2.copyWith(color: colors.mutedForeground),
+                ),
+                _buildCompactColorPalette(l10n),
+              ], spacing: 8),
+            ),
+          ),
         ],
       ),
     );
@@ -562,16 +626,6 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       return swatch;
     }
     return Tooltip(message: tooltip, child: swatch);
-  }
-
-  Map<String, int> _sectionSelectItems(
-    Iterable<int> sectionNumbers,
-    AppLocalizations l10n,
-  ) {
-    return {
-      for (final section in sectionNumbers)
-        l10n.scheduleSectionNumberLabel(section): section,
-    };
   }
 
   void _autofillShortNameFromCourseName() {
@@ -960,10 +1014,12 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final startSelect = _buildCompactPickerField(
       label: l10n.startSectionLabel,
       value: l10n.scheduleSectionNumberLabel(entry.startSection),
-      onPress: () => _pickFromSelectSheet(
+      onPress: () => _pickFromNumberWheelSheet(
         title: l10n.startSectionLabel,
-        items: _sectionSelectItems(sectionNumbers, l10n),
         currentValue: entry.startSection,
+        minValue: sectionNumbers.first,
+        maxValue: sectionNumbers.last,
+        label: (section) => l10n.scheduleSectionNumberLabel(section),
         onSelected: (value) {
           setState(() {
             entry.startSection = value;
@@ -977,13 +1033,12 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final endSelect = _buildCompactPickerField(
       label: l10n.endSectionLabel,
       value: l10n.scheduleSectionNumberLabel(entry.endSection),
-      onPress: () => _pickFromSelectSheet(
+      onPress: () => _pickFromNumberWheelSheet(
         title: l10n.endSectionLabel,
-        items: _sectionSelectItems(
-          sectionNumbers.where((s) => s >= entry.startSection),
-          l10n,
-        ),
         currentValue: entry.endSection,
+        minValue: entry.startSection,
+        maxValue: sectionNumbers.last,
+        label: (section) => l10n.scheduleSectionNumberLabel(section),
         onSelected: (value) => setState(() => entry.endSection = value),
       ),
     );
@@ -1184,17 +1239,75 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final entry = _scheduleEntries[index];
     final followLabel =
         provider.activeTimeScheme?.name ?? l10n.timetableAppName;
-    final currentName = entry.timeSchemeIdOverride == null
-        ? l10n.followCurrentTimetableWithName(followLabel)
-        : provider.timeSchemes
-                  .where((s) => s.id == entry.timeSchemeIdOverride)
-                  .firstOrNull
-                  ?.name ??
-              l10n.followCurrentTimetableWithName(followLabel);
+    final locationText = index < _entryLocationControllers.length
+        ? _entryLocationControllers[index].text
+        : entry.location;
+    // Never mutate draft entry during build — use [locationText] for resolve
+    // only. Controllers are flushed to entry on save / picker confirm.
+    final isAutoMode = entry.timeSchemeIdOverride == null;
+    final locationMatch = isAutoMode
+        ? provider.matchLocationTime(locationText)
+        : null;
+    final resolvedScheme = _resolveEntryTimeScheme(
+      provider,
+      entry,
+      locationOverride: locationText,
+    );
+    final sectionCount = resolvedScheme?.sections.length ?? 0;
+    final clockHint =
+        resolvedScheme != null &&
+            entry.startSection >= 1 &&
+            entry.endSection <= sectionCount
+        ? '${resolvedScheme.sections[entry.startSection - 1].startTime}'
+              '-${resolvedScheme.sections[entry.endSection - 1].endTime}'
+        : null;
+
+    // Always surface the *effective* scheme name. "Follow auto" is a mode, not
+    // a scheme — users expect to see which template will actually be used.
+    final String currentName;
+    String? autoResolvedSubtitle;
+    if (!isAutoMode) {
+      currentName =
+          provider.timeSchemes
+              .where((scheme) => scheme.id == entry.timeSchemeIdOverride)
+              .firstOrNull
+              ?.name ??
+          l10n.followCurrentTimetableWithName(followLabel);
+      autoResolvedSubtitle = null;
+    } else if (resolvedScheme != null) {
+      if (locationMatch != null) {
+        currentName = compact
+            ? resolvedScheme.name
+            : l10n.locationTimeMatchedSchemeHint(resolvedScheme.name);
+        autoResolvedSubtitle = l10n.locationTimeAutoResolvedByGroup(
+          locationMatch.groupName,
+          resolvedScheme.name,
+        );
+      } else {
+        currentName = compact
+            ? resolvedScheme.name
+            : l10n.followCurrentTimetableWithName(resolvedScheme.name);
+        autoResolvedSubtitle = l10n.locationTimeAutoResolvedByTimetable(
+          resolvedScheme.name,
+        );
+      }
+    } else {
+      currentName = l10n.followLocationAutoTimeScheme;
+      autoResolvedSubtitle = null;
+    }
+
+    // Compact row is single-line with ellipsis: put the clock first so
+    // truncation eats the scheme name, not the times.
+    final displayValue = clockHint == null
+        ? currentName
+        : compact
+        ? '$clockHint · $currentName'
+        : '$currentName · $clockHint';
     void onPress() {
       showTimeSchemePickerSheet(
         context,
         currentValue: entry.timeSchemeIdOverride,
+        autoResolvedSubtitle: autoResolvedSubtitle,
         onSelected: (value) {
           setState(() {
             entry.timeSchemeIdOverride = value;
@@ -1208,13 +1321,13 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     if (compact) {
       return _buildCompactPickerField(
         label: l10n.timeSchemeLabel,
-        value: currentName,
+        value: displayValue,
         onPress: onPress,
       );
     }
     return _buildPickerTile(
       label: l10n.timeSchemeLabel,
-      value: currentName,
+      value: displayValue,
       icon: Icons.schedule_rounded,
       onPress: onPress,
     );
@@ -1438,33 +1551,14 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     required bool isSelected,
     required VoidCallback onPress,
   }) {
-    final theme = context.theme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: theme.style.borderRadius.md,
-        onTap: onPress,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: isSelected ? theme.colors.primary : theme.colors.secondary,
-            borderRadius: theme.style.borderRadius.md,
-            border: Border.all(
-              color: isSelected ? theme.colors.primary : theme.colors.border,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              '$week',
-              style: theme.typography.body.sm.copyWith(
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? theme.colors.primaryForeground
-                    : theme.colors.secondaryForeground,
-              ),
-            ),
-          ),
-        ),
-      ),
+    // Ready-made Miuix button; dense variant is tuned for grid / chip layouts.
+    return HyperosButton(
+      label: '$week',
+      variant: isSelected
+          ? HyperosButtonVariant.primary
+          : HyperosButtonVariant.secondary,
+      dense: true,
+      onPressed: onPress,
     );
   }
 
@@ -1605,16 +1699,15 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                               if (tempMode == _WeekSelectionMode.range) ...[
                                 _buildResponsiveFieldPair(
                                   spacing: 8,
-                                  leading: _buildCompactPickerField(
+                                  leading: HyperosPickerField(
                                     label: l10n.startWeekLabel,
                                     value: l10n.weekLabel(tempStartWeek),
-                                    onPress: () => _pickFromSelectSheet(
+                                    onTap: () => _pickFromNumberWheelSheet(
                                       title: l10n.startWeekLabel,
-                                      items: {
-                                        for (final week in availableWeeks)
-                                          l10n.weekLabel(week): week,
-                                      },
                                       currentValue: tempStartWeek,
+                                      minValue: availableWeeks.first,
+                                      maxValue: availableWeeks.last,
+                                      label: (week) => l10n.weekLabel(week),
                                       onSelected: (value) {
                                         setDialogState(() {
                                           tempStartWeek = value;
@@ -1625,18 +1718,15 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                                       },
                                     ),
                                   ),
-                                  trailing: _buildCompactPickerField(
+                                  trailing: HyperosPickerField(
                                     label: l10n.endWeekLabel,
                                     value: l10n.weekLabel(tempEndWeek),
-                                    onPress: () => _pickFromSelectSheet(
+                                    onTap: () => _pickFromNumberWheelSheet(
                                       title: l10n.endWeekLabel,
-                                      items: {
-                                        for (final week in availableWeeks.where(
-                                          (w) => w >= tempStartWeek,
-                                        ))
-                                          l10n.weekLabel(week): week,
-                                      },
                                       currentValue: tempEndWeek,
+                                      minValue: tempStartWeek,
+                                      maxValue: availableWeeks.last,
+                                      label: (week) => l10n.weekLabel(week),
                                       onSelected: (value) {
                                         setDialogState(
                                           () => tempEndWeek = value,
@@ -1720,8 +1810,10 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                                   spacing: 8,
                                   runSpacing: 8,
                                   children: [
-                                    ActionChip(
-                                      label: Text(l10n.selectAllAction),
+                                    HyperosButton(
+                                      label: l10n.selectAllAction,
+                                      variant: HyperosButtonVariant.secondary,
+                                      dense: true,
                                       onPressed: () {
                                         setDialogState(() {
                                           tempCustomWeeks = availableWeeks
@@ -1729,8 +1821,10 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                                         });
                                       },
                                     ),
-                                    ActionChip(
-                                      label: Text(l10n.selectOddWeeksAction),
+                                    HyperosButton(
+                                      label: l10n.selectOddWeeksAction,
+                                      variant: HyperosButtonVariant.secondary,
+                                      dense: true,
                                       onPressed: () {
                                         setDialogState(() {
                                           tempCustomWeeks = availableWeeks
@@ -1739,8 +1833,10 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                                         });
                                       },
                                     ),
-                                    ActionChip(
-                                      label: Text(l10n.selectEvenWeeksAction),
+                                    HyperosButton(
+                                      label: l10n.selectEvenWeeksAction,
+                                      variant: HyperosButtonVariant.secondary,
+                                      dense: true,
                                       onPressed: () {
                                         setDialogState(() {
                                           tempCustomWeeks = availableWeeks
@@ -1758,7 +1854,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                                   selectedWeeks.length,
                                   _formatWeekList(selectedWeeks),
                                 ),
-                                style: context.theme.typography.body.sm,
+                                style: HyperosTypography.listDetail(context),
                               ),
                             ],
                           ),
@@ -1859,6 +1955,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
         timeSchemeId: entry.timeSchemeIdOverride,
         startSection: entry.startSection,
         endSection: entry.endSection,
+        location: entry.location,
       );
       if (validationMessage != null) {
         showAppToast(
@@ -1947,17 +2044,28 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
 
   TimeScheme? _resolveEntryTimeScheme(
     TimetableProvider provider,
-    _ScheduleEntryData entry,
-  ) {
-    if (entry.timeSchemeIdOverride == null) {
-      return provider.activeTimeScheme;
-    }
-    for (final scheme in provider.timeSchemes) {
-      if (scheme.id == entry.timeSchemeIdOverride) {
-        return scheme;
-      }
-    }
-    return null;
+    _ScheduleEntryData entry, {
+    String? locationOverride,
+  }) {
+    // Keep the same priority as runtime resolve:
+    // override > location match > date rule > active timetable scheme.
+    // Using only [activeTimeScheme] here would discard location routing when
+    // the user leaves the entry on "follow auto", and overwrite applied clocks
+    // on the next save.
+    return provider.resolveCourseTimeScheme(
+      Course(
+        id: entry.id,
+        name: '_',
+        teacher: entry.teacher,
+        location: locationOverride ?? entry.location,
+        dayOfWeek: entry.dayOfWeek,
+        startSection: entry.startSection,
+        endSection: entry.endSection,
+        startTime: '08:00',
+        endTime: '09:00',
+        timeSchemeIdOverride: entry.timeSchemeIdOverride,
+      ),
+    );
   }
 }
 

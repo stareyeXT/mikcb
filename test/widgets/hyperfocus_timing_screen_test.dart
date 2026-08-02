@@ -17,6 +17,13 @@ Future<void> _pumpScreen(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
+Future<void> flushRealAsync(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 1)),
+  );
+  await tester.pumpAndSettle();
+}
+
 void _seedInitializedPrefs() {
   final now = DateTime(2026, 4, 12);
   final settings = TimetableSettings.defaults();
@@ -87,19 +94,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('小米超级岛'),
+      find.text('提醒时段'),
       200,
       scrollable: find.byType(Scrollable).last,
     );
-    await tester.tap(find.text('小米超级岛'));
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.text('提醒时机'),
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.text('提醒时机'));
+    await tester.tap(find.text('提醒时段'));
     await tester.pumpAndSettle();
     return provider;
   }
@@ -113,17 +112,17 @@ void main() {
     expect(provider.settings.liveEnableBeforeClass, isTrue);
 
     await tester.tap(find.text('上课前提醒'));
-    await tester.pumpAndSettle();
+    await flushRealAsync(tester);
     expect(provider.settings.liveEnableBeforeClass, isFalse);
 
     await tester.tap(find.text('课中与下课提醒'));
-    await tester.pumpAndSettle();
+    await flushRealAsync(tester);
     expect(provider.settings.liveEnableDuringClass, isFalse);
     expect(provider.settings.liveEnableBeforeEnd, isFalse);
     expect(find.text('重点提醒切入时机'), findsNothing);
 
     await tester.tap(find.text('课中与下课提醒'));
-    await tester.pumpAndSettle();
+    await flushRealAsync(tester);
     expect(provider.settings.liveEnableDuringClass, isTrue);
     expect(provider.settings.liveEnableBeforeEnd, isTrue);
     expect(find.text('重点提醒切入时机'), findsOneWidget);

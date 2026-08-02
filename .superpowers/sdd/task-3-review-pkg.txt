@@ -1,0 +1,175 @@
+diff --git a/lib/models/timetable_settings.dart b/lib/models/timetable_settings.dart
+index 0e2209c..cfcf38b 100644
+--- a/lib/models/timetable_settings.dart
++++ b/lib/models/timetable_settings.dart
+@@ -1073,23 +1073,20 @@ class TimetableSettings {
+   final double liveDuringEndMiuiIslandLabelOffsetY;
+   final String? liveDuringEndMiuiIslandLabelLogoPath;
+   final double liveDuringEndMiuiIslandLabelLogoCornerRadius;
+   final MiuiIslandExpandedIconMode liveDuringEndMiuiIslandExpandedIconMode;
+   final String? liveDuringEndMiuiIslandExpandedIconPath;
+   final int liveShowBeforeClassMinutes;
+   final int liveClassReminderStartMinutes;
+   final int liveEndSecondsCountdownThreshold;
+   final int liveTimeCorrectionSeconds;
+   final SuperIslandEngine superIslandEngine;
+-  final bool hfEnableBeforeClass;
+-  final bool hfEnableDuringClass;
+-  final bool hfEnableBeforeEnd;
+   final bool hfShowCourseName;
+   final bool hfShowLocation;
+   final bool hfShowCountdown;
+   final String hfCustomTitle;
+   final String hfCustomTitleColor;
+   final String hfTemplatesJson;
+   final LiveBeforeClassQuickAction liveBeforeClassQuickAction;
+   final String themeSeedColor;
+   final ForuiTheme foruiTheme;
+   final String timetablePageBackgroundColor;
+@@ -1233,23 +1230,20 @@ class TimetableSettings {
+     this.liveDuringEndMiuiIslandLabelLogoCornerRadius = 8,
+     this.liveDuringEndMiuiIslandExpandedIconMode =
+         MiuiIslandExpandedIconMode.appIcon,
+     this.liveDuringEndMiuiIslandExpandedIconPath,
+     this.liveShowBeforeClassMinutes = 20,
+     this.liveClassReminderStartMinutes = 0,
+     this.liveEndSecondsCountdownThreshold = 60,
+     this.liveTimeCorrectionSeconds = 0,
+     this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
+     this.superIslandEngine = SuperIslandEngine.hyperFocusApi,
+-    this.hfEnableBeforeClass = true,
+-    this.hfEnableDuringClass = true,
+-    this.hfEnableBeforeEnd = true,
+     this.hfShowCourseName = true,
+     this.hfShowLocation = true,
+     this.hfShowCountdown = true,
+     this.hfCustomTitle = '',
+     this.hfCustomTitleColor = '#FFFFFF',
+     this.hfTemplatesJson = '',
+     this.themeSeedColor = '#2563EB',
+     this.foruiTheme = ForuiTheme.blue,
+     this.timetablePageBackgroundColor = '#F8FAFC',
+     this.homePageBackgroundFill = HomePageBackgroundFill.color,
+@@ -1547,23 +1541,20 @@ class TimetableSettings {
+       'liveDuringEndMiuiIslandExpandedIconMode':
+           liveDuringEndMiuiIslandExpandedIconMode.value,
+       'liveDuringEndMiuiIslandExpandedIconPath':
+           liveDuringEndMiuiIslandExpandedIconPath,
+       'liveShowBeforeClassMinutes': liveShowBeforeClassMinutes,
+       'liveClassReminderStartMinutes': liveClassReminderStartMinutes,
+       'liveEndSecondsCountdownThreshold': liveEndSecondsCountdownThreshold,
+       'liveTimeCorrectionSeconds': liveTimeCorrectionSeconds,
+       'liveBeforeClassQuickAction': liveBeforeClassQuickAction.value,
+       'superIslandEngine': superIslandEngine.value,
+-      'hfEnableBeforeClass': hfEnableBeforeClass,
+-      'hfEnableDuringClass': hfEnableDuringClass,
+-      'hfEnableBeforeEnd': hfEnableBeforeEnd,
+       'hfShowCourseName': hfShowCourseName,
+       'hfShowLocation': hfShowLocation,
+       'hfShowCountdown': hfShowCountdown,
+       'hfCustomTitle': hfCustomTitle,
+       'hfCustomTitleColor': hfCustomTitleColor,
+       'hfTemplatesJson': hfTemplatesJson,
+       'themeSeedColor': themeSeedColor,
+       'foruiTheme': foruiTheme.value,
+       'timetablePageBackgroundColor': timetablePageBackgroundColor,
+       'homePageBackgroundFill': homePageBackgroundFill.value,
+@@ -1872,23 +1863,20 @@ class TimetableSettings {
+       liveEndSecondsCountdownThreshold:
+           (json['liveEndSecondsCountdownThreshold'] as num?)?.toInt() ?? 60,
+       liveTimeCorrectionSeconds:
+           (json['liveTimeCorrectionSeconds'] as num?)?.toInt() ?? 0,
+       liveBeforeClassQuickAction: LiveBeforeClassQuickActionX.fromValue(
+         json['liveBeforeClassQuickAction'] as String?,
+       ),
+       superIslandEngine: SuperIslandEngineX.fromValue(
+         json['superIslandEngine'] as String?,
+       ),
+-      hfEnableBeforeClass: json['hfEnableBeforeClass'] as bool? ?? true,
+-      hfEnableDuringClass: json['hfEnableDuringClass'] as bool? ?? true,
+-      hfEnableBeforeEnd: json['hfEnableBeforeEnd'] as bool? ?? true,
+       hfShowCourseName: json['hfShowCourseName'] as bool? ?? true,
+       hfShowLocation: json['hfShowLocation'] as bool? ?? true,
+       hfShowCountdown: json['hfShowCountdown'] as bool? ?? true,
+       hfCustomTitle: json['hfCustomTitle'] as String? ?? '',
+       hfCustomTitleColor: json['hfCustomTitleColor'] as String? ?? '#FFFFFF',
+       hfTemplatesJson: json['hfTemplatesJson'] as String? ?? '',
+       themeSeedColor: json['themeSeedColor'] as String? ?? '#2563EB',
+       foruiTheme: ForuiThemeX.fromValue(json['foruiTheme'] as String?),
+       timetablePageBackgroundColor:
+           json['timetablePageBackgroundColor'] as String? ?? '#F8FAFC',
+@@ -2092,23 +2080,20 @@ class TimetableSettings {
+     double? liveDuringEndMiuiIslandLabelLogoCornerRadius,
+     MiuiIslandExpandedIconMode? liveDuringEndMiuiIslandExpandedIconMode,
+     String? liveDuringEndMiuiIslandExpandedIconPath,
+     bool clearLiveDuringEndMiuiIslandExpandedIconPath = false,
+     int? liveShowBeforeClassMinutes,
+     int? liveClassReminderStartMinutes,
+     int? liveEndSecondsCountdownThreshold,
+     int? liveTimeCorrectionSeconds,
+     LiveBeforeClassQuickAction? liveBeforeClassQuickAction,
+     SuperIslandEngine? superIslandEngine,
+-    bool? hfEnableBeforeClass,
+-    bool? hfEnableDuringClass,
+-    bool? hfEnableBeforeEnd,
+     bool? hfShowCourseName,
+     bool? hfShowLocation,
+     bool? hfShowCountdown,
+     String? hfCustomTitle,
+     String? hfCustomTitleColor,
+     String? hfTemplatesJson,
+     String? themeSeedColor,
+     ForuiTheme? foruiTheme,
+     String? timetablePageBackgroundColor,
+     HomePageBackgroundFill? homePageBackgroundFill,
+@@ -2353,23 +2338,20 @@ class TimetableSettings {
+       liveClassReminderStartMinutes:
+           liveClassReminderStartMinutes ?? this.liveClassReminderStartMinutes,
+       liveEndSecondsCountdownThreshold:
+           liveEndSecondsCountdownThreshold ??
+           this.liveEndSecondsCountdownThreshold,
+       liveTimeCorrectionSeconds:
+           liveTimeCorrectionSeconds ?? this.liveTimeCorrectionSeconds,
+       liveBeforeClassQuickAction:
+           liveBeforeClassQuickAction ?? this.liveBeforeClassQuickAction,
+       superIslandEngine: superIslandEngine ?? this.superIslandEngine,
+-      hfEnableBeforeClass: hfEnableBeforeClass ?? this.hfEnableBeforeClass,
+-      hfEnableDuringClass: hfEnableDuringClass ?? this.hfEnableDuringClass,
+-      hfEnableBeforeEnd: hfEnableBeforeEnd ?? this.hfEnableBeforeEnd,
+       hfShowCourseName: hfShowCourseName ?? this.hfShowCourseName,
+       hfShowLocation: hfShowLocation ?? this.hfShowLocation,
+       hfShowCountdown: hfShowCountdown ?? this.hfShowCountdown,
+       hfCustomTitle: hfCustomTitle ?? this.hfCustomTitle,
+       hfCustomTitleColor: hfCustomTitleColor ?? this.hfCustomTitleColor,
+       hfTemplatesJson: hfTemplatesJson ?? this.hfTemplatesJson,
+       themeSeedColor: themeSeedColor ?? this.themeSeedColor,
+       foruiTheme: foruiTheme ?? this.foruiTheme,
+       timetablePageBackgroundColor:
+           timetablePageBackgroundColor ?? this.timetablePageBackgroundColor,
+diff --git a/lib/screens/timetable_settings_screen.dart b/lib/screens/timetable_settings_screen.dart
+index b462946..23b673a 100644
+--- a/lib/screens/timetable_settings_screen.dart
++++ b/lib/screens/timetable_settings_screen.dart
+@@ -1773,21 +1773,21 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
+       ],
+     );
+   }
+ 
+   Widget _buildHyperFocusSettings(BuildContext context, AppLocalizations l10n) {
+     return HyperosListGroup(
+       children: [
+         HyperosListTile(
+           icon: Icons.alarm_outlined,
+           title: '提醒时机',
+-          details: '${_draft.hfEnableBeforeClass ? "课前 " : ""}${_draft.hfEnableDuringClass ? "课中 " : ""}${_draft.hfEnableBeforeEnd ? "课后" : ""}',
++          details: '课前: ${_draft.liveEnableBeforeClass ? "开" : "关"} 课中: ${_draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd ? "开" : "关"}',
+           onTap: () async {
+             await HyperosNavigation.push(
+               context,
+               builder: (_) => const HyperFocusTimingScreen(),
+             );
+             if (!mounted) return;
+             setState(() {
+               _draft = context.read<TimetableProvider>().settings;
+             });
+           },

@@ -357,6 +357,15 @@ class _OverscrollEdgeHapticState {
 /// One latch per scroll axis (vertical list / horizontal pager).
 final Map<Axis, _OverscrollEdgeHapticState> _overscrollEdgeHapticStates = {};
 
+/// Global gate for edge-arrival haptics (mirrors [TimetableSettings.enableHaptics]).
+/// Defaults to true; call [hyperosSetEdgeHapticsEnabled] when settings load/change.
+bool _hyperosEdgeHapticsEnabled = true;
+
+/// Enables or disables list edge-arrival haptic feedback app-wide.
+void hyperosSetEdgeHapticsEnabled(bool enabled) {
+  _hyperosEdgeHapticsEnabled = enabled;
+}
+
 /// Fraction of [ScrollMetrics.viewportDimension] that must be traveled into
 /// content before the same edge can fire again (~half screen).
 @visibleForTesting
@@ -439,6 +448,9 @@ bool hyperosObserveScrollEdgeHaptic({
   Object? key,
   String source = 'unknown',
 }) {
+  if (!_hyperosEdgeHapticsEnabled) {
+    return false;
+  }
   // Axis is the stable latch key (see class doc). Optional [key]/[source]
   // retained for call-site readability.
   final _ = (key, source);
@@ -626,9 +638,17 @@ class HyperosScrollBehavior extends MaterialScrollBehavior {
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
+    // Called from Scrollable._updatePosition with the Scrollable's OWN
+    // context. Reading the header scope here must NOT register a dependency:
+    // otherwise every scope change (frost flip, collapse inset) triggers
+    // didChangeDependencies → _updatePosition → ScrollPosition recreation
+    // mid-gesture, silently resetting pixels to 0 (title flicker on short
+    // collapsible pages). Untracked read: topInset only shapes the
+    // rubber-band cap, staleness until the next natural rebuild is fine.
+    final inset = HyperosBlurredHeaderScope.insetOfUntracked(context);
     return HyperosOverscrollPhysics(
       parent: const AlwaysScrollableScrollPhysics(),
-      topInset: HyperosBlurredHeaderScope.insetOf(context),
+      topInset: inset,
     );
   }
 

@@ -61,14 +61,16 @@ sequenceDiagram
   participant JS as 适配脚本
 
   Note over U,JS: 录制（首次成功导入）
-  U->>App: 开启录制 / 自动录制
+  U->>App: 网页登录导入（无已存宏时自动录制）/ 录制导入
   App->>WV: 注入 MacroRecorderJs
   U->>WV: 登录、导航
   WV-->>App: macro:event（input/click/submit）
   U->>App: 响应脚本弹窗（confirm/prompt/选择）
-  App->>App: 保存 dialogResponses
+  App->>App: 记录 dialogResponses
   U->>App: 导入成功
   App->>App: MacroRecordingConverter → MacroStep[]
+  App->>U: 询问是否保存导入路径
+  U->>App: 确认保存
   App->>App: 持久化 WarehouseMacroRecord
 
   Note over U,JS: 回放（快捷导入）
@@ -136,6 +138,13 @@ sequenceDiagram
 
 ## 八、后续可选改进
 
-- 录制开始时自动插入 `navigate(initialUrl)` 步
+- ~~录制开始时自动插入 `navigate(initialUrl)` 步~~（部分落地：成功导入后写入 `scriptPageUrl`，回放优先「登录步 + navigate(scriptPageUrl)」，失败回退完整点击宏）
 - 宏版本号与教务站点 fingerprint，便于提示「可能已过期」
 - 导出/导入宏 JSON（跨设备，需注意不含密码）
+
+### 已落地：快捷导入加速路径（App）
+
+1. `WarehouseMacroRecord.scriptPageUrl`：录制保存 / 快捷导入成功时写入当前页 URL（去掉 ticket/session 等易变参数）。
+2. `buildAcceleratedMacroSteps`：保留登录相关步（填表、验证码、登录点击），丢弃登录后菜单点击，改为 `navigate(scriptPageUrl)`。
+3. `WarehouseMacroReplayer`：先跑加速路径；失败则提示并回退完整宏（必要时先回到 `importUrl`）。
+4. 宏回放中未录制的 `confirm` 默认确认，避免脚本二次确认框被当成取消导致「未返回课程」。

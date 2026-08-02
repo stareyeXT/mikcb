@@ -1,0 +1,117 @@
+diff --git a/lib/screens/timetable_settings_screen.dart b/lib/screens/timetable_settings_screen.dart
+index 9cc9255..dc8527a 100644
+--- a/lib/screens/timetable_settings_screen.dart
++++ b/lib/screens/timetable_settings_screen.dart
+@@ -2936,20 +2936,29 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+       'pre' || 'active' || 'post' => scheduledStage as String,
+       _ => 'pre',
+     };
+     if (!mounted) return;
+     appDebugLog('MiuiLive', '测试阶段：$stage');
+     final provider = context.read<TimetableProvider>();
+     await provider.initialize();
+     final selection = provider.getTestLiveActivityCourseSelection();
+     final course = selection?.currentCourse;
+     appDebugLog('MiuiLive', '测试课程：${course?.name}');
++    await _hyperFocusService.recordDiagnosticEvent(
++      'send_test_focus_requested',
++      '收到超级岛测试通知发送请求',
++      extras: {
++        'stage': stage,
++        'courseName': course?.name ?? '',
++        'atMillis': DateTime.now().millisecondsSinceEpoch.toString(),
++      },
++    );
+     final error = await _hyperFocusService.sendTestFocusNotification(
+       courseName: course?.name,
+       startTime: course?.startTime,
+       endTime: course?.endTime,
+       location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
+       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
+       stage: stage,
+     );
+     appDebugLog('MiuiLive', '发送结果：${error ?? '成功'}');
+     if (!mounted) return;
+diff --git a/test/widgets/hyper_focus_testing_screen_test.dart b/test/widgets/hyper_focus_testing_screen_test.dart
+index 604540f..5a54c86 100644
+--- a/test/widgets/hyper_focus_testing_screen_test.dart
++++ b/test/widgets/hyper_focus_testing_screen_test.dart
+@@ -76,20 +76,22 @@ Future<void> _pumpToTestingEntry(WidgetTester tester) async {
+     200,
+     scrollable: find.byType(Scrollable).last,
+   );
+   await tester.tap(find.text('测试'));
+   await tester.pumpAndSettle();
+ }
+ 
+ void main() {
+   TestWidgetsFlutterBinding.ensureInitialized();
+   const liveChannel = MethodChannel('com.mutx163.qingyu/miui_live');
++  const umengChannel = MethodChannel('com.mutx163.qingyu/umeng_analytics');
++  const packageInfoChannel = MethodChannel('dev.fluttercommunity.plus/package_info');
+ 
+   setUp(() {
+     StorageService().resetForTesting();
+     _seedInitializedPrefs();
+     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+         .setMockMethodCallHandler(liveChannel, (call) async {
+           switch (call.method) {
+             case 'initialize':
+               return null;
+             case 'getHyperFocusDebugStatus':
+@@ -167,24 +169,55 @@ void main() {
+                   },
+                   'scheduling': {'nextTriggerStage': 'active'},
+                 };
+               case 'sendTestFocus':
+                 sentStage = (call.arguments as Map)['stage'] as String?;
+                 return null;
+               default:
+                 return null;
+             }
+           });
++      final recordedCategories = <String>[];
++      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++          .setMockMethodCallHandler(umengChannel, (call) async {
++            if (call.method == 'recordDiagnosticEvent') {
++              recordedCategories.add((call.arguments as Map)['category'] as String);
++            }
++            return null;
++          });
++      addTearDown(() {
++        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++            .setMockMethodCallHandler(umengChannel, null);
++      });
++      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++          .setMockMethodCallHandler(packageInfoChannel, (call) async {
++            if (call.method == 'getAll') {
++              return {
++                'appName': 'mikcb',
++                'packageName': 'com.mutx163.qingyu',
++                'version': '1.0.0',
++                'buildNumber': '1',
++                'buildSignature': '',
++                'installerStore': null,
++              };
++            }
++            return null;
++          });
++      addTearDown(() {
++        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++            .setMockMethodCallHandler(packageInfoChannel, null);
++      });
+ 
+       await _pumpToTestingEntry(tester);
+ 
+       await tester.tap(find.text('发送测试通知'));
+       await tester.runAsync(
+         () => Future<void>.delayed(const Duration(milliseconds: 50)),
+       );
+       await tester.pumpAndSettle();
+ 
+       expect(sentStage, 'active');
++      expect(recordedCategories, contains('send_test_focus_requested'));
+       expect(find.text('测试焦点通知已发送'), findsOneWidget);
+     },
+   );
+ }

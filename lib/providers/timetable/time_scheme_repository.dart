@@ -206,7 +206,13 @@ Future<bool> _timetableDeleteTimeScheme(
   String schemeId,
 ) async {
   await host.initialize();
-  if (TimeSchemeLogic.isSchemeInUse(host._profiles, schemeId)) {
+  if (TimeSchemeLogic.isSchemeInUse(
+    host._profiles,
+    schemeId,
+    locationTimeGroups: host._locationTimeGroups,
+    schemes: host._timeSchemes,
+    scheduleDateRules: host._scheduleDateRules,
+  )) {
     return false;
   }
 

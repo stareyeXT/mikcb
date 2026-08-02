@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-07-20T05:08:13+00:00",
+  "updatedAt": "2026-08-02T04:56:43+00:00",
   "source": "https://github.com/Mutx163/qingyu_warehouse",
   "sourceRef": "main",
   "counts": {
-    "total": 127,
-    "schools": 122,
+    "total": 133,
+    "schools": 128,
     "generic": 5
   },
   "schools": [
@@ -219,6 +219,13 @@
       "category": "school"
     },
     {
+      "id": "UESTC",
+      "name": "电子科技大学",
+      "initial": "D",
+      "resourceFolder": "UESTC",
+      "category": "school"
+    },
+    {
       "id": "FOSU",
       "name": "佛山大学",
       "initial": "F",
@@ -230,6 +237,13 @@
       "name": "福建船政交通职业学院",
       "initial": "F",
       "resourceFolder": "FJCPC",
+      "category": "school"
+    },
+    {
+      "id": "GDOU",
+      "name": "广东海洋大学",
+      "initial": "G",
+      "resourceFolder": "GDOU",
       "category": "school"
     },
     {
@@ -447,6 +461,20 @@
       "name": "衡阳师范学院",
       "initial": "H",
       "resourceFolder": "HYNU",
+      "category": "school"
+    },
+    {
+      "id": "GUC",
+      "name": "吉利学院",
+      "initial": "J",
+      "resourceFolder": "GUC",
+      "category": "school"
+    },
+    {
+      "id": "JLU",
+      "name": "吉林大学",
+      "initial": "J",
+      "resourceFolder": "JLU",
       "category": "school"
     },
     {
@@ -779,6 +807,13 @@
       "category": "school"
     },
     {
+      "id": "XJZFU",
+      "name": "新疆政法学院",
+      "initial": "X",
+      "resourceFolder": "XJZFU",
+      "category": "school"
+    },
+    {
       "id": "NWPU",
       "name": "西北工业大学",
       "initial": "X",
@@ -860,6 +895,13 @@
       "name": "中国石油大学（北京）克拉玛依校区",
       "initial": "Z",
       "resourceFolder": "CUPK",
+      "category": "school"
+    },
+    {
+      "id": "USTC",
+      "name": "中国科学技术大学",
+      "initial": "Z",
+      "resourceFolder": "USTC",
       "category": "school"
     },
     {

@@ -396,6 +396,9 @@ private fun liveSchedulerResolveBeforeClassBlockedUntil(
         if (previousStartAtMillis > courseStartAtMillis) {
             continue
         }
+        if (previousEndAtMillis <= courseStartAtMillis) {
+            continue
+        }
         blockedUntilMillis = maxOf(
             blockedUntilMillis ?: Long.MIN_VALUE,
             previousEndAtMillis,
@@ -633,12 +636,9 @@ private data class LiveUpdatePayload(
     val islandTimeoutPre: Int = 300,
     val islandTimeoutActive: Int = 600,
     val islandTimeoutPost: Int = 600,
-    val iconAEnabled: Boolean = true,
-    val statusTextColor: String = "#FFFFFFFF",
-    val outEffectStatusEnabled: Boolean = true,
-    val outEffectStatusColor: String = "#FFFFFFFF",
-    val outEffectExpandEnabled: Boolean = true,
-    val outEffectExpandColor: String = "#FFFFFFFF",
+    val iconAEnabled: Boolean = false,
+    val outEffectStatusEnabled: Boolean = false,
+    val outEffectStatusColor: String = "",
 )
 
 private fun normalizeNullableText(value: String?): String? {
@@ -691,7 +691,17 @@ object LiveUpdateScheduler {
 
     const val ACTION_TRIGGER = "com.mutx163.qingyu.ACTION_TRIGGER_LIVE_UPDATE"
 
+    /** Process-wide cache of the parsed snapshot. Parsing the full JSON on
+     *  every ticker tick is wasteful; [syncSnapshot] invalidates the cache
+     *  whenever the Flutter side pushes a new snapshot. */
+    @Volatile
+    private var cachedSnapshot: NativeScheduleSnapshot? = null
+    @Volatile
+    private var cachedSnapshotJson: String? = null
+
     fun syncSnapshot(context: Context, snapshotJson: String) {
+        cachedSnapshotJson = null
+        cachedSnapshot = null
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_SNAPSHOT_JSON, snapshotJson)
@@ -918,12 +928,9 @@ object LiveUpdateScheduler {
             islandTimeoutPre = (islandConfig["hfIslandTimeoutPre"] as? Number)?.toInt() ?: 300,
             islandTimeoutActive = (islandConfig["hfIslandTimeoutActive"] as? Number)?.toInt() ?: 600,
             islandTimeoutPost = (islandConfig["hfIslandTimeoutPost"] as? Number)?.toInt() ?: 600,
-            iconAEnabled = islandConfig["hfIconAEnabled"] as? Boolean ?: true,
-            statusTextColor = islandConfig["hfStatusTextColor"] as? String ?: "#FFFFFFFF",
-            outEffectStatusEnabled = islandConfig["hfOutEffectStatusEnabled"] as? Boolean ?: true,
-            outEffectStatusColor = islandConfig["hfOutEffectStatusColor"] as? String ?: "#FFFFFFFF",
-            outEffectExpandEnabled = islandConfig["hfOutEffectExpandEnabled"] as? Boolean ?: true,
-            outEffectExpandColor = islandConfig["hfOutEffectExpandColor"] as? String ?: "#FFFFFFFF",
+            iconAEnabled = islandConfig["hfIconAEnabled"] as? Boolean ?: false,
+            outEffectStatusEnabled = islandConfig["hfOutEffectStatusEnabled"] as? Boolean ?: false,
+            outEffectStatusColor = islandConfig["hfOutEffectStatusColor"] as? String ?: "",
         )
         return buildServiceIntent(context, payload)
     }
@@ -992,7 +999,13 @@ object LiveUpdateScheduler {
                     // FGS start can be blocked in the background. Schedule an
                     // exact alarm retry: its broadcast grants a temporary
                     // FGS-start exemption, so the session is not lost.
-                    scheduleAlarm(context, now + FGS_RETRY_DELAY_MILLIS)
+                    // Without the exact-alarm permission the fallback
+                    // setAndAllowWhileIdle alarm never grants the exemption,
+                    // so retrying would loop forever and drain the battery;
+                    // skip it and rely on the WorkManager fallback instead.
+                    if (canScheduleExactAlarms(context)) {
+                        scheduleAlarm(context, now + FGS_RETRY_DELAY_MILLIS)
+                    }
                 }
                 return started
             }
@@ -1023,7 +1036,11 @@ object LiveUpdateScheduler {
 
     private fun loadSnapshot(context: Context): NativeScheduleSnapshot? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val snapshotJson = prefs.getString(KEY_SNAPSHOT_JSON, null) ?: return null
+        val snapshotJson = prefs.getString(KEY_SNAPSHOT_JSON, null) ?: run {
+            cachedSnapshotJson = null
+            cachedSnapshot = null
+            return null
+        }
         val snapshotVersion = prefs.getString(KEY_SNAPSHOT_VERSION, null)
         val currentVersion = resolveAppVersionToken(context)
         if (snapshotVersion.isNullOrBlank() || (
@@ -1036,10 +1053,20 @@ object LiveUpdateScheduler {
                 storedSnapshotVersion = snapshotVersion,
                 currentVersion = currentVersion,
             )
+            cachedSnapshotJson = null
+            cachedSnapshot = null
             return null
         }
+        cachedSnapshot?.let { cached ->
+            if (cachedSnapshotJson == snapshotJson) {
+                return cached
+            }
+        }
         return try {
-            parseSnapshot(JSONObject(snapshotJson))
+            val parsed = parseSnapshot(JSONObject(snapshotJson))
+            cachedSnapshot = parsed
+            cachedSnapshotJson = snapshotJson
+            parsed
         } catch (e: Exception) {
             Log.w(TAG, DiagnosticLogMessages.LOG_PARSE_SNAPSHOT_FAILED, e)
             UmengDiagnosticReporter.report(
@@ -1399,11 +1426,8 @@ object LiveUpdateScheduler {
             putExtra("hfIslandTimeoutActive", payload.islandTimeoutActive)
             putExtra("hfIslandTimeoutPost", payload.islandTimeoutPost)
             putExtra("hfIconAEnabled", payload.iconAEnabled)
-            putExtra("hfStatusTextColor", payload.statusTextColor)
             putExtra("hfOutEffectStatusEnabled", payload.outEffectStatusEnabled)
             putExtra("hfOutEffectStatusColor", payload.outEffectStatusColor)
-            putExtra("hfOutEffectExpandEnabled", payload.outEffectExpandEnabled)
-            putExtra("hfOutEffectExpandColor", payload.outEffectExpandColor)
             putExtra("beforeClassQuickAction", payload.beforeClassQuickAction)
             putExtra("validateAgainstSchedule", payload.validateAgainstSchedule)
             putExtra("superIslandEngine", payload.superIslandEngine)
@@ -1944,6 +1968,9 @@ object LiveUpdateScheduler {
             if (previousStartAtMillis > courseStartAtMillis) {
                 continue
             }
+            if (previousEndAtMillis <= courseStartAtMillis) {
+                continue
+            }
             blockedUntilMillis = maxOf(
                 blockedUntilMillis ?: Long.MIN_VALUE,
                 previousEndAtMillis,
@@ -2093,7 +2120,7 @@ object LiveUpdateScheduler {
     private fun scheduleAlarm(context: Context, triggerAtMillis: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val pendingIntent = buildTriggerPendingIntent(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+        if (canScheduleExactAlarms(context)) {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 triggerAtMillis,
@@ -2112,6 +2139,11 @@ object LiveUpdateScheduler {
                 pendingIntent
             )
         }
+    }
+
+    private fun canScheduleExactAlarms(context: Context): Boolean {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
     }
 
     private fun cancelScheduledAlarm(context: Context) {

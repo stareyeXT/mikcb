@@ -1,0 +1,1602 @@
+diff --git a/lib/l10n/app_en.arb b/lib/l10n/app_en.arb
+index 8aca667..2cf7821 100644
+--- a/lib/l10n/app_en.arb
++++ b/lib/l10n/app_en.arb
+@@ -1833,20 +1833,62 @@
+   "liveDiagnosticsCleared": "App logs have been cleared.",
+   "liveDiagnosticsClearFailed": "Failed to clear app logs",
+   "liveTestingNotRefreshed": "Not refreshed yet",
+   "liveTestingTitle": "Testing & diagnostics",
+   "liveTestingNotificationTitle": "Test notifications",
+   "liveTestingNotificationSubtitle": "Used to verify the Island, notification bar, and course short-name display",
+   "liveTestingSendAction": "Send test notification",
+   "liveTestingUmengHint": "The two buttons below are shown only in test builds and are used to verify Umeng U-APM crash and ANR reporting",
+   "liveTestingCrashAction": "Crash test",
+   "liveTestingAnrAction": "ANR test",
++  "hfTestingTitle": "HyperFocus Testing & Diagnostics",
++  "hfTestingNotificationTitle": "Notification Test",
++  "hfTestingNotificationSubtitle": "Send a test HyperFocus island notification for the before-class, during-class, or after-class stage",
++  "hfTestingIslandStatusTitle": "HyperFocus Island Status",
++  "hfTestingIslandStatusSubtitle": "Notification permission, test channel, and scheduler status",
++  "hfTestingPermissionGranted": "Notification permission granted",
++  "hfTestingPermissionDenied": "Notification permission denied",
++  "hfTestingChannelOk": "Test channel OK",
++  "hfTestingChannelBlocked": "Test channel blocked",
++  "hfTestingChannelMissing": "Test channel missing",
++  "hfTestingSchedulerScheduled": "Scheduler ready",
++  "hfTestingSchedulerNoData": "No schedule data",
++  "hfTestingNoScheduleHint": "No schedule snapshot synced yet. Save your timetable first.",
++  "hfTestingChannelBlockedHint": "The test notification channel is blocked; test notifications will not appear.",
++  "hfTestingDebugScheduling": "Scheduling",
++  "hfTestingDebugTemplates": "Templates",
++  "hfTestingDebugLastTest": "Last Test",
++  "hfTestingNextCourse": "Next course",
++  "hfTestingNextTrigger": "Next trigger",
++  "hfTestingCurrentStage": "Current stage",
++  "hfTestingBeforeClassBlockedUntil": "Before-class blocked until",
++  "hfTestingSuspendedUntil": "Suspended until",
++  "hfTestingNone": "None",
++  "hfTestingTemplateStagePre": "Before-class template",
++  "hfTestingTemplateStageActive": "During-class template",
++  "hfTestingTemplateStagePost": "After-class template",
++  "hfTestingLastTestStage": "Stage",
++  "hfTestingLastTestResult": "Result",
++  "hfTestingLastTestTime": "Time",
++  "hfTestingLastTestMessage": "Reason",
++  "hfTestingLastTestNever": "No test notification sent yet",
++  "hfTestingLastTestSucceeded": "Sent",
++  "hfTestingLastTestFailed": "Failed",
++  "hfTestingLastTestAt": "Last test: {time}",
++  "hfTestingStageSheetTitle": "Choose a test stage",
++  "hfTestingStagePreTitle": "5 min before class",
++  "hfTestingStagePreSubtitle": "Countdown to class start; verifies the reminder template",
++  "hfTestingStageActiveTitle": "During class",
++  "hfTestingStageActiveSubtitle": "In class; countdown to class end",
++  "hfTestingStagePostTitle": "After class",
++  "hfTestingStagePostSubtitle": "Class over; no countdown; verifies the after-class template",
++  "hfTestingEntryDetails": "Send before/during/after-class test notifications and view HyperFocus diagnostics",
+   "liveTestingIslandStatusTitle": "Island status diagnostics",
+   "liveTestingIslandStatusSubtitle": "This section shows the native live service status, notification build result, and the reason it is not appearing on the Island",
+   "liveTestingServiceStatusRunning": "Service running",
+   "liveTestingServiceStatusStopped": "Service stopped",
+   "liveTestingNoIslandReasonTitle": "Why it is not on the Island",
+   "liveTestingNoIslandReasonEmpty": "No blocking reason at the moment",
+   "liveTestingRefreshAction": "Refresh diagnostics",
+   "liveTestingRefreshing": "Refreshing",
+   "liveTestingExportAction": "Export and share logs",
+   "liveTestingExporting": "Exporting",
+diff --git a/lib/l10n/app_ja.arb b/lib/l10n/app_ja.arb
+index 8bc6bd7..ccf3739 100644
+--- a/lib/l10n/app_ja.arb
++++ b/lib/l10n/app_ja.arb
+@@ -1641,20 +1641,62 @@
+   "liveDiagnosticsCleared": "スーパーアイランド診断ログをクリアしました。以降再び収集を開始",
+   "liveDiagnosticsClearFailed": "スーパーアイランド診断ログのクリアに失敗",
+   "liveTestingNotRefreshed": "未更新",
+   "liveTestingTitle": "テストと診断",
+   "liveTestingNotificationTitle": "テスト通知",
+   "liveTestingNotificationSubtitle": "スーパーアイランド、通知バーと授業略称などの表示効果を検証",
+   "liveTestingSendAction": "テスト通知を送信",
+   "liveTestingUmengHint": "以下の2つのボタンはテスト版のみ表示，Umeng U-APMクラッシュとフリーズ上报の検証用",
+   "liveTestingCrashAction": "クラッシュテスト",
+   "liveTestingAnrAction": "異常フリーズテスト",
++  "hfTestingTitle": "HyperFocus テストと診断",
++  "hfTestingNotificationTitle": "通知テスト",
++  "hfTestingNotificationSubtitle": "授業前・授業中・授業後の各ステージでスーパーアイランドのテスト通知を送信します",
++  "hfTestingIslandStatusTitle": "スーパーアイランドの状態",
++  "hfTestingIslandStatusSubtitle": "通知権限、テストチャンネル、スケジューラーの状態",
++  "hfTestingPermissionGranted": "通知権限が許可されています",
++  "hfTestingPermissionDenied": "通知権限が許可されていません",
++  "hfTestingChannelOk": "テストチャンネルは正常です",
++  "hfTestingChannelBlocked": "テストチャンネルがブロックされています",
++  "hfTestingChannelMissing": "テストチャンネルが作成されていません",
++  "hfTestingSchedulerScheduled": "スケジュール準備完了",
++  "hfTestingSchedulerNoData": "課表データがありません",
++  "hfTestingNoScheduleHint": "課表スナップショットがまだ同期されていません。先に課表を保存してください",
++  "hfTestingChannelBlockedHint": "テスト通知チャンネルがシステムによりブロックされているため、テスト通知は表示されません",
++  "hfTestingDebugScheduling": "スケジュール",
++  "hfTestingDebugTemplates": "テンプレート",
++  "hfTestingDebugLastTest": "前回のテスト",
++  "hfTestingNextCourse": "次の授業",
++  "hfTestingNextTrigger": "次回のトリガー",
++  "hfTestingCurrentStage": "現在のステージ",
++  "hfTestingBeforeClassBlockedUntil": "授業前ブロックの期限",
++  "hfTestingSuspendedUntil": "一時停止の期限",
++  "hfTestingNone": "なし",
++  "hfTestingTemplateStagePre": "授業前テンプレート",
++  "hfTestingTemplateStageActive": "授業中テンプレート",
++  "hfTestingTemplateStagePost": "授業後テンプレート",
++  "hfTestingLastTestStage": "ステージ",
++  "hfTestingLastTestResult": "結果",
++  "hfTestingLastTestTime": "時間",
++  "hfTestingLastTestMessage": "理由",
++  "hfTestingLastTestNever": "テスト通知はまだ送信されていません",
++  "hfTestingLastTestSucceeded": "送信成功",
++  "hfTestingLastTestFailed": "送信失敗",
++  "hfTestingLastTestAt": "前回のテスト：{time}",
++  "hfTestingStageSheetTitle": "テスト段階を選択",
++  "hfTestingStagePreTitle": "授業前 5 分",
++  "hfTestingStagePreSubtitle": "授業開始までのカウントダウン。リマインダーテンプレートを検証します",
++  "hfTestingStageActiveTitle": "授業中",
++  "hfTestingStageActiveSubtitle": "授業中。授業終了までのカウントダウン",
++  "hfTestingStagePostTitle": "授業後",
++  "hfTestingStagePostSubtitle": "授業終了。カウントダウンなし。授業後テンプレートを検証します",
++  "hfTestingEntryDetails": "授業前/授業中/授業後のテスト通知を送信し、スーパーアイランドの診断状態を確認します",
+   "liveTestingIslandStatusTitle": "アイランドステータス診断",
+   "liveTestingIslandStatusSubtitle": "ネイティブリアルタイムサービス、通知構築結果と非アイランド理由を直接表示",
+   "liveTestingServiceStatusRunning": "サービス実行中",
+   "liveTestingServiceStatusStopped": "サービス未実行",
+   "liveTestingNoIslandReasonTitle": "非アイランド理由",
+   "liveTestingNoIslandReasonEmpty": "現在ブロック理由なし",
+   "liveTestingRefreshAction": "診断を更新",
+   "liveTestingRefreshing": "更新中",
+   "liveTestingExportAction": "ログをエクスポートして共有",
+   "liveTestingExporting": "エクスポート中",
+diff --git a/lib/l10n/app_ko.arb b/lib/l10n/app_ko.arb
+index d4efba8..99e9d73 100644
+--- a/lib/l10n/app_ko.arb
++++ b/lib/l10n/app_ko.arb
+@@ -1641,20 +1641,62 @@
+   "liveDiagnosticsCleared": "슈퍼아일랜드 진단 로그를 비웠습니다. 이후 다시 수집을 시작합니다",
+   "liveDiagnosticsClearFailed": "슈퍼아일랜드 진단 로그 비우기 실패",
+   "liveTestingNotRefreshed": "아직 새로고침 안 됨",
+   "liveTestingTitle": "테스트 및 진단",
+   "liveTestingNotificationTitle": "테스트 알림",
+   "liveTestingNotificationSubtitle": "슈퍼아일랜드, 알림바, 수업 약칭 등의 표시 효과를 검증합니다",
+   "liveTestingSendAction": "테스트 알림 전송",
+   "liveTestingUmengHint": "아래 두 버튼은 테스트판에만 표시됩니다. Umeng U-APM 충돌과 프리즈上报 검증용입니다",
+   "liveTestingCrashAction": "충돌 테스트",
+   "liveTestingAnrAction": "비정상 프리즈 테스트",
++  "hfTestingTitle": "HyperFocus 테스트 및 진단",
++  "hfTestingNotificationTitle": "알림 테스트",
++  "hfTestingNotificationSubtitle": "수업 전·수업 중·수업 후 단계의 슈퍼아일랜드 테스트 알림을 전송합니다",
++  "hfTestingIslandStatusTitle": "슈퍼아일랜드 상태",
++  "hfTestingIslandStatusSubtitle": "알림 권한, 테스트 채널, 스케줄러 상태",
++  "hfTestingPermissionGranted": "알림 권한 허용됨",
++  "hfTestingPermissionDenied": "알림 권한 거부됨",
++  "hfTestingChannelOk": "테스트 채널 정상",
++  "hfTestingChannelBlocked": "테스트 채널 차단됨",
++  "hfTestingChannelMissing": "테스트 채널 생성되지 않음",
++  "hfTestingSchedulerScheduled": "일정 준비 완료",
++  "hfTestingSchedulerNoData": "시간표 데이터 없음",
++  "hfTestingNoScheduleHint": "아직 시간표 스냅샷이 동기화되지 않았습니다. 먼저 시간표를 저장하세요",
++  "hfTestingChannelBlockedHint": "테스트 알림 채널이 시스템에 의해 차단되어 테스트 알림이 표시되지 않습니다",
++  "hfTestingDebugScheduling": "일정",
++  "hfTestingDebugTemplates": "템플릿",
++  "hfTestingDebugLastTest": "마지막 테스트",
++  "hfTestingNextCourse": "다음 수업",
++  "hfTestingNextTrigger": "다음 트리거",
++  "hfTestingCurrentStage": "현재 단계",
++  "hfTestingBeforeClassBlockedUntil": "수업 전 차단 기한",
++  "hfTestingSuspendedUntil": "일시 중지 기한",
++  "hfTestingNone": "없음",
++  "hfTestingTemplateStagePre": "수업 전 템플릿",
++  "hfTestingTemplateStageActive": "수업 중 템플릿",
++  "hfTestingTemplateStagePost": "수업 후 템플릿",
++  "hfTestingLastTestStage": "단계",
++  "hfTestingLastTestResult": "결과",
++  "hfTestingLastTestTime": "시간",
++  "hfTestingLastTestMessage": "사유",
++  "hfTestingLastTestNever": "아직 테스트 알림을 보낸 적이 없습니다",
++  "hfTestingLastTestSucceeded": "전송 성공",
++  "hfTestingLastTestFailed": "전송 실패",
++  "hfTestingLastTestAt": "마지막 테스트: {time}",
++  "hfTestingStageSheetTitle": "테스트 단계 선택",
++  "hfTestingStagePreTitle": "수업 5분 전",
++  "hfTestingStagePreSubtitle": "수업 시작까지 카운트다운. 알림 템플릿을 검증합니다",
++  "hfTestingStageActiveTitle": "수업 중",
++  "hfTestingStageActiveSubtitle": "수업 중. 수업 종료까지 카운트다운",
++  "hfTestingStagePostTitle": "수업 후",
++  "hfTestingStagePostSubtitle": "수업 종료. 카운트다운 없음. 수업 후 템플릿을 검증합니다",
++  "hfTestingEntryDetails": "수업 전/중/후 테스트 알림 전송 및 슈퍼아일랜드 진단 상태 확인",
+   "liveTestingIslandStatusTitle": "아일랜드 상태 진단",
+   "liveTestingIslandStatusSubtitle": "네이티브 실시간 서비스, 알림 구성 결과 및 비아일랜드 사유를 직접 표시합니다",
+   "liveTestingServiceStatusRunning": "서비스 실행 중",
+   "liveTestingServiceStatusStopped": "서비스 미실행",
+   "liveTestingNoIslandReasonTitle": "비아일랜드 사유",
+   "liveTestingNoIslandReasonEmpty": "현재 차단 사유 없음",
+   "liveTestingRefreshAction": "진단 새로고침",
+   "liveTestingRefreshing": "새로고침 중",
+   "liveTestingExportAction": "로그 내보내기 및 공유",
+   "liveTestingExporting": "내보내는 중",
+diff --git a/lib/l10n/app_localizations.dart b/lib/l10n/app_localizations.dart
+index 32249a2..ab8b688 100644
+--- a/lib/l10n/app_localizations.dart
++++ b/lib/l10n/app_localizations.dart
+@@ -6146,20 +6146,272 @@ abstract class AppLocalizations {
+   /// In zh, this message translates to:
+   /// **'崩溃测试'**
+   String get liveTestingCrashAction;
+ 
+   /// No description provided for @liveTestingAnrAction.
+   ///
+   /// In zh, this message translates to:
+   /// **'异常卡顿测试'**
+   String get liveTestingAnrAction;
+ 
++  /// No description provided for @hfTestingTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'超级岛测试与诊断'**
++  String get hfTestingTitle;
++
++  /// No description provided for @hfTestingNotificationTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'通知测试'**
++  String get hfTestingNotificationTitle;
++
++  /// No description provided for @hfTestingNotificationSubtitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'发送课前、课中、课后阶段的超级岛测试通知'**
++  String get hfTestingNotificationSubtitle;
++
++  /// No description provided for @hfTestingIslandStatusTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'超级岛状态'**
++  String get hfTestingIslandStatusTitle;
++
++  /// No description provided for @hfTestingIslandStatusSubtitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'通知权限、测试渠道与调度器状态'**
++  String get hfTestingIslandStatusSubtitle;
++
++  /// No description provided for @hfTestingPermissionGranted.
++  ///
++  /// In zh, this message translates to:
++  /// **'通知权限已开启'**
++  String get hfTestingPermissionGranted;
++
++  /// No description provided for @hfTestingPermissionDenied.
++  ///
++  /// In zh, this message translates to:
++  /// **'通知权限未开启'**
++  String get hfTestingPermissionDenied;
++
++  /// No description provided for @hfTestingChannelOk.
++  ///
++  /// In zh, this message translates to:
++  /// **'测试渠道正常'**
++  String get hfTestingChannelOk;
++
++  /// No description provided for @hfTestingChannelBlocked.
++  ///
++  /// In zh, this message translates to:
++  /// **'测试渠道被屏蔽'**
++  String get hfTestingChannelBlocked;
++
++  /// No description provided for @hfTestingChannelMissing.
++  ///
++  /// In zh, this message translates to:
++  /// **'测试渠道未创建'**
++  String get hfTestingChannelMissing;
++
++  /// No description provided for @hfTestingSchedulerScheduled.
++  ///
++  /// In zh, this message translates to:
++  /// **'调度已就绪'**
++  String get hfTestingSchedulerScheduled;
++
++  /// No description provided for @hfTestingSchedulerNoData.
++  ///
++  /// In zh, this message translates to:
++  /// **'暂无课表数据'**
++  String get hfTestingSchedulerNoData;
++
++  /// No description provided for @hfTestingNoScheduleHint.
++  ///
++  /// In zh, this message translates to:
++  /// **'尚未同步课表快照，请先保存课表'**
++  String get hfTestingNoScheduleHint;
++
++  /// No description provided for @hfTestingChannelBlockedHint.
++  ///
++  /// In zh, this message translates to:
++  /// **'测试通知渠道已被系统屏蔽，测试通知不会显示'**
++  String get hfTestingChannelBlockedHint;
++
++  /// No description provided for @hfTestingDebugScheduling.
++  ///
++  /// In zh, this message translates to:
++  /// **'调度'**
++  String get hfTestingDebugScheduling;
++
++  /// No description provided for @hfTestingDebugTemplates.
++  ///
++  /// In zh, this message translates to:
++  /// **'模板'**
++  String get hfTestingDebugTemplates;
++
++  /// No description provided for @hfTestingDebugLastTest.
++  ///
++  /// In zh, this message translates to:
++  /// **'上次测试'**
++  String get hfTestingDebugLastTest;
++
++  /// No description provided for @hfTestingNextCourse.
++  ///
++  /// In zh, this message translates to:
++  /// **'下一节课'**
++  String get hfTestingNextCourse;
++
++  /// No description provided for @hfTestingNextTrigger.
++  ///
++  /// In zh, this message translates to:
++  /// **'下次触发'**
++  String get hfTestingNextTrigger;
++
++  /// No description provided for @hfTestingCurrentStage.
++  ///
++  /// In zh, this message translates to:
++  /// **'当前阶段'**
++  String get hfTestingCurrentStage;
++
++  /// No description provided for @hfTestingBeforeClassBlockedUntil.
++  ///
++  /// In zh, this message translates to:
++  /// **'课前屏蔽截止'**
++  String get hfTestingBeforeClassBlockedUntil;
++
++  /// No description provided for @hfTestingSuspendedUntil.
++  ///
++  /// In zh, this message translates to:
++  /// **'挂起截止'**
++  String get hfTestingSuspendedUntil;
++
++  /// No description provided for @hfTestingNone.
++  ///
++  /// In zh, this message translates to:
++  /// **'无'**
++  String get hfTestingNone;
++
++  /// No description provided for @hfTestingTemplateStagePre.
++  ///
++  /// In zh, this message translates to:
++  /// **'课前模板'**
++  String get hfTestingTemplateStagePre;
++
++  /// No description provided for @hfTestingTemplateStageActive.
++  ///
++  /// In zh, this message translates to:
++  /// **'课中模板'**
++  String get hfTestingTemplateStageActive;
++
++  /// No description provided for @hfTestingTemplateStagePost.
++  ///
++  /// In zh, this message translates to:
++  /// **'课后模板'**
++  String get hfTestingTemplateStagePost;
++
++  /// No description provided for @hfTestingLastTestStage.
++  ///
++  /// In zh, this message translates to:
++  /// **'阶段'**
++  String get hfTestingLastTestStage;
++
++  /// No description provided for @hfTestingLastTestResult.
++  ///
++  /// In zh, this message translates to:
++  /// **'结果'**
++  String get hfTestingLastTestResult;
++
++  /// No description provided for @hfTestingLastTestTime.
++  ///
++  /// In zh, this message translates to:
++  /// **'时间'**
++  String get hfTestingLastTestTime;
++
++  /// No description provided for @hfTestingLastTestMessage.
++  ///
++  /// In zh, this message translates to:
++  /// **'原因'**
++  String get hfTestingLastTestMessage;
++
++  /// No description provided for @hfTestingLastTestNever.
++  ///
++  /// In zh, this message translates to:
++  /// **'尚未发送过测试通知'**
++  String get hfTestingLastTestNever;
++
++  /// No description provided for @hfTestingLastTestSucceeded.
++  ///
++  /// In zh, this message translates to:
++  /// **'发送成功'**
++  String get hfTestingLastTestSucceeded;
++
++  /// No description provided for @hfTestingLastTestFailed.
++  ///
++  /// In zh, this message translates to:
++  /// **'发送失败'**
++  String get hfTestingLastTestFailed;
++
++  /// No description provided for @hfTestingLastTestAt.
++  ///
++  /// In zh, this message translates to:
++  /// **'上次测试：{time}'**
++  String hfTestingLastTestAt(Object time);
++
++  /// No description provided for @hfTestingStageSheetTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'选择测试阶段'**
++  String get hfTestingStageSheetTitle;
++
++  /// No description provided for @hfTestingStagePreTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'课前 5 分钟'**
++  String get hfTestingStagePreTitle;
++
++  /// No description provided for @hfTestingStagePreSubtitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'倒计时到上课，验证提醒模板'**
++  String get hfTestingStagePreSubtitle;
++
++  /// No description provided for @hfTestingStageActiveTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'课中'**
++  String get hfTestingStageActiveTitle;
++
++  /// No description provided for @hfTestingStageActiveSubtitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'上课中，倒计时到下课'**
++  String get hfTestingStageActiveSubtitle;
++
++  /// No description provided for @hfTestingStagePostTitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'课后'**
++  String get hfTestingStagePostTitle;
++
++  /// No description provided for @hfTestingStagePostSubtitle.
++  ///
++  /// In zh, this message translates to:
++  /// **'已下课，无倒计时，验证课后模板'**
++  String get hfTestingStagePostSubtitle;
++
++  /// No description provided for @hfTestingEntryDetails.
++  ///
++  /// In zh, this message translates to:
++  /// **'发送课前/课中/课后测试通知、查看超级岛诊断状态'**
++  String get hfTestingEntryDetails;
++
+   /// No description provided for @liveTestingIslandStatusTitle.
+   ///
+   /// In zh, this message translates to:
+   /// **'上岛状态诊断'**
+   String get liveTestingIslandStatusTitle;
+ 
+   /// No description provided for @liveTestingIslandStatusSubtitle.
+   ///
+   /// In zh, this message translates to:
+   /// **'这里直接显示原生实时服务、通知构造结果和不上岛原因'**
+diff --git a/lib/l10n/app_localizations_en.dart b/lib/l10n/app_localizations_en.dart
+index c2fb2d4..b6d90d4 100644
+--- a/lib/l10n/app_localizations_en.dart
++++ b/lib/l10n/app_localizations_en.dart
+@@ -3538,20 +3538,155 @@ class AppLocalizationsEn extends AppLocalizations {
+   @override
+   String get liveTestingUmengHint =>
+       'The two buttons below are shown only in test builds and are used to verify Umeng U-APM crash and ANR reporting';
+ 
+   @override
+   String get liveTestingCrashAction => 'Crash test';
+ 
+   @override
+   String get liveTestingAnrAction => 'ANR test';
+ 
++  @override
++  String get hfTestingTitle => 'HyperFocus Testing & Diagnostics';
++
++  @override
++  String get hfTestingNotificationTitle => 'Notification Test';
++
++  @override
++  String get hfTestingNotificationSubtitle =>
++      'Send a test HyperFocus island notification for the before-class, during-class, or after-class stage';
++
++  @override
++  String get hfTestingIslandStatusTitle => 'HyperFocus Island Status';
++
++  @override
++  String get hfTestingIslandStatusSubtitle =>
++      'Notification permission, test channel, and scheduler status';
++
++  @override
++  String get hfTestingPermissionGranted => 'Notification permission granted';
++
++  @override
++  String get hfTestingPermissionDenied => 'Notification permission denied';
++
++  @override
++  String get hfTestingChannelOk => 'Test channel OK';
++
++  @override
++  String get hfTestingChannelBlocked => 'Test channel blocked';
++
++  @override
++  String get hfTestingChannelMissing => 'Test channel missing';
++
++  @override
++  String get hfTestingSchedulerScheduled => 'Scheduler ready';
++
++  @override
++  String get hfTestingSchedulerNoData => 'No schedule data';
++
++  @override
++  String get hfTestingNoScheduleHint =>
++      'No schedule snapshot synced yet. Save your timetable first.';
++
++  @override
++  String get hfTestingChannelBlockedHint =>
++      'The test notification channel is blocked; test notifications will not appear.';
++
++  @override
++  String get hfTestingDebugScheduling => 'Scheduling';
++
++  @override
++  String get hfTestingDebugTemplates => 'Templates';
++
++  @override
++  String get hfTestingDebugLastTest => 'Last Test';
++
++  @override
++  String get hfTestingNextCourse => 'Next course';
++
++  @override
++  String get hfTestingNextTrigger => 'Next trigger';
++
++  @override
++  String get hfTestingCurrentStage => 'Current stage';
++
++  @override
++  String get hfTestingBeforeClassBlockedUntil => 'Before-class blocked until';
++
++  @override
++  String get hfTestingSuspendedUntil => 'Suspended until';
++
++  @override
++  String get hfTestingNone => 'None';
++
++  @override
++  String get hfTestingTemplateStagePre => 'Before-class template';
++
++  @override
++  String get hfTestingTemplateStageActive => 'During-class template';
++
++  @override
++  String get hfTestingTemplateStagePost => 'After-class template';
++
++  @override
++  String get hfTestingLastTestStage => 'Stage';
++
++  @override
++  String get hfTestingLastTestResult => 'Result';
++
++  @override
++  String get hfTestingLastTestTime => 'Time';
++
++  @override
++  String get hfTestingLastTestMessage => 'Reason';
++
++  @override
++  String get hfTestingLastTestNever => 'No test notification sent yet';
++
++  @override
++  String get hfTestingLastTestSucceeded => 'Sent';
++
++  @override
++  String get hfTestingLastTestFailed => 'Failed';
++
++  @override
++  String hfTestingLastTestAt(Object time) {
++    return 'Last test: $time';
++  }
++
++  @override
++  String get hfTestingStageSheetTitle => 'Choose a test stage';
++
++  @override
++  String get hfTestingStagePreTitle => '5 min before class';
++
++  @override
++  String get hfTestingStagePreSubtitle =>
++      'Countdown to class start; verifies the reminder template';
++
++  @override
++  String get hfTestingStageActiveTitle => 'During class';
++
++  @override
++  String get hfTestingStageActiveSubtitle => 'In class; countdown to class end';
++
++  @override
++  String get hfTestingStagePostTitle => 'After class';
++
++  @override
++  String get hfTestingStagePostSubtitle =>
++      'Class over; no countdown; verifies the after-class template';
++
++  @override
++  String get hfTestingEntryDetails =>
++      'Send before/during/after-class test notifications and view HyperFocus diagnostics';
++
+   @override
+   String get liveTestingIslandStatusTitle => 'Island status diagnostics';
+ 
+   @override
+   String get liveTestingIslandStatusSubtitle =>
+       'This section shows the native live service status, notification build result, and the reason it is not appearing on the Island';
+ 
+   @override
+   String get liveTestingServiceStatusRunning => 'Service running';
+ 
+diff --git a/lib/l10n/app_localizations_ja.dart b/lib/l10n/app_localizations_ja.dart
+index 4279a6a..34c5bbf 100644
+--- a/lib/l10n/app_localizations_ja.dart
++++ b/lib/l10n/app_localizations_ja.dart
+@@ -3373,20 +3373,151 @@ class AppLocalizationsJa extends AppLocalizations {
+   @override
+   String get liveTestingUmengHint =>
+       '以下の2つのボタンはテスト版のみ表示，Umeng U-APMクラッシュとフリーズ上报の検証用';
+ 
+   @override
+   String get liveTestingCrashAction => 'クラッシュテスト';
+ 
+   @override
+   String get liveTestingAnrAction => '異常フリーズテスト';
+ 
++  @override
++  String get hfTestingTitle => 'HyperFocus テストと診断';
++
++  @override
++  String get hfTestingNotificationTitle => '通知テスト';
++
++  @override
++  String get hfTestingNotificationSubtitle =>
++      '授業前・授業中・授業後の各ステージでスーパーアイランドのテスト通知を送信します';
++
++  @override
++  String get hfTestingIslandStatusTitle => 'スーパーアイランドの状態';
++
++  @override
++  String get hfTestingIslandStatusSubtitle => '通知権限、テストチャンネル、スケジューラーの状態';
++
++  @override
++  String get hfTestingPermissionGranted => '通知権限が許可されています';
++
++  @override
++  String get hfTestingPermissionDenied => '通知権限が許可されていません';
++
++  @override
++  String get hfTestingChannelOk => 'テストチャンネルは正常です';
++
++  @override
++  String get hfTestingChannelBlocked => 'テストチャンネルがブロックされています';
++
++  @override
++  String get hfTestingChannelMissing => 'テストチャンネルが作成されていません';
++
++  @override
++  String get hfTestingSchedulerScheduled => 'スケジュール準備完了';
++
++  @override
++  String get hfTestingSchedulerNoData => '課表データがありません';
++
++  @override
++  String get hfTestingNoScheduleHint => '課表スナップショットがまだ同期されていません。先に課表を保存してください';
++
++  @override
++  String get hfTestingChannelBlockedHint =>
++      'テスト通知チャンネルがシステムによりブロックされているため、テスト通知は表示されません';
++
++  @override
++  String get hfTestingDebugScheduling => 'スケジュール';
++
++  @override
++  String get hfTestingDebugTemplates => 'テンプレート';
++
++  @override
++  String get hfTestingDebugLastTest => '前回のテスト';
++
++  @override
++  String get hfTestingNextCourse => '次の授業';
++
++  @override
++  String get hfTestingNextTrigger => '次回のトリガー';
++
++  @override
++  String get hfTestingCurrentStage => '現在のステージ';
++
++  @override
++  String get hfTestingBeforeClassBlockedUntil => '授業前ブロックの期限';
++
++  @override
++  String get hfTestingSuspendedUntil => '一時停止の期限';
++
++  @override
++  String get hfTestingNone => 'なし';
++
++  @override
++  String get hfTestingTemplateStagePre => '授業前テンプレート';
++
++  @override
++  String get hfTestingTemplateStageActive => '授業中テンプレート';
++
++  @override
++  String get hfTestingTemplateStagePost => '授業後テンプレート';
++
++  @override
++  String get hfTestingLastTestStage => 'ステージ';
++
++  @override
++  String get hfTestingLastTestResult => '結果';
++
++  @override
++  String get hfTestingLastTestTime => '時間';
++
++  @override
++  String get hfTestingLastTestMessage => '理由';
++
++  @override
++  String get hfTestingLastTestNever => 'テスト通知はまだ送信されていません';
++
++  @override
++  String get hfTestingLastTestSucceeded => '送信成功';
++
++  @override
++  String get hfTestingLastTestFailed => '送信失敗';
++
++  @override
++  String hfTestingLastTestAt(Object time) {
++    return '前回のテスト：$time';
++  }
++
++  @override
++  String get hfTestingStageSheetTitle => 'テスト段階を選択';
++
++  @override
++  String get hfTestingStagePreTitle => '授業前 5 分';
++
++  @override
++  String get hfTestingStagePreSubtitle => '授業開始までのカウントダウン。リマインダーテンプレートを検証します';
++
++  @override
++  String get hfTestingStageActiveTitle => '授業中';
++
++  @override
++  String get hfTestingStageActiveSubtitle => '授業中。授業終了までのカウントダウン';
++
++  @override
++  String get hfTestingStagePostTitle => '授業後';
++
++  @override
++  String get hfTestingStagePostSubtitle => '授業終了。カウントダウンなし。授業後テンプレートを検証します';
++
++  @override
++  String get hfTestingEntryDetails =>
++      '授業前/授業中/授業後のテスト通知を送信し、スーパーアイランドの診断状態を確認します';
++
+   @override
+   String get liveTestingIslandStatusTitle => 'アイランドステータス診断';
+ 
+   @override
+   String get liveTestingIslandStatusSubtitle =>
+       'ネイティブリアルタイムサービス、通知構築結果と非アイランド理由を直接表示';
+ 
+   @override
+   String get liveTestingServiceStatusRunning => 'サービス実行中';
+ 
+diff --git a/lib/l10n/app_localizations_ko.dart b/lib/l10n/app_localizations_ko.dart
+index db15664..00c4a8f 100644
+--- a/lib/l10n/app_localizations_ko.dart
++++ b/lib/l10n/app_localizations_ko.dart
+@@ -3392,20 +3392,151 @@ class AppLocalizationsKo extends AppLocalizations {
+   @override
+   String get liveTestingUmengHint =>
+       '아래 두 버튼은 테스트판에만 표시됩니다. Umeng U-APM 충돌과 프리즈上报 검증용입니다';
+ 
+   @override
+   String get liveTestingCrashAction => '충돌 테스트';
+ 
+   @override
+   String get liveTestingAnrAction => '비정상 프리즈 테스트';
+ 
++  @override
++  String get hfTestingTitle => 'HyperFocus 테스트 및 진단';
++
++  @override
++  String get hfTestingNotificationTitle => '알림 테스트';
++
++  @override
++  String get hfTestingNotificationSubtitle =>
++      '수업 전·수업 중·수업 후 단계의 슈퍼아일랜드 테스트 알림을 전송합니다';
++
++  @override
++  String get hfTestingIslandStatusTitle => '슈퍼아일랜드 상태';
++
++  @override
++  String get hfTestingIslandStatusSubtitle => '알림 권한, 테스트 채널, 스케줄러 상태';
++
++  @override
++  String get hfTestingPermissionGranted => '알림 권한 허용됨';
++
++  @override
++  String get hfTestingPermissionDenied => '알림 권한 거부됨';
++
++  @override
++  String get hfTestingChannelOk => '테스트 채널 정상';
++
++  @override
++  String get hfTestingChannelBlocked => '테스트 채널 차단됨';
++
++  @override
++  String get hfTestingChannelMissing => '테스트 채널 생성되지 않음';
++
++  @override
++  String get hfTestingSchedulerScheduled => '일정 준비 완료';
++
++  @override
++  String get hfTestingSchedulerNoData => '시간표 데이터 없음';
++
++  @override
++  String get hfTestingNoScheduleHint =>
++      '아직 시간표 스냅샷이 동기화되지 않았습니다. 먼저 시간표를 저장하세요';
++
++  @override
++  String get hfTestingChannelBlockedHint =>
++      '테스트 알림 채널이 시스템에 의해 차단되어 테스트 알림이 표시되지 않습니다';
++
++  @override
++  String get hfTestingDebugScheduling => '일정';
++
++  @override
++  String get hfTestingDebugTemplates => '템플릿';
++
++  @override
++  String get hfTestingDebugLastTest => '마지막 테스트';
++
++  @override
++  String get hfTestingNextCourse => '다음 수업';
++
++  @override
++  String get hfTestingNextTrigger => '다음 트리거';
++
++  @override
++  String get hfTestingCurrentStage => '현재 단계';
++
++  @override
++  String get hfTestingBeforeClassBlockedUntil => '수업 전 차단 기한';
++
++  @override
++  String get hfTestingSuspendedUntil => '일시 중지 기한';
++
++  @override
++  String get hfTestingNone => '없음';
++
++  @override
++  String get hfTestingTemplateStagePre => '수업 전 템플릿';
++
++  @override
++  String get hfTestingTemplateStageActive => '수업 중 템플릿';
++
++  @override
++  String get hfTestingTemplateStagePost => '수업 후 템플릿';
++
++  @override
++  String get hfTestingLastTestStage => '단계';
++
++  @override
++  String get hfTestingLastTestResult => '결과';
++
++  @override
++  String get hfTestingLastTestTime => '시간';
++
++  @override
++  String get hfTestingLastTestMessage => '사유';
++
++  @override
++  String get hfTestingLastTestNever => '아직 테스트 알림을 보낸 적이 없습니다';
++
++  @override
++  String get hfTestingLastTestSucceeded => '전송 성공';
++
++  @override
++  String get hfTestingLastTestFailed => '전송 실패';
++
++  @override
++  String hfTestingLastTestAt(Object time) {
++    return '마지막 테스트: $time';
++  }
++
++  @override
++  String get hfTestingStageSheetTitle => '테스트 단계 선택';
++
++  @override
++  String get hfTestingStagePreTitle => '수업 5분 전';
++
++  @override
++  String get hfTestingStagePreSubtitle => '수업 시작까지 카운트다운. 알림 템플릿을 검증합니다';
++
++  @override
++  String get hfTestingStageActiveTitle => '수업 중';
++
++  @override
++  String get hfTestingStageActiveSubtitle => '수업 중. 수업 종료까지 카운트다운';
++
++  @override
++  String get hfTestingStagePostTitle => '수업 후';
++
++  @override
++  String get hfTestingStagePostSubtitle => '수업 종료. 카운트다운 없음. 수업 후 템플릿을 검증합니다';
++
++  @override
++  String get hfTestingEntryDetails => '수업 전/중/후 테스트 알림 전송 및 슈퍼아일랜드 진단 상태 확인';
++
+   @override
+   String get liveTestingIslandStatusTitle => '아일랜드 상태 진단';
+ 
+   @override
+   String get liveTestingIslandStatusSubtitle =>
+       '네이티브 실시간 서비스, 알림 구성 결과 및 비아일랜드 사유를 직접 표시합니다';
+ 
+   @override
+   String get liveTestingServiceStatusRunning => '서비스 실행 중';
+ 
+diff --git a/lib/l10n/app_localizations_zh.dart b/lib/l10n/app_localizations_zh.dart
+index 0b6f772..eeb879e 100644
+--- a/lib/l10n/app_localizations_zh.dart
++++ b/lib/l10n/app_localizations_zh.dart
+@@ -3321,20 +3321,148 @@ class AppLocalizationsZh extends AppLocalizations {
+ 
+   @override
+   String get liveTestingUmengHint => '下面两个按钮仅测试版显示，用于验证友盟 U-APM 崩溃和卡顿上报';
+ 
+   @override
+   String get liveTestingCrashAction => '崩溃测试';
+ 
+   @override
+   String get liveTestingAnrAction => '异常卡顿测试';
+ 
++  @override
++  String get hfTestingTitle => '超级岛测试与诊断';
++
++  @override
++  String get hfTestingNotificationTitle => '通知测试';
++
++  @override
++  String get hfTestingNotificationSubtitle => '发送课前、课中、课后阶段的超级岛测试通知';
++
++  @override
++  String get hfTestingIslandStatusTitle => '超级岛状态';
++
++  @override
++  String get hfTestingIslandStatusSubtitle => '通知权限、测试渠道与调度器状态';
++
++  @override
++  String get hfTestingPermissionGranted => '通知权限已开启';
++
++  @override
++  String get hfTestingPermissionDenied => '通知权限未开启';
++
++  @override
++  String get hfTestingChannelOk => '测试渠道正常';
++
++  @override
++  String get hfTestingChannelBlocked => '测试渠道被屏蔽';
++
++  @override
++  String get hfTestingChannelMissing => '测试渠道未创建';
++
++  @override
++  String get hfTestingSchedulerScheduled => '调度已就绪';
++
++  @override
++  String get hfTestingSchedulerNoData => '暂无课表数据';
++
++  @override
++  String get hfTestingNoScheduleHint => '尚未同步课表快照，请先保存课表';
++
++  @override
++  String get hfTestingChannelBlockedHint => '测试通知渠道已被系统屏蔽，测试通知不会显示';
++
++  @override
++  String get hfTestingDebugScheduling => '调度';
++
++  @override
++  String get hfTestingDebugTemplates => '模板';
++
++  @override
++  String get hfTestingDebugLastTest => '上次测试';
++
++  @override
++  String get hfTestingNextCourse => '下一节课';
++
++  @override
++  String get hfTestingNextTrigger => '下次触发';
++
++  @override
++  String get hfTestingCurrentStage => '当前阶段';
++
++  @override
++  String get hfTestingBeforeClassBlockedUntil => '课前屏蔽截止';
++
++  @override
++  String get hfTestingSuspendedUntil => '挂起截止';
++
++  @override
++  String get hfTestingNone => '无';
++
++  @override
++  String get hfTestingTemplateStagePre => '课前模板';
++
++  @override
++  String get hfTestingTemplateStageActive => '课中模板';
++
++  @override
++  String get hfTestingTemplateStagePost => '课后模板';
++
++  @override
++  String get hfTestingLastTestStage => '阶段';
++
++  @override
++  String get hfTestingLastTestResult => '结果';
++
++  @override
++  String get hfTestingLastTestTime => '时间';
++
++  @override
++  String get hfTestingLastTestMessage => '原因';
++
++  @override
++  String get hfTestingLastTestNever => '尚未发送过测试通知';
++
++  @override
++  String get hfTestingLastTestSucceeded => '发送成功';
++
++  @override
++  String get hfTestingLastTestFailed => '发送失败';
++
++  @override
++  String hfTestingLastTestAt(Object time) {
++    return '上次测试：$time';
++  }
++
++  @override
++  String get hfTestingStageSheetTitle => '选择测试阶段';
++
++  @override
++  String get hfTestingStagePreTitle => '课前 5 分钟';
++
++  @override
++  String get hfTestingStagePreSubtitle => '倒计时到上课，验证提醒模板';
++
++  @override
++  String get hfTestingStageActiveTitle => '课中';
++
++  @override
++  String get hfTestingStageActiveSubtitle => '上课中，倒计时到下课';
++
++  @override
++  String get hfTestingStagePostTitle => '课后';
++
++  @override
++  String get hfTestingStagePostSubtitle => '已下课，无倒计时，验证课后模板';
++
++  @override
++  String get hfTestingEntryDetails => '发送课前/课中/课后测试通知、查看超级岛诊断状态';
++
+   @override
+   String get liveTestingIslandStatusTitle => '上岛状态诊断';
+ 
+   @override
+   String get liveTestingIslandStatusSubtitle => '这里直接显示原生实时服务、通知构造结果和不上岛原因';
+ 
+   @override
+   String get liveTestingServiceStatusRunning => '服务运行中';
+ 
+   @override
+@@ -11314,20 +11442,148 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
+ 
+   @override
+   String get liveTestingUmengHint => '下面兩個按鈕僅測試版顯示，用于驗證友盟 U-APM 崩溃和卡顿上報';
+ 
+   @override
+   String get liveTestingCrashAction => '崩溃測試';
+ 
+   @override
+   String get liveTestingAnrAction => '異常卡顿測試';
+ 
++  @override
++  String get hfTestingTitle => '超級島測試與診斷';
++
++  @override
++  String get hfTestingNotificationTitle => '通知測試';
++
++  @override
++  String get hfTestingNotificationSubtitle => '發送課前、課中、課後階段的超級島測試通知';
++
++  @override
++  String get hfTestingIslandStatusTitle => '超級島狀態';
++
++  @override
++  String get hfTestingIslandStatusSubtitle => '通知權限、測試頻道與排程器狀態';
++
++  @override
++  String get hfTestingPermissionGranted => '通知權限已開啟';
++
++  @override
++  String get hfTestingPermissionDenied => '通知權限未開啟';
++
++  @override
++  String get hfTestingChannelOk => '測試頻道正常';
++
++  @override
++  String get hfTestingChannelBlocked => '測試頻道已被封鎖';
++
++  @override
++  String get hfTestingChannelMissing => '測試頻道未建立';
++
++  @override
++  String get hfTestingSchedulerScheduled => '排程已就緒';
++
++  @override
++  String get hfTestingSchedulerNoData => '暫無課表資料';
++
++  @override
++  String get hfTestingNoScheduleHint => '未同步課表快照，請先儲存課表';
++
++  @override
++  String get hfTestingChannelBlockedHint => '測試通知頻道已被系統封鎖，測試通知不會顯示';
++
++  @override
++  String get hfTestingDebugScheduling => '排程';
++
++  @override
++  String get hfTestingDebugTemplates => '範本';
++
++  @override
++  String get hfTestingDebugLastTest => '上次測試';
++
++  @override
++  String get hfTestingNextCourse => '下一節課';
++
++  @override
++  String get hfTestingNextTrigger => '下次觸發';
++
++  @override
++  String get hfTestingCurrentStage => '目前階段';
++
++  @override
++  String get hfTestingBeforeClassBlockedUntil => '課前封鎖截止';
++
++  @override
++  String get hfTestingSuspendedUntil => '暫停截止';
++
++  @override
++  String get hfTestingNone => '無';
++
++  @override
++  String get hfTestingTemplateStagePre => '課前範本';
++
++  @override
++  String get hfTestingTemplateStageActive => '課中範本';
++
++  @override
++  String get hfTestingTemplateStagePost => '課後範本';
++
++  @override
++  String get hfTestingLastTestStage => '階段';
++
++  @override
++  String get hfTestingLastTestResult => '結果';
++
++  @override
++  String get hfTestingLastTestTime => '時間';
++
++  @override
++  String get hfTestingLastTestMessage => '原因';
++
++  @override
++  String get hfTestingLastTestNever => '尚未發送過測試通知';
++
++  @override
++  String get hfTestingLastTestSucceeded => '發送成功';
++
++  @override
++  String get hfTestingLastTestFailed => '發送失敗';
++
++  @override
++  String hfTestingLastTestAt(Object time) {
++    return '上次測試：$time';
++  }
++
++  @override
++  String get hfTestingStageSheetTitle => '選擇測試階段';
++
++  @override
++  String get hfTestingStagePreTitle => '課前 5 分鐘';
++
++  @override
++  String get hfTestingStagePreSubtitle => '倒數到上課，驗證提醒範本';
++
++  @override
++  String get hfTestingStageActiveTitle => '課中';
++
++  @override
++  String get hfTestingStageActiveSubtitle => '上課中，倒數到下課';
++
++  @override
++  String get hfTestingStagePostTitle => '課後';
++
++  @override
++  String get hfTestingStagePostSubtitle => '已下課，無倒數，驗證課後範本';
++
++  @override
++  String get hfTestingEntryDetails => '發送課前/課中/課後測試通知、查看超級島診斷狀態';
++
+   @override
+   String get liveTestingIslandStatusTitle => '上島狀態診斷';
+ 
+   @override
+   String get liveTestingIslandStatusSubtitle => '這裡直接顯示原生实時服務、通知构造结果和不上島原因';
+ 
+   @override
+   String get liveTestingServiceStatusRunning => '服務运行中';
+ 
+   @override
+@@ -19314,20 +19570,148 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
+ 
+   @override
+   String get liveTestingUmengHint => '下面兩個按鈕僅測試版顯示，用于驗證友盟 U-APM 崩溃和卡顿上報';
+ 
+   @override
+   String get liveTestingCrashAction => '崩溃測試';
+ 
+   @override
+   String get liveTestingAnrAction => '異常卡顿測試';
+ 
++  @override
++  String get hfTestingTitle => '超級島測試與診斷';
++
++  @override
++  String get hfTestingNotificationTitle => '通知測試';
++
++  @override
++  String get hfTestingNotificationSubtitle => '發送課前、課中、課後階段的超級島測試通知';
++
++  @override
++  String get hfTestingIslandStatusTitle => '超級島狀態';
++
++  @override
++  String get hfTestingIslandStatusSubtitle => '通知權限、測試管道與排程器狀態';
++
++  @override
++  String get hfTestingPermissionGranted => '通知權限已開啟';
++
++  @override
++  String get hfTestingPermissionDenied => '通知權限未開啟';
++
++  @override
++  String get hfTestingChannelOk => '測試管道正常';
++
++  @override
++  String get hfTestingChannelBlocked => '測試管道已遭封鎖';
++
++  @override
++  String get hfTestingChannelMissing => '測試管道尚未建立';
++
++  @override
++  String get hfTestingSchedulerScheduled => '排程已就緒';
++
++  @override
++  String get hfTestingSchedulerNoData => '暫無課表資料';
++
++  @override
++  String get hfTestingNoScheduleHint => '尚未同步課表快照，請先儲存課表';
++
++  @override
++  String get hfTestingChannelBlockedHint => '測試通知管道已遭系統封鎖，測試通知不會顯示';
++
++  @override
++  String get hfTestingDebugScheduling => '排程';
++
++  @override
++  String get hfTestingDebugTemplates => '範本';
++
++  @override
++  String get hfTestingDebugLastTest => '上次測試';
++
++  @override
++  String get hfTestingNextCourse => '下一節課';
++
++  @override
++  String get hfTestingNextTrigger => '下次觸發';
++
++  @override
++  String get hfTestingCurrentStage => '目前階段';
++
++  @override
++  String get hfTestingBeforeClassBlockedUntil => '課前封鎖截止';
++
++  @override
++  String get hfTestingSuspendedUntil => '掛起截止';
++
++  @override
++  String get hfTestingNone => '無';
++
++  @override
++  String get hfTestingTemplateStagePre => '課前範本';
++
++  @override
++  String get hfTestingTemplateStageActive => '課中範本';
++
++  @override
++  String get hfTestingTemplateStagePost => '課後範本';
++
++  @override
++  String get hfTestingLastTestStage => '階段';
++
++  @override
++  String get hfTestingLastTestResult => '結果';
++
++  @override
++  String get hfTestingLastTestTime => '時間';
++
++  @override
++  String get hfTestingLastTestMessage => '原因';
++
++  @override
++  String get hfTestingLastTestNever => '尚未發送過測試通知';
++
++  @override
++  String get hfTestingLastTestSucceeded => '發送成功';
++
++  @override
++  String get hfTestingLastTestFailed => '發送失敗';
++
++  @override
++  String hfTestingLastTestAt(Object time) {
++    return '上次測試：$time';
++  }
++
++  @override
++  String get hfTestingStageSheetTitle => '選擇測試階段';
++
++  @override
++  String get hfTestingStagePreTitle => '課前 5 分鐘';
++
++  @override
++  String get hfTestingStagePreSubtitle => '倒數計時到上課，驗證提醒範本';
++
++  @override
++  String get hfTestingStageActiveTitle => '課中';
++
++  @override
++  String get hfTestingStageActiveSubtitle => '上課中，倒數計時到下課';
++
++  @override
++  String get hfTestingStagePostTitle => '課後';
++
++  @override
++  String get hfTestingStagePostSubtitle => '已下課，無倒數計時，驗證課後範本';
++
++  @override
++  String get hfTestingEntryDetails => '發送課前/課中/課後測試通知、查看超級島診斷狀態';
++
+   @override
+   String get liveTestingIslandStatusTitle => '上島狀態診斷';
+ 
+   @override
+   String get liveTestingIslandStatusSubtitle => '這裡直接顯示原生实時服務、通知构造结果和不上島原因';
+ 
+   @override
+   String get liveTestingServiceStatusRunning => '服務运行中';
+ 
+   @override
+diff --git a/lib/l10n/app_zh.arb b/lib/l10n/app_zh.arb
+index 66f35ef..416eb38 100644
+--- a/lib/l10n/app_zh.arb
++++ b/lib/l10n/app_zh.arb
+@@ -1833,20 +1833,62 @@
+   "liveDiagnosticsCleared": "已清空应用日志",
+   "liveDiagnosticsClearFailed": "清空应用日志失败",
+   "liveTestingNotRefreshed": "尚未刷新",
+   "liveTestingTitle": "测试与诊断",
+   "liveTestingNotificationTitle": "测试通知",
+   "liveTestingNotificationSubtitle": "用于验证超级岛、通知栏和课程简称等显示效果",
+   "liveTestingSendAction": "发送测试通知",
+   "liveTestingUmengHint": "下面两个按钮仅测试版显示，用于验证友盟 U-APM 崩溃和卡顿上报",
+   "liveTestingCrashAction": "崩溃测试",
+   "liveTestingAnrAction": "异常卡顿测试",
++  "hfTestingTitle": "超级岛测试与诊断",
++  "hfTestingNotificationTitle": "通知测试",
++  "hfTestingNotificationSubtitle": "发送课前、课中、课后阶段的超级岛测试通知",
++  "hfTestingIslandStatusTitle": "超级岛状态",
++  "hfTestingIslandStatusSubtitle": "通知权限、测试渠道与调度器状态",
++  "hfTestingPermissionGranted": "通知权限已开启",
++  "hfTestingPermissionDenied": "通知权限未开启",
++  "hfTestingChannelOk": "测试渠道正常",
++  "hfTestingChannelBlocked": "测试渠道被屏蔽",
++  "hfTestingChannelMissing": "测试渠道未创建",
++  "hfTestingSchedulerScheduled": "调度已就绪",
++  "hfTestingSchedulerNoData": "暂无课表数据",
++  "hfTestingNoScheduleHint": "尚未同步课表快照，请先保存课表",
++  "hfTestingChannelBlockedHint": "测试通知渠道已被系统屏蔽，测试通知不会显示",
++  "hfTestingDebugScheduling": "调度",
++  "hfTestingDebugTemplates": "模板",
++  "hfTestingDebugLastTest": "上次测试",
++  "hfTestingNextCourse": "下一节课",
++  "hfTestingNextTrigger": "下次触发",
++  "hfTestingCurrentStage": "当前阶段",
++  "hfTestingBeforeClassBlockedUntil": "课前屏蔽截止",
++  "hfTestingSuspendedUntil": "挂起截止",
++  "hfTestingNone": "无",
++  "hfTestingTemplateStagePre": "课前模板",
++  "hfTestingTemplateStageActive": "课中模板",
++  "hfTestingTemplateStagePost": "课后模板",
++  "hfTestingLastTestStage": "阶段",
++  "hfTestingLastTestResult": "结果",
++  "hfTestingLastTestTime": "时间",
++  "hfTestingLastTestMessage": "原因",
++  "hfTestingLastTestNever": "尚未发送过测试通知",
++  "hfTestingLastTestSucceeded": "发送成功",
++  "hfTestingLastTestFailed": "发送失败",
++  "hfTestingLastTestAt": "上次测试：{time}",
++  "hfTestingStageSheetTitle": "选择测试阶段",
++  "hfTestingStagePreTitle": "课前 5 分钟",
++  "hfTestingStagePreSubtitle": "倒计时到上课，验证提醒模板",
++  "hfTestingStageActiveTitle": "课中",
++  "hfTestingStageActiveSubtitle": "上课中，倒计时到下课",
++  "hfTestingStagePostTitle": "课后",
++  "hfTestingStagePostSubtitle": "已下课，无倒计时，验证课后模板",
++  "hfTestingEntryDetails": "发送课前/课中/课后测试通知、查看超级岛诊断状态",
+   "liveTestingIslandStatusTitle": "上岛状态诊断",
+   "liveTestingIslandStatusSubtitle": "这里直接显示原生实时服务、通知构造结果和不上岛原因",
+   "liveTestingServiceStatusRunning": "服务运行中",
+   "liveTestingServiceStatusStopped": "服务未运行",
+   "liveTestingNoIslandReasonTitle": "不上岛原因",
+   "liveTestingNoIslandReasonEmpty": "当前无拦截原因",
+   "liveTestingRefreshAction": "刷新诊断",
+   "liveTestingRefreshing": "刷新中",
+   "liveTestingExportAction": "导出并分享日志",
+   "liveTestingExporting": "导出中",
+diff --git a/lib/l10n/app_zh_HK.arb b/lib/l10n/app_zh_HK.arb
+index 0774d3b..b8e4fff 100644
+--- a/lib/l10n/app_zh_HK.arb
++++ b/lib/l10n/app_zh_HK.arb
+@@ -1640,20 +1640,62 @@
+   "liveDiagnosticsCleared": "已清空超級島診斷日誌，後续会重新開始收集",
+   "liveDiagnosticsClearFailed": "清空超級島診斷日誌失败",
+   "liveTestingNotRefreshed": "尚未刷新",
+   "liveTestingTitle": "測試與診斷",
+   "liveTestingNotificationTitle": "測試通知",
+   "liveTestingNotificationSubtitle": "用于驗證超級島、通知栏和課程簡稱等顯示效果",
+   "liveTestingSendAction": "發送測試通知",
+   "liveTestingUmengHint": "下面兩個按鈕僅測試版顯示，用于驗證友盟 U-APM 崩溃和卡顿上報",
+   "liveTestingCrashAction": "崩溃測試",
+   "liveTestingAnrAction": "異常卡顿測試",
++  "hfTestingTitle": "超級島測試與診斷",
++  "hfTestingNotificationTitle": "通知測試",
++  "hfTestingNotificationSubtitle": "發送課前、課中、課後階段的超級島測試通知",
++  "hfTestingIslandStatusTitle": "超級島狀態",
++  "hfTestingIslandStatusSubtitle": "通知權限、測試頻道與排程器狀態",
++  "hfTestingPermissionGranted": "通知權限已開啟",
++  "hfTestingPermissionDenied": "通知權限未開啟",
++  "hfTestingChannelOk": "測試頻道正常",
++  "hfTestingChannelBlocked": "測試頻道已被封鎖",
++  "hfTestingChannelMissing": "測試頻道未建立",
++  "hfTestingSchedulerScheduled": "排程已就緒",
++  "hfTestingSchedulerNoData": "暫無課表資料",
++  "hfTestingNoScheduleHint": "未同步課表快照，請先儲存課表",
++  "hfTestingChannelBlockedHint": "測試通知頻道已被系統封鎖，測試通知不會顯示",
++  "hfTestingDebugScheduling": "排程",
++  "hfTestingDebugTemplates": "範本",
++  "hfTestingDebugLastTest": "上次測試",
++  "hfTestingNextCourse": "下一節課",
++  "hfTestingNextTrigger": "下次觸發",
++  "hfTestingCurrentStage": "目前階段",
++  "hfTestingBeforeClassBlockedUntil": "課前封鎖截止",
++  "hfTestingSuspendedUntil": "暫停截止",
++  "hfTestingNone": "無",
++  "hfTestingTemplateStagePre": "課前範本",
++  "hfTestingTemplateStageActive": "課中範本",
++  "hfTestingTemplateStagePost": "課後範本",
++  "hfTestingLastTestStage": "階段",
++  "hfTestingLastTestResult": "結果",
++  "hfTestingLastTestTime": "時間",
++  "hfTestingLastTestMessage": "原因",
++  "hfTestingLastTestNever": "尚未發送過測試通知",
++  "hfTestingLastTestSucceeded": "發送成功",
++  "hfTestingLastTestFailed": "發送失敗",
++  "hfTestingLastTestAt": "上次測試：{time}",
++  "hfTestingStageSheetTitle": "選擇測試階段",
++  "hfTestingStagePreTitle": "課前 5 分鐘",
++  "hfTestingStagePreSubtitle": "倒數到上課，驗證提醒範本",
++  "hfTestingStageActiveTitle": "課中",
++  "hfTestingStageActiveSubtitle": "上課中，倒數到下課",
++  "hfTestingStagePostTitle": "課後",
++  "hfTestingStagePostSubtitle": "已下課，無倒數，驗證課後範本",
++  "hfTestingEntryDetails": "發送課前/課中/課後測試通知、查看超級島診斷狀態",
+   "liveTestingIslandStatusTitle": "上島狀態診斷",
+   "liveTestingIslandStatusSubtitle": "這裡直接顯示原生实時服務、通知构造结果和不上島原因",
+   "liveTestingServiceStatusRunning": "服務运行中",
+   "liveTestingServiceStatusStopped": "服務未运行",
+   "liveTestingNoIslandReasonTitle": "不上島原因",
+   "liveTestingNoIslandReasonEmpty": "目前無拦截原因",
+   "liveTestingRefreshAction": "刷新診斷",
+   "liveTestingRefreshing": "刷新中",
+   "liveTestingExportAction": "導出並分享日誌",
+   "liveTestingExporting": "導出中",
+diff --git a/lib/l10n/app_zh_TW.arb b/lib/l10n/app_zh_TW.arb
+index 5bcd27b..3f12f13 100644
+--- a/lib/l10n/app_zh_TW.arb
++++ b/lib/l10n/app_zh_TW.arb
+@@ -1640,20 +1640,62 @@
+   "liveDiagnosticsCleared": "已清空超級島診斷日誌，後续会重新開始收集",
+   "liveDiagnosticsClearFailed": "清空超級島診斷日誌失败",
+   "liveTestingNotRefreshed": "尚未刷新",
+   "liveTestingTitle": "測試與診斷",
+   "liveTestingNotificationTitle": "測試通知",
+   "liveTestingNotificationSubtitle": "用于驗證超級島、通知栏和課程簡稱等顯示效果",
+   "liveTestingSendAction": "發送測試通知",
+   "liveTestingUmengHint": "下面兩個按鈕僅測試版顯示，用于驗證友盟 U-APM 崩溃和卡顿上報",
+   "liveTestingCrashAction": "崩溃測試",
+   "liveTestingAnrAction": "異常卡顿測試",
++  "hfTestingTitle": "超級島測試與診斷",
++  "hfTestingNotificationTitle": "通知測試",
++  "hfTestingNotificationSubtitle": "發送課前、課中、課後階段的超級島測試通知",
++  "hfTestingIslandStatusTitle": "超級島狀態",
++  "hfTestingIslandStatusSubtitle": "通知權限、測試管道與排程器狀態",
++  "hfTestingPermissionGranted": "通知權限已開啟",
++  "hfTestingPermissionDenied": "通知權限未開啟",
++  "hfTestingChannelOk": "測試管道正常",
++  "hfTestingChannelBlocked": "測試管道已遭封鎖",
++  "hfTestingChannelMissing": "測試管道尚未建立",
++  "hfTestingSchedulerScheduled": "排程已就緒",
++  "hfTestingSchedulerNoData": "暫無課表資料",
++  "hfTestingNoScheduleHint": "尚未同步課表快照，請先儲存課表",
++  "hfTestingChannelBlockedHint": "測試通知管道已遭系統封鎖，測試通知不會顯示",
++  "hfTestingDebugScheduling": "排程",
++  "hfTestingDebugTemplates": "範本",
++  "hfTestingDebugLastTest": "上次測試",
++  "hfTestingNextCourse": "下一節課",
++  "hfTestingNextTrigger": "下次觸發",
++  "hfTestingCurrentStage": "目前階段",
++  "hfTestingBeforeClassBlockedUntil": "課前封鎖截止",
++  "hfTestingSuspendedUntil": "掛起截止",
++  "hfTestingNone": "無",
++  "hfTestingTemplateStagePre": "課前範本",
++  "hfTestingTemplateStageActive": "課中範本",
++  "hfTestingTemplateStagePost": "課後範本",
++  "hfTestingLastTestStage": "階段",
++  "hfTestingLastTestResult": "結果",
++  "hfTestingLastTestTime": "時間",
++  "hfTestingLastTestMessage": "原因",
++  "hfTestingLastTestNever": "尚未發送過測試通知",
++  "hfTestingLastTestSucceeded": "發送成功",
++  "hfTestingLastTestFailed": "發送失敗",
++  "hfTestingLastTestAt": "上次測試：{time}",
++  "hfTestingStageSheetTitle": "選擇測試階段",
++  "hfTestingStagePreTitle": "課前 5 分鐘",
++  "hfTestingStagePreSubtitle": "倒數計時到上課，驗證提醒範本",
++  "hfTestingStageActiveTitle": "課中",
++  "hfTestingStageActiveSubtitle": "上課中，倒數計時到下課",
++  "hfTestingStagePostTitle": "課後",
++  "hfTestingStagePostSubtitle": "已下課，無倒數計時，驗證課後範本",
++  "hfTestingEntryDetails": "發送課前/課中/課後測試通知、查看超級島診斷狀態",
+   "liveTestingIslandStatusTitle": "上島狀態診斷",
+   "liveTestingIslandStatusSubtitle": "這裡直接顯示原生实時服務、通知构造结果和不上島原因",
+   "liveTestingServiceStatusRunning": "服務运行中",
+   "liveTestingServiceStatusStopped": "服務未运行",
+   "liveTestingNoIslandReasonTitle": "不上島原因",
+   "liveTestingNoIslandReasonEmpty": "目前無拦截原因",
+   "liveTestingRefreshAction": "刷新診斷",
+   "liveTestingRefreshing": "刷新中",
+   "liveTestingExportAction": "導出並分享日誌",
+   "liveTestingExporting": "導出中",

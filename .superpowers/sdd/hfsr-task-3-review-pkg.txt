@@ -1,0 +1,321 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index 54b6801..f97c328 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -1224,83 +1224,98 @@ class MainActivity : FlutterActivity() {
+                 )
+             }
+ 
+             val tickerText = r(templates["ticker_$templateStage"] ?: "")
+             val islandAText = r(templates["islandA_$templateStage"] ?: "")
+             val islandBText = r(templates["islandB_$templateStage"] ?: "")
+             val baseTitleText = r(templates["baseTitle_$templateStage"] ?: "")
+             val baseContentText = r(templates["baseContent_$templateStage"] ?: "")
+             val baseSubcontentText = r(templates["baseSubcontent_$templateStage"] ?: "")
+             val hintTitleText = r(templates["hintTitle_$templateStage"] ?: "")
++            val hintContentText = r(templates["hintContent_$templateStage"] ?: "")
++            val hintSubcontentText = r(templates["hintSubcontent_$templateStage"] ?: "")
++            val hintSubtitleText = r(templates["hintSubtitle_$templateStage"] ?: "")
+ 
+             val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+             } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                 data = Uri.fromParts("package", packageName, null)
+             }
+             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
+ 
+             val hasTimer = timerTarget > 0L && timerTarget > now
+             val extras = FocusNotification.buildV3 {
+                 business = "course_schedule"
+                 updatable = true
+                 enableFloat = true
+                 ticker = tickerText
+                 aodTitle = tickerText
+                 islandFirstFloat = true
+-                outEffectSrc = "outer_glow"
++                outEffectSrc = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
++                outEffectColor = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("outEffectStatusColor") ?: "#FFFFFFFF") else ""
+ 
+                 baseInfo {
+                     type = 2
+                     title = baseTitleText
+                     content = baseContentText
+                     subContent = baseSubcontentText
+                     showDivider = baseSubcontentText.isNotBlank()
+                 }
+ 
+                 picInfo {
+-                    type = 1
++                    if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
++                        type = 1
++                    }
+                 }
+ 
+                 hintInfo {
+                     type = 2
+                     title = hintTitleText
+                     content = hintText
++                    subTitle = hintSubtitleText
++                    extraTitle = hintContentText
++                    specialTitle = hintSubcontentText
+ 
+                     if (hasTimer) {
+                         timerInfo {
+                             timerType = -1
+                             timerWhen = timerTarget
+                             timerSystemCurrent = now
+                         }
+                     }
+ 
+                     actionInfo {
+                         actionIntentType = 1
+                         actionIntent = openAppUri
+                         actionTitle = "查看课表"
+                     }
+                 }
+ 
+                 island {
+                     islandProperty = 1
+-                    islandTimeout = 300
++                    islandTimeout = when (templateStage) {
++                        "pre" -> (args?.get("islandTimeoutPre")?.toIntOrNull() ?: 300)
++                        "post" -> (args?.get("islandTimeoutPost")?.toIntOrNull() ?: 600)
++                        else -> (args?.get("islandTimeoutActive")?.toIntOrNull() ?: 600)
++                    }
+ 
+                     bigIslandArea {
+                         imageTextInfoLeft {
+                             type = 1
+                             textInfo {
+                                 title = islandAText
+                                 showHighlightColor = true
+                             }
+                             picInfo {
+-                                type = 1
++                                if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
++                                    type = 1
++                                }
+                             }
+                         }
+ 
+                         if (hasTimer) {
+                             sameWidthDigitInfo {
+                                 timerInfo {
+                                     timerType = -1
+                                     timerWhen = timerTarget
+                                     timerSystemCurrent = now
+                                 }
+@@ -1319,22 +1334,24 @@ class MainActivity : FlutterActivity() {
+ 
+                     smallIslandArea { }
+ 
+                     shareData {
+                         title = courseName
+                         content = location
+                     }
+                 }
+             }
+ 
+-            extras.putString("miui.bigIsland.effect.src", "outer_glow")
+-            extras.putString("miui.effect.src", "outer_glow")
++            if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
++                extras.putString("miui.bigIsland.effect.src", "outer_glow")
++                extras.putString("miui.effect.src", "outer_glow")
++            }
+ 
+             notificationManager.createNotificationChannel(
+                 NotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
+             )
+             val channel = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                 Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
+                 UmengDiagnosticReporter.record(
+                     context = applicationContext,
+                     category = "send_test_focus_channel_blocked",
+@@ -2230,20 +2247,29 @@ class LiveUpdateService : Service() {
+     private var miuiIslandLabelFontColor = "#FFFFFF"
+     private var miuiIslandLabelFontWeight = "bold"
+     private var miuiIslandLabelRenderQuality = "standard"
+     private var miuiIslandLabelFontSize = 14f
+     private var miuiIslandLabelOffsetX = 0f
+     private var miuiIslandLabelOffsetY = 0f
+     private var miuiIslandLabelLogoPath: String? = null
+     private var miuiIslandLabelLogoCornerRadius = 8f
+     private var miuiIslandExpandedIconMode = "app_icon"
+     private var miuiIslandExpandedIconPath: String? = null
++    private var islandTimeoutPre = 300
++    private var islandTimeoutActive = 600
++    private var islandTimeoutPost = 600
++    private var iconAEnabled = true
++    private var statusTextColor = "#FFFFFFFF"
++    private var outEffectStatusEnabled = true
++    private var outEffectStatusColor = "#FFFFFFFF"
++    private var outEffectExpandEnabled = true
++    private var outEffectExpandColor = "#FFFFFFFF"
+     private var startAtMillis = 0L
+     private var endAtMillis = 0L
+     private var beforeClassLeadMillis = 0L
+     private var endReminderLeadMillis = 600_000L
+     private var liveClassReminderStartMinutes = 0
+     private var enableBeforeClass = true
+     private var enableDuringClass = true
+     private var enableBeforeEnd = true
+     private var promoteDuringClass = true
+     private var showNotificationDuringClass = true
+@@ -3220,80 +3246,95 @@ class LiveUpdateService : Service() {
+                 )
+             }
+ 
+             val tickerText = r(templates["ticker_$stageKey"] ?: "{课名}")
+             val islandAText = r(templates["islandA_$stageKey"] ?: "{课名}")
+             val islandBText = r(templates["islandB_$stageKey"] ?: "")
+             val baseTitleText = r(templates["baseTitle_$stageKey"] ?: "{课名}")
+             val baseContentText = r(templates["baseContent_$stageKey"] ?: "")
+             val baseSubcontentText = r(templates["baseSubcontent_$stageKey"] ?: "")
+             val hintTitleText = r(templates["hintTitle_$stageKey"] ?: "")
++            val hintContentText = r(templates["hintContent_$stageKey"] ?: "")
++            val hintSubcontentText = r(templates["hintSubcontent_$stageKey"] ?: "")
++            val hintSubtitleText = r(templates["hintSubtitle_$stageKey"] ?: "")
+ 
+             val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+             } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                 data = Uri.fromParts("package", packageName, null)
+             }
+             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
+ 
+             val extras = FocusNotification.buildV3 {
+                 business = "course_schedule"
+                 updatable = true
+                 enableFloat = true
+                 ticker = tickerText
+                 aodTitle = tickerText
+                 islandFirstFloat = true
+-                outEffectSrc = "outer_glow"
++                outEffectSrc = if (outEffectStatusEnabled) "outer_glow" else ""
++                outEffectColor = if (outEffectStatusEnabled) outEffectStatusColor else ""
+ 
+                 baseInfo {
+                     type = 2
+                     title = baseTitleText
+                     content = baseContentText
+                     subContent = baseSubcontentText
+                     showDivider = baseSubcontentText.isNotBlank()
+                 }
+ 
+                 picInfo {
+-                    type = 1
++                    if (iconAEnabled) {
++                        type = 1
++                    }
+                 }
+ 
+                 hintInfo {
+                     type = 2
+                     title = hintTitleText
+                     content = remainingText.ifBlank { hintTitleText }
++                    subTitle = hintSubtitleText
++                    extraTitle = hintContentText
++                    specialTitle = hintSubcontentText
+ 
+                     timerInfo {
+                         timerType = -1
+                                 timerWhen = targetTimerWhen
+                         timerSystemCurrent = now
+                     }
+ 
+                     actionInfo {
+                         actionIntentType = 1
+                         actionIntent = openAppUri
+                         actionTitle = "查看课表"
+                     }
+                 }
+ 
+                 island {
+                     islandProperty = 1
+-                    islandTimeout = if (stageKey == "pre") 300 else 600
++                    islandTimeout = when (stageKey) {
++                        "pre" -> islandTimeoutPre
++                        "post" -> islandTimeoutPost
++                        else -> islandTimeoutActive
++                    }
+ 
+                     bigIslandArea {
+                         imageTextInfoLeft {
+                             type = 1
+                             textInfo {
+                                 title = islandAText
+                                 showHighlightColor = true
+                             }
+                             picInfo {
+-                                type = 1
++                                if (iconAEnabled) {
++                                    type = 1
++                                }
+                             }
+                         }
+ 
+                         sameWidthDigitInfo {
+                             timerInfo {
+                                 timerType = -1
+                     timerWhen = targetTimerWhen
+                                 timerSystemCurrent = now
+                             }
+                             content = islandBText
+@@ -3304,22 +3345,24 @@ class LiveUpdateService : Service() {
+ 
+                     smallIslandArea { }
+ 
+                     shareData {
+                         title = courseName
+                         content = location.ifBlank { "" }
+                     }
+                 }
+             }
+ 
+-            extras.putString("miui.bigIsland.effect.src", "outer_glow")
+-            extras.putString("miui.effect.src", "outer_glow")
++            if (outEffectStatusEnabled) {
++                extras.putString("miui.bigIsland.effect.src", "outer_glow")
++                extras.putString("miui.effect.src", "outer_glow")
++            }
+ 
+             extras
+         } catch (e: Exception) {
+             Log.e(TAG, "buildHyperFocusBundle failed", e)
+             null
+         }
+ 
+     }
+ 
+     private fun buildHyperFocusDismissBundle(): Bundle? {
+@@ -4461,20 +4504,29 @@ internal val hfDefaultTemplates = mapOf(
+     "baseTitle_post" to "课名",
+     "baseContent_pre" to "开始,结束",
+     "baseContent_active" to "开始,结束",
+     "baseContent_post" to "开始,结束",
+     "baseSubcontent_pre" to "教室",
+     "baseSubcontent_active" to "教室",
+     "baseSubcontent_post" to "教室",
+     "hintTitle_pre" to "",
+     "hintTitle_active" to "上课中",
+     "hintTitle_post" to "已下课",
++    "hintContent_pre" to "即将上课",
++    "hintContent_active" to "距离下课",
++    "hintContent_post" to "已经下课",
++    "hintSubcontent_pre" to "",
++    "hintSubcontent_active" to "",
++    "hintSubcontent_post" to "",
++    "hintSubtitle_pre" to "",
++    "hintSubtitle_active" to "",
++    "hintSubtitle_post" to "",
+ )
+ 
+ internal fun loadHyperFocusTemplates(context: Context): Map<String, String> {
+     val json = context.getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
+         .getString("templates_json", null) ?: return hfDefaultTemplates
+     return try {
+         val obj = org.json.JSONObject(json)
+         for (key in obj.keys()) {
+             val v = obj.optString(key, "")
+             if (v.contains("{")) {

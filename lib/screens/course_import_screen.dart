@@ -2,6 +2,7 @@ import '../l10n/service_message_localizer.dart';
 import '../logging/app_debug_log.dart';
 import 'dart:async';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
+import 'package:university_timetable/widgets/miuix_date_picker_sheet.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,7 +10,6 @@ import 'package:azlistview/azlistview.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +26,7 @@ import '../models/timetable_settings.dart';
 import '../models/warehouse_macro_models.dart';
 import '../models/warehouse_repository_models.dart';
 import '../providers/timetable_provider.dart';
+import '../providers/timetable/import_export_logic.dart';
 import '../services/ai_course_import_service.dart';
 import '../services/ics_import_service.dart';
 import '../services/html_import_service.dart';
@@ -33,6 +34,7 @@ import '../services/import_random_color_preferences.dart';
 import '../services/import_week_alignment_service.dart';
 import '../services/spreadsheet_import_service.dart';
 import '../services/warehouse_import_preferences_service.dart';
+import '../services/warehouse_import_session_log.dart';
 import '../services/warehouse_macro_service.dart';
 import '../services/warehouse_repository_service.dart';
 import '../utils/app_toast.dart';
@@ -44,6 +46,7 @@ import '../widgets/warehouse_macro_recorder.dart';
 import '../widgets/warehouse_macro_replayer.dart';
 import '../widgets/warehouse_playback_overlay.dart';
 import 'feedback_screen.dart';
+import 'log_viewer_entry.dart';
 
 Future<List<Course>> _coursesWithOptionalRandomColors(
   List<Course> courses,
@@ -51,10 +54,24 @@ Future<List<Course>> _coursesWithOptionalRandomColors(
   if (!await ImportRandomColorPreferences.isEnabled()) {
     return courses;
   }
-  return applyRandomImportCourseColors(courses);
+  final assignMatchingTextColor =
+      await ImportRandomColorPreferences.isTextColorEnabled();
+  return applyRandomImportCourseColors(
+    courses,
+    assignMatchingTextColor: assignMatchingTextColor,
+  );
 }
 
-enum _WarehouseImportMenuAction { feedback, customDebug }
+/// When random colors are on, import must apply the new palette (and optional
+/// text colors) even for courses that match existing local rows.
+Future<bool> _shouldPreserveLocalColorsOnImport() async {
+  return !(await ImportRandomColorPreferences.isEnabled());
+}
+
+enum _WarehouseImportMenuAction { feedback, customDebug, executionLog }
+
+Future<void> openWarehouseImportExecutionLogViewer(BuildContext context) =>
+    openLogViewer(context, AppLogSource.warehouseImport);
 
 Widget _importListTitle(BuildContext context, String text) {
   return Text(text, style: HyperosTypography.listTitle(context));
@@ -87,23 +104,15 @@ bool shouldPromptRememberedLoginAutofill({
       !isPromptShowing;
 }
 
-Widget _buildImportMethodChoiceTile({
-  required IconData icon,
-  required String title,
-  required String subtitle,
-  required String footer,
-  required VoidCallback onTap,
+/// Whether ordinary web-login import should start background path recording.
+///
+/// Explicit "record import" always records. Automatic first-import recording
+/// only runs when this school+adapter has no saved macro yet.
+bool shouldAutoRecordWarehouseImport({
+  required bool forceRecord,
+  required bool hasExistingMacro,
 }) {
-  return HyperosChoiceTile(
-    prefix: Icon(icon),
-    title: title,
-    subtitle: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Text(subtitle), const SizedBox(height: 4), Text(footer)],
-    ),
-    trailing: const HyperosChevron(),
-    onTap: onTap,
-  );
+  return forceRecord || !hasExistingMacro;
 }
 
 Widget _buildWarehouseAdapterListItem({
@@ -155,73 +164,71 @@ class CourseImportScreen extends StatelessWidget {
       onBack: () => Navigator.pop(context),
       title: Text(l10n.courseImportTitle),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: HyperosListView(
-            includeHeaderInset: false,
+      // Standard list path (header inset inside the scrollable + notification
+      // bubbling) so the large title collapses with scroll; the old
+      // BodyInset + includeHeaderInset:false combo swallowed vertical scroll
+      // notifications and froze the large title.
+      child: HyperosListView(
+        children: [
+          const ImportRandomColorToggle(),
+          const HyperosSectionGap(),
+          HyperosSectionLabel(text: l10n.chooseImportMethodTitle),
+          const HyperosSectionGap(),
+          HyperosListGroup(
             children: [
-              const ImportRandomColorToggle(),
-              const HyperosSectionGap(),
-              HyperosSectionLabel(text: l10n.chooseImportMethodTitle),
-              const HyperosSectionGap(),
-              HyperosChoiceGroup(
-                children: [
-                  _buildImportMethodChoiceTile(
-                    icon: Icons.event_note_rounded,
-                    title: l10n.importMethodIcsTitle,
-                    subtitle: l10n.importMethodIcsSubtitle,
-                    footer: l10n.importMethodIcsFooter,
-                    onTap: () => _openImportPage<bool>(
-                      context,
-                      builder: (_) => const IcsCourseImportScreen(),
-                    ),
-                  ),
-                  _buildImportMethodChoiceTile(
-                    icon: Icons.auto_awesome_rounded,
-                    title: l10n.importMethodAiTitle,
-                    subtitle: l10n.importMethodAiSubtitle,
-                    footer: l10n.importMethodAiFooter,
-                    onTap: () => _openImportPage<bool>(
-                      context,
-                      builder: (_) => const AiImageCourseImportScreen(),
-                    ),
-                  ),
-                  _buildImportMethodChoiceTile(
-                    icon: Icons.school_outlined,
-                    title: l10n.importMethodWarehouseTitle,
-                    subtitle: l10n.importMethodWarehouseSubtitle,
-                    footer: l10n.importMethodWarehouseFooter,
-                    onTap: () => _openImportPage<bool>(
-                      context,
-                      builder: (_) => const WarehouseCourseImportScreen(),
-                    ),
-                  ),
-                  _buildImportMethodChoiceTile(
-                    icon: Icons.table_chart_outlined,
-                    title: l10n.importMethodSpreadsheetTitle,
-                    subtitle: l10n.importMethodSpreadsheetSubtitle,
-                    footer: l10n.importMethodSpreadsheetFooter,
-                    onTap: () => _openImportPage<bool>(
-                      context,
-                      builder: (_) => const SpreadsheetCourseImportScreen(),
-                    ),
-                  ),
-                  _buildImportMethodChoiceTile(
-                    icon: Icons.language_rounded,
-                    title: l10n.importMethodHtmlTitle,
-                    subtitle: l10n.importMethodHtmlSubtitle,
-                    footer: l10n.importMethodHtmlFooter,
-                    onTap: () => _openImportPage<bool>(
-                      context,
-                      builder: (_) => const HtmlCourseImportScreen(),
-                    ),
-                  ),
-                ],
+              HyperosNavTile(
+                icon: Icons.event_note_rounded,
+                iconAccent: HyperosIconColors.blue,
+                title: l10n.importMethodIcsTitle,
+                subtitle: l10n.importMethodIcsSubtitle,
+                onTap: () => _openImportPage<bool>(
+                  context,
+                  builder: (_) => const IcsCourseImportScreen(),
+                ),
+              ),
+              HyperosNavTile(
+                icon: Icons.auto_awesome_rounded,
+                iconAccent: HyperosIconColors.purple,
+                title: l10n.importMethodAiTitle,
+                subtitle: l10n.importMethodAiSubtitle,
+                onTap: () => _openImportPage<bool>(
+                  context,
+                  builder: (_) => const AiImageCourseImportScreen(),
+                ),
+              ),
+              HyperosNavTile(
+                icon: Icons.school_outlined,
+                iconAccent: HyperosIconColors.green,
+                title: l10n.importMethodWarehouseTitle,
+                subtitle: l10n.importMethodWarehouseSubtitle,
+                onTap: () => _openImportPage<bool>(
+                  context,
+                  builder: (_) => const WarehouseCourseImportScreen(),
+                ),
+              ),
+              HyperosNavTile(
+                icon: Icons.table_chart_outlined,
+                iconAccent: HyperosIconColors.orange,
+                title: l10n.importMethodSpreadsheetTitle,
+                subtitle: l10n.importMethodSpreadsheetSubtitle,
+                onTap: () => _openImportPage<bool>(
+                  context,
+                  builder: (_) => const SpreadsheetCourseImportScreen(),
+                ),
+              ),
+              HyperosNavTile(
+                icon: Icons.language_rounded,
+                iconAccent: HyperosIconColors.teal,
+                title: l10n.importMethodHtmlTitle,
+                subtitle: l10n.importMethodHtmlSubtitle,
+                onTap: () => _openImportPage<bool>(
+                  context,
+                  builder: (_) => const HtmlCourseImportScreen(),
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -274,15 +281,15 @@ class _IcsCourseImportScreenState extends State<IcsCourseImportScreen> {
       onBack: () => Navigator.pop(context),
       title: Text(l10n.icsImportTitle),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: Column(
-            children: [
-              Expanded(
-                child: HyperosListView(
-                  includeHeaderInset: false,
-                  children: [
+      // Standard list path (header inset inside the scrollable + notification
+      // bubbling) so the large title collapses; the old BodyInset +
+      // includeHeaderInset:false combo swallowed vertical scroll notifications
+      // and froze the large title.
+      child: Column(
+        children: [
+          Expanded(
+            child: HyperosListView(
+              children: [
                     _ImportGuidePanel(
                       scenarioIntro: l10n.icsScenarioIntro,
                       step1Subtitle: l10n.icsStep1Subtitle,
@@ -308,8 +315,6 @@ class _IcsCourseImportScreenState extends State<IcsCourseImportScreen> {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 
@@ -462,6 +467,7 @@ class _IcsCourseImportScreenState extends State<IcsCourseImportScreen> {
       replaceExisting: replaceExisting,
       semesterStart: semesterConfig.semesterStartDate,
       source: 'ics',
+      preserveLocalColors: await _shouldPreserveLocalColorsOnImport(),
     );
     if (!mounted) return;
     showAppToast(
@@ -518,15 +524,13 @@ class _SpreadsheetCourseImportScreenState
       onBack: () => Navigator.pop(context),
       title: Text(l10n.spreadsheetImportTitle),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: Column(
-            children: [
-              Expanded(
-                child: HyperosListView(
-                  includeHeaderInset: false,
-                  children: [
+      // Standard list path so the large title collapses with scroll (see the
+      // ICS import screen above).
+      child: Column(
+        children: [
+          Expanded(
+            child: HyperosListView(
+              children: [
                     _ImportGuidePanel(
                       scenarioIntro: l10n.spreadsheetScenarioIntro,
                       step1Subtitle: l10n.spreadsheetStep1Subtitle,
@@ -565,8 +569,6 @@ class _SpreadsheetCourseImportScreenState
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 
@@ -804,6 +806,7 @@ Future<void> _completeParsedCourseImport({
     replaceExisting: replaceExisting,
     semesterStart: semesterStart,
     source: source,
+    preserveLocalColors: await _shouldPreserveLocalColorsOnImport(),
   );
   if (!context.mounted) return;
 
@@ -1010,17 +1013,15 @@ class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
       title: Text(l10n.aiImportTitle),
       childPad: false,
       resizeToAvoidBottomInset: true,
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: HyperosBlurredBodyInset(
-            child: Column(
-              children: [
-                Expanded(
-                  child: HyperosListView(
-                    includeHeaderInset: false,
-                    children: [
+      // Standard list path so the large title collapses with scroll (see the
+      // ICS import screen above).
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: HyperosListView(
+                children: [
                       _AiWorkflowGuideCard(l10n: l10n),
                       const HyperosSectionGap(),
                       HyperosControlCard(
@@ -1117,7 +1118,7 @@ class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
                       ],
                     ],
                   ),
-                ),
+            ),
                 Material(
                   color: HyperosColors.card(context),
                   child: Padding(
@@ -1150,8 +1151,6 @@ class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
               ],
             ),
           ),
-        ),
-      ),
     );
   }
 
@@ -1429,6 +1428,7 @@ class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
         replaceExisting: replaceExisting,
         semesterStart: semesterConfig.semesterStartDate,
         source: 'ai',
+        preserveLocalColors: await _shouldPreserveLocalColorsOnImport(),
       );
       if (!mounted) {
         return;
@@ -1455,6 +1455,144 @@ class _AiImageCourseImportScreenState extends State<AiImageCourseImportScreen> {
       }
     }
   }
+}
+
+/// Runs warehouse quick import without showing the WebView login page.
+///
+/// Equivalent to tapping the lightning icon on the warehouse import school list,
+/// but keeps the browser off-screen for home pull-to-refresh.
+///
+/// Hosted in an [Overlay] (not a route) so the home page stays interactive.
+/// Call [onCancelAvailable] with a cancel callback while the session is active.
+Future<bool> runHomePullWarehouseQuickImport(
+  BuildContext context, {
+  VoidCallback? onNeedsManualAction,
+  void Function(VoidCallback cancel)? onCancelAvailable,
+}) async {
+  final l10n = AppLocalizations.of(context)!;
+  final macroService = WarehouseMacroService();
+  final preferencesService = WarehouseImportPreferencesService();
+  final allEntries = await macroService.getAllMacroEntries();
+  if (!context.mounted) {
+    return false;
+  }
+  if (allEntries.isEmpty) {
+    showAppLightTip(context, message: l10n.noSavedQuickImportRecords);
+    return false;
+  }
+
+  WarehouseMacroRecord? macro;
+  for (final entry in allEntries) {
+    final record = await macroService.getMacro(entry.schoolId, entry.adapterId);
+    if (record != null) {
+      macro = record;
+      break;
+    }
+  }
+  if (!context.mounted) {
+    return false;
+  }
+  if (macro == null) {
+    showAppLightTip(context, message: l10n.noSavedQuickImportRecords);
+    return false;
+  }
+
+  final customUrl = await preferencesService.getCustomImportUrl(
+    macro.adapterId,
+  );
+  final initialUrl = resolveWarehouseImportUrl(
+    customImportUrl: customUrl,
+    defaultUrl: macro.importUrl,
+  );
+  if (!context.mounted) {
+    return false;
+  }
+  if (initialUrl == null) {
+    showAppLightTip(context, message: l10n.noValidWarehouseLoginUrl);
+    return false;
+  }
+
+  final settings = context.read<TimetableProvider>().settings;
+  final fetchOptions = WarehouseFetchOptions.fromSettings(settings);
+  final source = WarehouseRepositorySource.fromGitHubUrl(
+    'https://github.com/Mutx163/qingyu_warehouse',
+  );
+  final selectedMacro = macro;
+  final completer = Completer<bool>();
+  var sessionFinished = false;
+  OverlayEntry? overlayEntry;
+
+  void completeSession(bool success) {
+    if (sessionFinished) {
+      return;
+    }
+    sessionFinished = true;
+    overlayEntry?.remove();
+    overlayEntry = null;
+    if (!completer.isCompleted) {
+      completer.complete(success);
+    }
+  }
+
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) {
+    showAppLightTip(context, message: l10n.quickImportUnknownError);
+    return false;
+  }
+
+  overlayEntry = OverlayEntry(
+    builder: (overlayContext) {
+      // Keep a tiny on-screen platform view so WebView keeps running, but do
+      // not intercept home-page touches.
+      return IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 1,
+            height: 1,
+            child: WarehouseAdapterWebLoginScreen(
+              title: l10n.quickImportTitle(selectedMacro.schoolName),
+              initialUrl: initialUrl,
+              source: source,
+              school: WarehouseSchoolEntry(
+                id: selectedMacro.schoolId,
+                name: selectedMacro.schoolName,
+                initial: selectedMacro.schoolName.isNotEmpty
+                    ? selectedMacro.schoolName[0]
+                    : '#',
+                resourceFolder: selectedMacro.schoolResourceFolder.isNotEmpty
+                    ? selectedMacro.schoolResourceFolder
+                    : selectedMacro.schoolId,
+              ),
+              adapter: WarehouseAdapterEntry(
+                adapterId: selectedMacro.adapterId,
+                adapterName: selectedMacro.adapterName,
+                category: 'macro',
+                assetJsPath: selectedMacro.adapterAssetJsPath.isNotEmpty
+                    ? selectedMacro.adapterAssetJsPath
+                    : 'macro/${selectedMacro.adapterId}.js',
+                importUrl: selectedMacro.importUrl,
+                maintainer: 'macro',
+                description: l10n.courseImportQuickImportDescription(
+                  selectedMacro.schoolName,
+                  selectedMacro.adapterName,
+                ),
+              ),
+              fetchOptions: fetchOptions,
+              macroRecord: selectedMacro,
+              runInBackground: true,
+              onBackgroundNeedsManualAction: onNeedsManualAction,
+              onBackgroundFinished: completeSession,
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  overlay.insert(overlayEntry!);
+  onCancelAvailable?.call(() => completeSession(false));
+  return completer.future;
 }
 
 class WarehouseCourseImportScreen extends StatefulWidget {
@@ -1519,6 +1657,9 @@ class _WarehouseCourseImportScreenState
       case _WarehouseImportMenuAction.customDebug:
         await _openCustomDebugRecords();
         break;
+      case _WarehouseImportMenuAction.executionLog:
+        await openWarehouseImportExecutionLogViewer(context);
+        break;
     }
   }
 
@@ -1535,6 +1676,10 @@ class _WarehouseCourseImportScreenState
         HyperosPopupMenuItem(
           label: l10n.warehouseCustomDebugTitle,
           value: _WarehouseImportMenuAction.customDebug,
+        ),
+        HyperosPopupMenuItem(
+          label: l10n.warehouseImportExecutionLogMenuLabel,
+          value: _WarehouseImportMenuAction.executionLog,
         ),
       ],
     );
@@ -1766,21 +1911,22 @@ class _WarehouseCourseImportScreenState
         ),
       ),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: Column(
-            children: [
-              Expanded(
-                child: FutureBuilder<WarehouseRootIndex>(
+      // Standard scroll path so the large title collapses with scroll (see the
+      // ICS import screen above); centered states inset manually below.
+      child: Column(
+        children: [
+          Expanded(
+            child: FutureBuilder<WarehouseRootIndex>(
                   future: _rootIndexFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _importLoadingCenter();
+                      // Non-scroll centered view: inset below the bar manually.
+                      return HyperosBlurredBodyInset(
+                        child: _importLoadingCenter(),
+                      );
                     }
                     if (snapshot.hasError) {
                       return HyperosListView(
-                        includeHeaderInset: false,
                         children: [
                           HyperosSectionLabel(
                             text: l10n.warehouseRootLoadFailedTitle,
@@ -1844,22 +1990,30 @@ class _WarehouseCourseImportScreenState
                         .toList(growable: false);
                     final isSearching = _searchQuery.trim().isNotEmpty;
                     if (sections.isEmpty) {
-                      return Center(
-                        child: HyperosEmptyState(
-                          icon: Icons.search_off_rounded,
-                          title: isSearching
-                              ? l10n.noMatchingSchools
-                              : l10n.noAvailableSchools,
-                          subtitle: isSearching
-                              ? l10n.searchSchoolSuggestion
-                              : null,
+                      // Non-scroll centered view: inset below the bar manually.
+                      return HyperosBlurredBodyInset(
+                        child: Center(
+                          child: HyperosEmptyState(
+                            icon: Icons.search_off_rounded,
+                            title: isSearching
+                                ? l10n.noMatchingSchools
+                                : l10n.noAvailableSchools,
+                            subtitle: isSearching
+                                ? l10n.searchSchoolSuggestion
+                                : null,
+                          ),
                         ),
                       );
                     }
+                    // Header inset inside the scrollable so rows slide under
+                    // the frosted bar (mirrors HyperosListView's default).
+                    final headerInset = HyperosBlurredHeaderScope.insetOf(
+                      context,
+                    );
                     return AzListView(
                       data: sections,
                       itemCount: sections.length,
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: EdgeInsets.fromLTRB(16, headerInset, 16, 16),
                       indexBarData: isSearching ? const [] : indexTags,
                       indexBarOptions: IndexBarOptions(
                         needRebuild: true,
@@ -1939,8 +2093,6 @@ class _WarehouseCourseImportScreenState
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 
@@ -2105,13 +2257,10 @@ class _WarehouseCustomDebugRecordsScreenState
         ),
       ],
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: _isLoading
-              ? _importLoadingCenter()
-              : HyperosListView(
-                  includeHeaderInset: false,
+      child: _isLoading
+          // Non-scroll centered view: inset below the bar manually.
+          ? HyperosBlurredBodyInset(child: _importLoadingCenter())
+          : HyperosListView(
                   children: [
                     HyperosControlCard(
                       title: l10n.customDebugIntroTitle,
@@ -2198,8 +2347,6 @@ class _WarehouseCustomDebugRecordsScreenState
                       ),
                   ],
                 ),
-        ),
-      ),
     );
   }
 }
@@ -2346,11 +2493,9 @@ class _WarehouseCustomDebugEditScreenState
         ),
       ],
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: HyperosListView(
-            includeHeaderInset: false,
+      // Standard list path so the large title collapses with scroll (see the
+      // ICS import screen above).
+      child: HyperosListView(
             children: [
               HyperosSectionLabel(text: l10n.debugRecordFormula),
               const HyperosSectionGap(),
@@ -2398,8 +2543,6 @@ class _WarehouseCustomDebugEditScreenState
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 }
@@ -2460,18 +2603,19 @@ class _WarehouseSchoolAdaptersScreenState
       onBack: () => Navigator.pop(context),
       title: Text(widget.school.name),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: FutureBuilder<WarehouseAdaptersIndex>(
+      // Standard scroll path so the large title collapses with scroll (see the
+      // ICS import screen above); the loading state insets manually.
+      child: FutureBuilder<WarehouseAdaptersIndex>(
             future: _adaptersFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return _importLoadingCenter();
+                // Non-scroll centered view: inset below the bar manually.
+                return HyperosBlurredBodyInset(
+                  child: _importLoadingCenter(),
+                );
               }
               if (snapshot.hasError) {
                 return HyperosListView(
-                  includeHeaderInset: false,
                   children: [
                     HyperosSectionLabel(
                       text: l10n.warehouseAdaptersLoadFailedTitle,
@@ -2505,7 +2649,6 @@ class _WarehouseSchoolAdaptersScreenState
               _scheduleMacroCacheCheck(adapters);
               _scheduleCustomImportUrlCacheCheck(adapters);
               return HyperosListView(
-                includeHeaderInset: false,
                 children: [
                   HyperosListGroup(
                     children: [
@@ -2555,8 +2698,6 @@ class _WarehouseSchoolAdaptersScreenState
               );
             },
           ),
-        ),
-      ),
     );
   }
 
@@ -2586,6 +2727,19 @@ class _WarehouseSchoolAdaptersScreenState
     if (initialUrl == null || !mounted) {
       return;
     }
+    // Explicit "record import" always records. Ordinary import auto-records
+    // only when this school+adapter has no saved macro yet (first import).
+    final hasExistingMacro = await _macroService.hasMacro(
+      widget.school.id,
+      adapter.adapterId,
+    );
+    if (!mounted) {
+      return;
+    }
+    final shouldRecord = shouldAutoRecordWarehouseImport(
+      forceRecord: autoRecord,
+      hasExistingMacro: hasExistingMacro,
+    );
     final imported = await Navigator.of(context).push<bool>(
       HyperosPageRoute(
         settings: const RouteSettings(name: '/courses/import/warehouse/login'),
@@ -2596,7 +2750,7 @@ class _WarehouseSchoolAdaptersScreenState
           school: widget.school,
           adapter: adapter,
           fetchOptions: widget.fetchOptions,
-          autoRecord: autoRecord,
+          autoRecord: shouldRecord,
         ),
       ),
     );
@@ -2853,6 +3007,7 @@ class _WarehouseAdapterDetailScreenState
       WarehouseRepositoryService();
   final WarehouseImportPreferencesService _preferencesService =
       WarehouseImportPreferencesService();
+  final WarehouseMacroService _macroService = WarehouseMacroService();
   late Future<String> _scriptFuture;
   String? _customImportUrl;
 
@@ -2877,11 +3032,9 @@ class _WarehouseAdapterDetailScreenState
       onBack: () => Navigator.pop(context),
       title: Text(adapter.adapterName),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: HyperosListView(
-            includeHeaderInset: false,
+      // Standard list path so the large title collapses with scroll (see the
+      // ICS import screen above).
+      child: HyperosListView(
             children: [
               _WarehouseIntroCard(
                 title: adapter.adapterName,
@@ -3025,8 +3178,6 @@ class _WarehouseAdapterDetailScreenState
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 
@@ -3094,6 +3245,17 @@ class _WarehouseAdapterDetailScreenState
       );
       return;
     }
+    final hasExistingMacro = await _macroService.hasMacro(
+      widget.school.id,
+      widget.adapter.adapterId,
+    );
+    if (!mounted) {
+      return;
+    }
+    final shouldRecord = shouldAutoRecordWarehouseImport(
+      forceRecord: false,
+      hasExistingMacro: hasExistingMacro,
+    );
     await Navigator.of(context)
         .push(
           HyperosPageRoute(
@@ -3107,6 +3269,7 @@ class _WarehouseAdapterDetailScreenState
               school: widget.school,
               adapter: widget.adapter,
               fetchOptions: widget.fetchOptions,
+              autoRecord: shouldRecord,
             ),
           ),
         )
@@ -3174,6 +3337,16 @@ class WarehouseAdapterWebLoginScreen extends StatefulWidget {
   final WarehouseMacroRecord? macroRecord;
   final bool autoRecord;
 
+  /// When true, the WebView runs off-screen and UI chrome is hidden. Used by
+  /// home pull-to-refresh quick import so the page never appears.
+  final bool runInBackground;
+
+  /// Called when background playback needs user input (captcha / password).
+  final VoidCallback? onBackgroundNeedsManualAction;
+
+  /// Called when background import finishes (success or failure).
+  final ValueChanged<bool>? onBackgroundFinished;
+
   const WarehouseAdapterWebLoginScreen({
     super.key,
     required this.title,
@@ -3186,6 +3359,9 @@ class WarehouseAdapterWebLoginScreen extends StatefulWidget {
     this.debugScriptName,
     this.macroRecord,
     this.autoRecord = false,
+    this.runInBackground = false,
+    this.onBackgroundNeedsManualAction,
+    this.onBackgroundFinished,
   });
 
   @override
@@ -3253,17 +3429,31 @@ class _WarehouseAdapterWebLoginScreenState
   bool get _isUsingLocalDebugScript =>
       (widget.debugScriptOverride ?? '').trim().isNotEmpty;
 
-  void _debugImportLog(String message) {
-    if (!kDebugMode) return;
-    appDebugLog(
-      'WarehouseImportDebug',
-      'macro=$_isMacroReplay '
-          'playback=$_playbackState '
-          'executing=$_isExecutingImport '
-          'recording=$_macroRecordingState '
-          'status="${_lastScriptStatus ?? ''}" '
-          '$message',
+  void _debugImportLog(String message, {String level = 'info'}) {
+    final detail =
+        'macro=$_isMacroReplay '
+        'playback=$_playbackState '
+        'executing=$_isExecutingImport '
+        'recording=$_macroRecordingState '
+        'status="${_lastScriptStatus ?? ''}" '
+        '$message';
+    WarehouseImportSessionLog.instance.append(
+      message: detail,
+      level: level,
+      extras: {
+        'schoolId': widget.school.id,
+        'schoolName': widget.school.name,
+        'adapterId': widget.adapter.adapterId,
+        'adapterName': widget.adapter.adapterName,
+        'url': _currentUrl ?? widget.initialUrl,
+        'macroReplay': _isMacroReplay,
+        'executingImport': _isExecutingImport,
+        'playbackState': '$_playbackState',
+        'recordingState': '$_macroRecordingState',
+      },
     );
+    if (!kDebugMode) return;
+    appDebugLog('WarehouseImportDebug', detail);
   }
 
   String _bridgeMessageSummary(Map<String, dynamic> message) {
@@ -3275,12 +3465,55 @@ class _WarehouseAdapterWebLoginScreenState
     return 'type=$type keys=[$keys] payloadLength=$payloadLength message=$errorMessage';
   }
 
+  /// Adapter scripts often toast "成功导入 N 条课程" right before the host shows
+  /// the quick-import completion sheet. Match common success phrasings so we
+  /// can suppress the redundant light tip during macro replay.
+  bool _isScriptImportSuccessToast(String message) {
+    final text = message.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+    final lower = text.toLowerCase();
+    return text.contains('成功导入') ||
+        text.contains('导入成功') ||
+        text.contains('导入完成') ||
+        (text.contains('导入') && text.contains('条课程')) ||
+        lower.contains('import success') ||
+        lower.contains('imported') && lower.contains('course');
+  }
+
+  /// Progress toasts from adapter scripts ("正在获取课表…") are redundant with
+  /// the quick-import playback overlay / completion sheet.
+  bool _isScriptImportProgressToast(String message) {
+    final text = message.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+    return text.contains('正在通过接口') ||
+        text.contains('正在获取') ||
+        text.contains('正在导入') ||
+        text.contains('请稍候') ||
+        text.contains('请稍等');
+  }
+
   @override
   void initState() {
     super.initState();
     _useDesktopMode = widget.macroRecord?.useDesktopMode ?? true;
     _currentUrl = widget.initialUrl;
     _addressController = TextEditingController(text: widget.initialUrl);
+    WarehouseImportSessionLog.instance.append(
+      message:
+          'open web login school=${widget.school.name}(${widget.school.id}) '
+          'adapter=${widget.adapter.adapterName}(${widget.adapter.adapterId}) '
+          'url=${widget.initialUrl} macro=${widget.macroRecord != null} '
+          'autoRecord=${widget.autoRecord} localDebug=$_isUsingLocalDebugScript',
+      extras: {
+        'schoolId': widget.school.id,
+        'adapterId': widget.adapter.adapterId,
+        'url': widget.initialUrl,
+      },
+    );
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..enableZoom(true)
@@ -3291,6 +3524,18 @@ class _WarehouseAdapterWebLoginScreenState
           _handleBridgeMessage(message.message);
         },
       )
+      ..setOnConsoleMessage((consoleMessage) {
+        WarehouseImportSessionLog.instance.append(
+          message:
+              'console.${consoleMessage.level.name}: ${consoleMessage.message}',
+          level: consoleMessage.level.name == 'error' ? 'error' : 'debug',
+          extras: {
+            'schoolId': widget.school.id,
+            'adapterId': widget.adapter.adapterId,
+            'url': _currentUrl ?? widget.initialUrl,
+          },
+        );
+      })
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -3500,6 +3745,10 @@ class _WarehouseAdapterWebLoginScreenState
           label: l10n.copyCurrentAddressTooltip,
           value: 'copy',
         ),
+        HyperosPopupMenuItem(
+          label: l10n.warehouseImportExecutionLogMenuLabel,
+          value: 'executionLog',
+        ),
       ],
     );
     if (!mounted || value == null) {
@@ -3529,6 +3778,9 @@ class _WarehouseAdapterWebLoginScreenState
           );
         }
         break;
+      case 'executionLog':
+        await openWarehouseImportExecutionLogViewer(context);
+        break;
     }
   }
 
@@ -3544,6 +3796,18 @@ class _WarehouseAdapterWebLoginScreenState
         (_isUsingLocalDebugScript
             ? l10n.localDebugModeScriptStatus(effectiveDebugScriptName)
             : null);
+    if (widget.runInBackground) {
+      // Keep the platform WebView attached (size > 0) but fully off-screen so
+      // JS / cookies / navigation still work without showing any UI chrome.
+      return Offstage(
+        offstage: true,
+        child: SizedBox(
+          width: 1,
+          height: 1,
+          child: WebViewWidget(controller: _controller),
+        ),
+      );
+    }
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
       title: Text(widget.title),
@@ -3885,6 +4149,10 @@ class _WarehouseAdapterWebLoginScreenState
       );
       _playbackState = PlaybackUiState.error;
     });
+    if (widget.runInBackground) {
+      _debugImportLog('background import error message="$message"');
+      widget.onBackgroundFinished?.call(false);
+    }
   }
 
   Future<void> _markMacroImportCompleted({
@@ -3904,6 +4172,11 @@ class _WarehouseAdapterWebLoginScreenState
           existing.copyWith(
             successfulImportCount: existing.successfulImportCount + 1,
             updatedAt: DateTime.now(),
+            scriptPageUrl:
+                sanitizeWarehouseScriptPageUrl(
+                  _currentUrl ?? widget.initialUrl,
+                ) ??
+                existing.scriptPageUrl,
           ),
         );
       }
@@ -3921,6 +4194,11 @@ class _WarehouseAdapterWebLoginScreenState
       return;
     }
     _quickImportResultHandled = true;
+    if (widget.runInBackground) {
+      _debugImportLog('background quick import finished successfully');
+      widget.onBackgroundFinished?.call(true);
+      return;
+    }
     final l10n = AppLocalizations.of(context)!;
     final status = (_lastScriptStatus ?? '').trim();
     final description = [
@@ -3935,11 +4213,20 @@ class _WarehouseAdapterWebLoginScreenState
       builder: (sheetContext) {
         return HyperosSheet(
           title: l10n.quickImportFinishedTitle,
-          description: description,
-          child: HyperosButton(
-            label: l10n.quickImportDismissAction,
-            expand: true,
-            onPressed: () => Navigator.pop(sheetContext),
+          // Put result text above the dismiss button. HyperosSheet renders
+          // [child] before [description], so compose layout in [child].
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              HyperosSectionDescription(text: description),
+              const SizedBox(height: 16),
+              HyperosButton(
+                label: l10n.quickImportDismissAction,
+                expand: true,
+                onPressed: () => Navigator.pop(sheetContext),
+              ),
+            ],
           ),
         );
       },
@@ -4127,7 +4414,22 @@ class _WarehouseAdapterWebLoginScreenState
         break;
       case 'toast':
         if (!mounted) return;
-        _showLightTip(context, (message['message'] as String?) ?? '');
+        final toastMessage = (message['message'] as String?)?.trim() ?? '';
+        if (toastMessage.isEmpty) {
+          break;
+        }
+        // During quick-import / macro replay the host already shows a
+        // completion sheet; suppress script success toasts that only report
+        // "imported N courses" so users are not hit by two stacked tips.
+        if (_isMacroReplay &&
+            (_isScriptImportSuccessToast(toastMessage) ||
+                _isScriptImportProgressToast(toastMessage))) {
+          _debugImportLog(
+            'bridge toast suppressed during macro replay message="$toastMessage"',
+          );
+          break;
+        }
+        _showLightTip(context, toastMessage);
         break;
       case 'confirm':
         await _showScriptConfirmDialog(message);
@@ -4219,7 +4521,10 @@ class _WarehouseAdapterWebLoginScreenState
     if (macroRecord != null) {
       final key = _dialogResponseKey('confirm', message);
       final recorded = macroRecord.dialogResponses[key];
-      await _resolveJavaScriptRequest(requestId, recorded == true);
+      // Unrecorded confirms default to true so automated import scripts are
+      // not cancelled just because the old macro never saw this dialog.
+      final shouldConfirm = recorded == null ? true : recorded == true;
+      await _resolveJavaScriptRequest(requestId, shouldConfirm);
       return;
     }
     final l10n = AppLocalizations.of(context)!;
@@ -4300,6 +4605,12 @@ class _WarehouseAdapterWebLoginScreenState
       final recorded = macroRecord.dialogResponses[key];
       if (recorded != null) {
         await _resolveJavaScriptRequest(requestId, '$recorded');
+        return;
+      }
+      if (widget.runInBackground) {
+        // Prefer the script-provided selection; fall back to first option.
+        final selectedIndex = (message['selectedIndex'] as num?)?.toInt() ?? 0;
+        await _resolveJavaScriptRequest(requestId, selectedIndex);
         return;
       }
     }
@@ -4393,12 +4704,36 @@ class _WarehouseAdapterWebLoginScreenState
     String requestId,
     Object? value,
   ) async {
-    final encoded = jsonEncode(value);
+    if (!_isSafeBridgeRequestId(requestId)) {
+      _debugImportLog('reject unsafe bridge requestId');
+      return;
+    }
+    final encodedValue = jsonEncode(value);
+    final encodedRequestId = jsonEncode(requestId);
     await _controller.runJavaScript(
       "window.__qingyuResolvers = window.__qingyuResolvers || {}; "
-      "window.__qingyuResolvers['$requestId']?.($encoded); "
-      "delete window.__qingyuResolvers['$requestId'];",
+      "window.__qingyuResolvers[$encodedRequestId]?.($encodedValue); "
+      "delete window.__qingyuResolvers[$encodedRequestId];",
     );
+  }
+
+  /// Bridge request ids must be alphanumeric tokens (no quotes / script).
+  bool _isSafeBridgeRequestId(String requestId) {
+    if (requestId.isEmpty || requestId.length > 128) {
+      return false;
+    }
+    for (var index = 0; index < requestId.length; index++) {
+      final codeUnit = requestId.codeUnitAt(index);
+      final isUpperLetter = codeUnit >= 65 && codeUnit <= 90;
+      final isLowerLetter = codeUnit >= 97 && codeUnit <= 122;
+      final isDigit = codeUnit >= 48 && codeUnit <= 57;
+      final isAllowedSymbol =
+          codeUnit == 95 || codeUnit == 46 || codeUnit == 45;
+      if (!isUpperLetter && !isLowerLetter && !isDigit && !isAllowedSymbol) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _handleImportedCoursesJson(String payload) async {
@@ -4445,13 +4780,15 @@ class _WarehouseAdapterWebLoginScreenState
       final replaceExisting = provider.courses.isEmpty
           ? true
           : recordedReplaceExisting ??
-                await _askReplaceExisting(
-                  context,
-                  title: AppLocalizations.of(context)!.courseImportTitle,
-                  content: AppLocalizations.of(
-                    context,
-                  )!.importCourseCountPrompt(parsedCourses.length),
-                );
+                (widget.runInBackground
+                    ? false
+                    : await _askReplaceExisting(
+                        context,
+                        title: AppLocalizations.of(context)!.courseImportTitle,
+                        content: AppLocalizations.of(
+                          context,
+                        )!.importCourseCountPrompt(parsedCourses.length),
+                      ));
       if (replaceExisting == null || !mounted) {
         _debugImportLog(
           'courses import aborted at replaceExisting mounted=$mounted value=$replaceExisting',
@@ -4472,18 +4809,24 @@ class _WarehouseAdapterWebLoginScreenState
 
       final semesterConfig =
           recordedSemesterConfig ??
-          await _pickImportSemesterConfig(
-            context,
-            initialSemesterStartDate:
-                provider.settings.semesterStartDate ?? DateTime.now(),
-            initialFirstCourseWeek: 1,
-            title: AppLocalizations.of(
-              context,
-            )!.importConfirmSemesterMappingTitle,
-            subtitle: AppLocalizations.of(
-              context,
-            )!.importConfirmSemesterMappingSubtitleWarehouse,
-          );
+          (widget.runInBackground
+              ? _ImportSemesterConfig(
+                  semesterStartDate:
+                      provider.settings.semesterStartDate ?? DateTime.now(),
+                  firstCourseWeek: 1,
+                )
+              : await _pickImportSemesterConfig(
+                  context,
+                  initialSemesterStartDate:
+                      provider.settings.semesterStartDate ?? DateTime.now(),
+                  initialFirstCourseWeek: 1,
+                  title: AppLocalizations.of(
+                    context,
+                  )!.importConfirmSemesterMappingTitle,
+                  subtitle: AppLocalizations.of(
+                    context,
+                  )!.importConfirmSemesterMappingSubtitleWarehouse,
+                ));
       if (semesterConfig == null || !mounted) {
         _debugImportLog(
           'courses import aborted at semesterConfig mounted=$mounted hasConfig=${semesterConfig != null}',
@@ -4567,6 +4910,7 @@ class _WarehouseAdapterWebLoginScreenState
         replaceExisting: replaceExisting,
         semesterStart: semesterConfig.semesterStartDate,
         source: 'warehouse',
+        preserveLocalColors: await _shouldPreserveLocalColorsOnImport(),
       );
       _debugImportLog('importParsedCourses done importedCount=$importedCount');
       if (!mounted) {
@@ -4582,12 +4926,16 @@ class _WarehouseAdapterWebLoginScreenState
             : AppLocalizations.of(context)!.importNoCourseChanges;
       });
       final navigator = Navigator.of(context);
-      _showLightTip(
-        context,
-        importedCount > 0
-            ? AppLocalizations.of(context)!.importUpdatedCount(importedCount)
-            : AppLocalizations.of(context)!.importNoCourseChanges,
-      );
+      // Quick-import replay already shows a completion sheet with the same
+      // status text; skip the 2s light tip to avoid a double toast.
+      if (!replaying) {
+        _showLightTip(
+          context,
+          importedCount > 0
+              ? AppLocalizations.of(context)!.importUpdatedCount(importedCount)
+              : AppLocalizations.of(context)!.importNoCourseChanges,
+        );
+      }
       _cancelImportTimeout();
       _debugImportLog('courses import success path -> set executing false');
       setState(() {
@@ -4649,7 +4997,11 @@ class _WarehouseAdapterWebLoginScreenState
       final weeks =
           (map['weeks'] as List<dynamic>?)
               ?.map((item) => (item as num).toInt())
-              .where((item) => item > 0)
+              .where(
+                (item) =>
+                    item > 0 &&
+                    item <= ImportExportLogic.maxAllowedSemesterWeekCount,
+              )
               .toSet()
               .toList()
             ?..sort();
@@ -4661,6 +5013,11 @@ class _WarehouseAdapterWebLoginScreenState
           weeks.isEmpty) {
         continue;
       }
+      final normalizedDay = Course.normalizeDayOfWeek(day);
+      final normalizedSections = Course.normalizeSections(
+        startSection: startSection,
+        endSection: endSection,
+      );
       courses.add(
         Course(
           id: const Uuid().v4(),
@@ -4671,9 +5028,11 @@ class _WarehouseAdapterWebLoginScreenState
           location: location.isEmpty
               ? AppLocalizations.of(context)!.unknownLocation
               : location,
-          dayOfWeek: day,
-          startSection: startSection,
-          endSection: endSection,
+          dayOfWeek: normalizedDay,
+          startSection: normalizedSections.startSection,
+          endSection: normalizedSections.endSection,
+          startWeek: weeks.first,
+          endWeek: weeks.last,
           startTime: '',
           endTime: '',
           customWeeks: weeks,
@@ -4790,17 +5149,21 @@ class _WarehouseAdapterWebLoginScreenState
     return ['text','email','tel','number'].includes(type) && !input.disabled;
   });
   const passwordInput = Array.from(document.querySelectorAll('input[type="password"]')).find((input) => !input.disabled);
+  const setInputValue = (input, nextValue) => {
+    if (!input) return false;
+    // 已是目标值则不改写，避免触发页面「清空再输入」监听。
+    if (String(input.value || '') === nextValue) return false;
+    input.focus();
+    input.value = nextValue;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  };
   if (textInputs[0]) {
-    textInputs[0].focus();
-    textInputs[0].value = ${jsonEncode(login.username)};
-    textInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-    textInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+    setInputValue(textInputs[0], ${jsonEncode(login.username)});
   }
   if (passwordInput) {
-    passwordInput.focus();
-    passwordInput.value = ${jsonEncode(login.password)};
-    passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
-    passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+    setInputValue(passwordInput, ${jsonEncode(login.password)});
   }
 })();
 ''';
@@ -4907,9 +5270,18 @@ class _WarehouseAdapterWebLoginScreenState
       _macroRawEvents = [];
       _lastScriptStatus = l10n.courseImportRecordingStatus;
     });
+    // Each recording session must start with a clean dialog map so a previous
+    // stop-and-discard (or re-record on the same WebView) cannot leak answers.
+    _macroDialogResponses.clear();
     // 在当前页面注入录制 JS
     _injectMacroRecorderJs();
-    _showLightTip(context, l10n.courseImportRecordingStartedTip);
+    // First-import auto-record uses a lighter tip so users are not startled.
+    _showLightTip(
+      context,
+      widget.autoRecord
+          ? l10n.courseImportAutoRecordingStartedTip
+          : l10n.courseImportRecordingStartedTip,
+    );
   }
 
   /// 导入成功时自动完成录制并返回
@@ -4933,7 +5305,41 @@ class _WarehouseAdapterWebLoginScreenState
     final capturedEvents = List<Map<String, dynamic>>.from(_macroRawEvents);
     final steps = MacroRecordingConverter.convert(capturedEvents);
 
-    if (steps.isNotEmpty && mounted) {
+    if (!mounted) {
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _macroRecordingState = MacroRecordingState.stopped;
+    });
+
+    // No steps captured: finish import without offering to save a path.
+    if (steps.isEmpty) {
+      setState(() {
+        _macroRecordingState = MacroRecordingState.idle;
+        _macroRawEvents = [];
+      });
+      _macroDialogResponses.clear();
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    // Ask whether to keep this first-import (or explicit-record) path.
+    final shouldSave = await showAppConfirmDialog(
+      context,
+      title: l10n.courseImportSaveRecordingTitle,
+      message: widget.autoRecord
+          ? l10n.courseImportSaveAutoRecordingMessage(steps.length)
+          : l10n.courseImportSaveRecordingMessage(steps.length),
+      confirmLabel: l10n.saveAction,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (shouldSave == true) {
       final now = DateTime.now();
       final record = WarehouseMacroRecord(
         schoolId: widget.school.id,
@@ -4941,6 +5347,9 @@ class _WarehouseAdapterWebLoginScreenState
         schoolName: widget.school.name,
         adapterName: widget.adapter.adapterName,
         importUrl: widget.initialUrl,
+        scriptPageUrl: sanitizeWarehouseScriptPageUrl(
+          _currentUrl ?? widget.initialUrl,
+        ),
         schoolResourceFolder: widget.school.resourceFolder,
         adapterAssetJsPath: widget.adapter.assetJsPath,
         steps: steps,
@@ -4950,11 +5359,28 @@ class _WarehouseAdapterWebLoginScreenState
         successfulImportCount: 1,
         useDesktopMode: _useDesktopMode,
       );
+      _macroDialogResponses.clear();
       await _macroService.saveMacro(record);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _macroRecordingState = MacroRecordingState.idle;
+        _macroRawEvents = [];
+        _lastScriptStatus = l10n.courseImportRecordingSavedStatus(steps.length);
+      });
+    } else {
+      setState(() {
+        _macroRecordingState = MacroRecordingState.idle;
+        _macroRawEvents = [];
+        _lastScriptStatus = null;
+      });
+      _macroDialogResponses.clear();
     }
 
     if (mounted) {
-      Navigator.of(context).pop(false);
+      // Import already succeeded; always return true so parent can close.
+      Navigator.of(context).pop(true);
     }
   }
 
@@ -4993,6 +5419,7 @@ class _WarehouseAdapterWebLoginScreenState
         _macroRawEvents = [];
         _lastScriptStatus = l10n.courseImportRecordingEmptyStatus;
       });
+      _macroDialogResponses.clear();
       _showLightTip(context, l10n.courseImportRecordingEmptyTip);
       return;
     }
@@ -5011,6 +5438,7 @@ class _WarehouseAdapterWebLoginScreenState
         _macroRawEvents = [];
         _lastScriptStatus = null;
       });
+      _macroDialogResponses.clear();
       return;
     }
 
@@ -5022,6 +5450,9 @@ class _WarehouseAdapterWebLoginScreenState
       schoolName: widget.school.name,
       adapterName: widget.adapter.adapterName,
       importUrl: widget.initialUrl,
+      scriptPageUrl: sanitizeWarehouseScriptPageUrl(
+        _currentUrl ?? widget.initialUrl,
+      ),
       schoolResourceFolder: widget.school.resourceFolder,
       adapterAssetJsPath: widget.adapter.assetJsPath,
       steps: steps,
@@ -5032,6 +5463,7 @@ class _WarehouseAdapterWebLoginScreenState
       useDesktopMode: _useDesktopMode,
     );
 
+    _macroDialogResponses.clear();
     await _macroService.saveMacro(record);
     if (!mounted) return;
 
@@ -5049,8 +5481,20 @@ class _WarehouseAdapterWebLoginScreenState
   // ============ 宏回放方法 ============
 
   Future<void> _startPlayback(WarehouseMacroRecord macro) async {
+    final acceleratedPreview = buildAcceleratedMacroSteps(
+      compactMacroFillSteps(macro.steps),
+      scriptPageUrl: macro.scriptPageUrl,
+      importUrl: macro.importUrl,
+    );
+    final willAccelerate =
+        acceleratedPreview.length < compactMacroFillSteps(macro.steps).length;
     _debugImportLog(
-      'start playback macro steps=${macro.steps.length} adapter=${macro.adapterId}',
+      'start playback macro steps=${macro.steps.length} '
+      'acceleratedSteps=${acceleratedPreview.length} '
+      'willAccelerate=$willAccelerate '
+      'scriptPageUrl=${macro.scriptPageUrl ?? "(null)"} '
+      'importUrl=${macro.importUrl} '
+      'adapter=${macro.adapterId}',
     );
     setState(() {
       _playbackState = PlaybackUiState.playing;
@@ -5092,6 +5536,8 @@ class _WarehouseAdapterWebLoginScreenState
                   _rememberedLogin = remembered;
                 });
               }
+              // 始终走 autofill：内部 setInputValue 对已有正确值会跳过改写，
+              // 但不会连带跳过学号/用户名（避免密码已满、用户名为空）。
               await _autofillRememberedLogin();
               await Future.delayed(const Duration(milliseconds: 300));
               if (!mounted) return false;
@@ -5100,6 +5546,14 @@ class _WarehouseAdapterWebLoginScreenState
               });
               return true;
             }
+          }
+          if (widget.runInBackground) {
+            _debugImportLog(
+              'background playback needs manual input reason=$reason',
+            );
+            widget.onBackgroundNeedsManualAction?.call();
+            widget.onBackgroundFinished?.call(false);
+            return false;
           }
           setState(() {
             _playbackState = PlaybackUiState.pausedForInput;
@@ -5127,6 +5581,10 @@ class _WarehouseAdapterWebLoginScreenState
           } else {
             if (!mounted) return;
             _debugImportLog('playback failed -> playback error');
+            if (widget.runInBackground) {
+              widget.onBackgroundFinished?.call(false);
+              return;
+            }
             setState(() {
               _playbackState = PlaybackUiState.error;
             });
@@ -5722,8 +6180,8 @@ Future<_ImportSemesterConfig?> _pickImportSemesterConfig(
       return StatefulBuilder(
         builder: (context, setModalState) {
           Future<void> pickStartDate() async {
-            final picked = await showDatePicker(
-              context: context,
+            final picked = await showMiuixDatePickerSheet(
+              context,
               initialDate: selectedSemesterStartDate,
               firstDate: DateTime(2020),
               lastDate: DateTime(2035),
@@ -5777,7 +6235,8 @@ Future<_ImportSemesterConfig?> _pickImportSemesterConfig(
                     edgeToEdge: true,
                     child: HyperosControlCardRowScope(
                       isFirst: true,
-                      isLast: false,
+                      // Lone select row is also the card bottom edge.
+                      isLast: true,
                       child: HyperosSelectTile<int>(
                         label: l10n.importFirstCourseWeekMappingLabel,
                         subtitle: l10n.importFirstCourseWeekMappingSubtitle,
@@ -5863,21 +6322,24 @@ Future<bool> _ensureSectionCapacity(
   BuildContext context, {
   required int requiredSectionCount,
   required TimetableProvider provider,
+  bool autoConfirm = false,
 }) async {
   if (requiredSectionCount <= provider.settings.sectionCount) {
     return true;
   }
 
   final l10n = AppLocalizations.of(context)!;
-  final shouldContinue = await showAppConfirmDialog(
-    context,
-    title: l10n.courseImportSectionCountInsufficientTitle,
-    message: l10n.courseImportSectionCountInsufficientMessage(
-      provider.settings.sectionCount,
-      requiredSectionCount,
-    ),
-    confirmLabel: l10n.courseImportAutoFillAndImportAction,
-  );
+  final shouldContinue = autoConfirm
+      ? true
+      : await showAppConfirmDialog(
+          context,
+          title: l10n.courseImportSectionCountInsufficientTitle,
+          message: l10n.courseImportSectionCountInsufficientMessage(
+            provider.settings.sectionCount,
+            requiredSectionCount,
+          ),
+          confirmLabel: l10n.courseImportAutoFillAndImportAction,
+        );
 
   if (shouldContinue != true || !context.mounted) {
     return false;
@@ -6063,13 +6525,13 @@ class _HtmlCourseImportScreenState extends State<HtmlCourseImportScreen> {
               SafeArea(
                 top: false,
                 minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: FButton(
-                  child: Text(
-                    _isImporting
-                        ? l10n.htmlFetchingLabel
-                        : l10n.htmlFetchImportLabel,
-                  ),
-                  onPress: _isImporting ? null : _fetchAndImport,
+                child: HyperosButton(
+                  label: _isImporting
+                      ? l10n.htmlFetchingLabel
+                      : l10n.htmlFetchImportLabel,
+                  expand: true,
+                  loading: _isImporting,
+                  onPressed: _isImporting ? null : _fetchAndImport,
                 ),
               ),
             ],
@@ -6177,6 +6639,7 @@ class _HtmlCourseImportScreenState extends State<HtmlCourseImportScreen> {
       if (!mounted) return;
 
       await provider.setHtmlImportSource(url);
+      if (!mounted) return;
 
       if (importedCount > 0) {
         Navigator.of(context).pop(true);

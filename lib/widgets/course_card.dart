@@ -4,6 +4,7 @@ import 'package:university_timetable/l10n/app_localizations.dart';
 import '../models/course.dart';
 import '../models/timetable_settings.dart';
 import '../utils/hex_color.dart';
+import 'course_surface.dart';
 
 class CourseCard extends StatelessWidget {
   final Course course;
@@ -25,8 +26,19 @@ class CourseCard extends StatelessWidget {
   final String? overrideColorHex;
   final String? titleColorHex;
   final String? detailColorHex;
+
+  /// Surface material style behind the card content (solid / translucent /
+  /// gaussian / liquid glass).
+  final CourseCardSurfaceStyle surfaceStyle;
+
+  /// Dim factor for conflict / holiday / suspended states (0–1); scales the
+  /// surface fill and tint alphas.
+  final double surfaceOpacity;
   final String? compactOverlineText;
   final String? topRightBadgeText;
+
+  /// Shows a circular homework indicator on the card (typically week view).
+  final bool showHomeworkIndicator;
   final bool isHighlighted;
   final bool isHoliday;
   final bool isSuspended;
@@ -52,8 +64,11 @@ class CourseCard extends StatelessWidget {
     this.overrideColorHex,
     this.titleColorHex,
     this.detailColorHex,
+    this.surfaceStyle = CourseCardSurfaceStyle.solid,
+    this.surfaceOpacity = 1.0,
     this.compactOverlineText,
     this.topRightBadgeText,
+    this.showHomeworkIndicator = false,
     this.isHighlighted = false,
     this.isHoliday = false,
     this.isSuspended = false,
@@ -94,122 +109,132 @@ class CourseCard extends StatelessWidget {
     final titleAlignment = _contentAlignment;
     final titleTextAlign = _textAlign;
 
-    final card = Card(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      elevation: isHighlighted ? 6 : 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isHighlighted
-            ? BorderSide(
-                color: Colors.white.withValues(alpha: 0.92),
-                width: 1.6,
-              )
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color.withValues(alpha: 0.9),
-                color.withValues(alpha: 0.7),
-              ],
-            ),
-            boxShadow: isHighlighted
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.28),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Stack(
+    // Content layout (shared between full and compact paths).
+    final content = Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
+              if (showName)
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (showName)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              course.name,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: titleColor,
-                              ),
-                              textAlign: titleTextAlign,
-                              softWrap: true,
-                            ),
-                          ),
-                          if (showName)
-                            Align(
-                              alignment: titleAlignment,
-                              child: Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  l10n.sectionRangeLabel(
-                                    course.startSection,
-                                    course.endSection,
-                                  ),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: titleColor,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                    Expanded(
+                      child: Text(
+                        course.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: titleColor,
+                        ),
+                        textAlign: titleTextAlign,
+                        softWrap: true,
                       ),
-                    if (showName && detailLines.isNotEmpty)
-                      const SizedBox(height: 8),
-                    ...detailLines,
+                    ),
+                    if (showName)
+                      Align(
+                        alignment: titleAlignment,
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            l10n.sectionRangeLabel(
+                              course.startSection,
+                              course.endSection,
+                            ),
+                            style: TextStyle(fontSize: 12, color: titleColor),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-              ),
-              if (topRightBadgeText != null)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: _buildBadgeRow(
-                    context,
-                    customBadgeText: topRightBadgeText,
-                  ),
-                ),
-              if (isHoliday && topRightBadgeText == null)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: _buildBadgeRow(context, showHoliday: true),
-                ),
-              if (isSuspended && topRightBadgeText == null && !isHoliday)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: _buildBadgeRow(context, showSuspended: true),
-                ),
+              if (showName && detailLines.isNotEmpty) const SizedBox(height: 8),
+              ...detailLines,
             ],
           ),
         ),
+        if (showHomeworkIndicator)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: _buildHomeworkIndicator(size: 18, iconSize: 11),
+          ),
+        if (topRightBadgeText != null)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildBadgeRow(context, customBadgeText: topRightBadgeText),
+          ),
+        if (isHoliday && topRightBadgeText == null)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildBadgeRow(context, showHoliday: true),
+          ),
+        if (isSuspended && topRightBadgeText == null && !isHoliday)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildBadgeRow(context, showSuspended: true),
+          ),
+      ],
+    );
+
+    // Tap target with ink ripple, identical to the day-view approach.
+    final tapTarget = onTap != null
+        ? Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: content,
+            ),
+          )
+        : content;
+
+    // Use CourseSurface (same as _buildCompactCard) instead of Material Card +
+    // inner Container gradient. The old Card wrapper added its own default
+    // background color (surfaceContainerLow), creating a "card within a card"
+    // look around the inner gradient's rounded corners. CourseSurface paints
+    // the surface in one pass and supports all four surface styles including
+    // HyperOS liquid glass / gaussian blur.
+    final card = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: CourseSurface(
+        style: surfaceStyle,
+        color: color,
+        borderRadius: 12,
+        opacityScale: surfaceOpacity,
+        solidGradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color.withValues(alpha: 0.9), color.withValues(alpha: 0.7)],
+        ),
+        outerShadow: isHighlighted
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.28),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : null,
+        border: isHighlighted
+            ? Border.all(
+                color: Colors.white.withValues(alpha: 0.92),
+                width: 1.6,
+              )
+            : null,
+        child: tapTarget,
       ),
     );
 
@@ -238,18 +263,14 @@ class CourseCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Container(
-              margin: EdgeInsets.all(compactOuterInset),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    color.withValues(alpha: 0.9),
-                    color.withValues(alpha: 0.7),
-                  ],
-                ),
+            const ColoredBox(color: Colors.transparent),
+            Padding(
+              padding: EdgeInsets.all(compactOuterInset),
+              child: CourseSurface(
+                style: surfaceStyle,
+                color: color,
+                borderRadius: 8,
+                opacityScale: surfaceOpacity,
                 border: isHighlighted
                     ? Border.all(
                         color: Colors.white.withValues(alpha: 0.9),
@@ -265,77 +286,89 @@ class CourseCard extends StatelessWidget {
                         ),
                       ]
                     : null,
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: compactVerticalPadding,
-              ),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ClipRect(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final content = Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: crossAxisAlignment,
-                            children: [
-                              for (var i = 0; i < textLines.length; i++) ...[
-                                if (i > 0) const SizedBox(height: 2),
-                                Text(
-                                  textLines[i].text,
-                                  style: textLines[i].style,
-                                  textAlign: textAlign,
-                                  softWrap: true,
-                                ),
-                              ],
-                            ],
-                          );
-
-                          if (verticalAlign ==
-                              CourseCardVerticalAlign.spaceEvenly) {
-                            return FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.center,
-                              child: SizedBox(
-                                width: constraints.maxWidth,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  crossAxisAlignment: crossAxisAlignment,
-                                  children: [
-                                    for (final line in textLines)
-                                      Text(
-                                        line.text,
-                                        style: line.style,
-                                        textAlign: textAlign,
-                                        softWrap: true,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          return Align(
-                            alignment: _verticalContentAlignment,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: _verticalContentAlignment,
-                              child: SizedBox(
-                                width: constraints.maxWidth,
-                                child: content,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: compactVerticalPadding,
                   ),
-                ],
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: ClipRect(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final content = Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: crossAxisAlignment,
+                                children: [
+                                  for (
+                                    var i = 0;
+                                    i < textLines.length;
+                                    i++
+                                  ) ...[
+                                    if (i > 0) const SizedBox(height: 2),
+                                    Text(
+                                      textLines[i].text,
+                                      style: textLines[i].style,
+                                      textAlign: textAlign,
+                                      softWrap: true,
+                                    ),
+                                  ],
+                                ],
+                              );
+
+                              if (verticalAlign ==
+                                  CourseCardVerticalAlign.spaceEvenly) {
+                                return FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.center,
+                                  child: SizedBox(
+                                    width: constraints.maxWidth,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
+                                      crossAxisAlignment: crossAxisAlignment,
+                                      children: [
+                                        for (final line in textLines)
+                                          Text(
+                                            line.text,
+                                            style: line.style,
+                                            textAlign: textAlign,
+                                            softWrap: true,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return Align(
+                                alignment: _verticalContentAlignment,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: _verticalContentAlignment,
+                                  child: SizedBox(
+                                    width: constraints.maxWidth,
+                                    child: content,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
+            if (showHomeworkIndicator)
+              Positioned(
+                top: 4,
+                left: 4,
+                child: _buildHomeworkIndicator(size: 15, iconSize: 9),
+              ),
             if (topRightBadgeText != null)
               Positioned(
                 top: 6,
@@ -369,6 +402,38 @@ class CourseCard extends StatelessWidget {
       return Opacity(opacity: 0.4, child: card);
     }
     return card;
+  }
+
+  /// Circular outlined badge used for per-session homework marks.
+  Widget _buildHomeworkIndicator({
+    required double size,
+    required double iconSize,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.95),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.assignment_outlined,
+        size: iconSize,
+        color: const Color(0xFFE05D44),
+      ),
+    );
   }
 
   Widget _buildBadge(String text, {Color? color}) {

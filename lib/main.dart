@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -21,10 +20,13 @@ import 'screens/course_import_screen.dart';
 import 'screens/startup_flow_screens.dart';
 import 'screens/user_guide_screen.dart';
 import 'screens/timetable_screen.dart';
+import 'screens/timetable_settings_screen.dart';
 import 'screens/lan_edit_screen.dart';
 import 'utils/app_toast.dart';
+import 'widgets/miuix_font_weight_scope.dart';
 import 'services/app_log_service.dart';
 import 'services/bundled_assets.dart';
+import 'services/fair_memory_service.dart';
 import 'services/debug_deep_link_navigator.dart';
 import 'services/debug_deep_link_service.dart';
 import 'services/lan_edit_foreground_service.dart';
@@ -42,7 +44,6 @@ import 'ui/debug/debug.dart';
 import 'ui/hyperos/hyperos.dart';
 import 'ui/hyperos/hyperos_layout_debug_tuning.dart';
 import 'ui/hyperos/hyperos_motion.dart';
-import 'ui/hyperos_app_bridge.dart';
 import 'ui/hyperos_motion_bridge.dart';
 
 ThemeMode _themeModeFromSettings(AppThemeMode mode) {
@@ -53,133 +54,21 @@ ThemeMode _themeModeFromSettings(AppThemeMode mode) {
   };
 }
 
-FTypeface _typefaceWithFontFamily(FTypeface source, AppFontSpec fontSpec) {
-  TextStyle withFont(TextStyle style) => style.copyWith(
-    fontFamily: fontSpec.fontFamily,
-    fontFamilyFallback: fontSpec.fontFamilyFallback.isEmpty
-        ? style.fontFamilyFallback
-        : fontSpec.fontFamilyFallback,
+ThemeData _appThemeData(Brightness brightness, {required AppFontSpec fontSpec}) {
+  final theme = ThemeData(
+    brightness: brightness,
+    useMaterial3: true,
+    pageTransitionsTheme: HyperosNavigation.pageTransitionsTheme,
   );
-
-  return source.copyWith(
-    xs3: withFont(source.xs3),
-    xs2: withFont(source.xs2),
-    xs: withFont(source.xs),
-    sm: withFont(source.sm),
-    md: withFont(source.md),
-    lg: withFont(source.lg),
-    xl: withFont(source.xl),
-    xl2: withFont(source.xl2),
-    xl3: withFont(source.xl3),
-    xl4: withFont(source.xl4),
-    xl5: withFont(source.xl5),
-    xl6: withFont(source.xl6),
-    xl7: withFont(source.xl7),
-    xl8: withFont(source.xl8),
-  );
-}
-
-FThemeData _foruiThemeDataWithFont(FThemeData theme, AppFontSpec fontSpec) {
   final fontFamily = fontSpec.fontFamily;
   if (fontFamily == null || fontFamily.isEmpty) {
     return theme;
   }
-
-  final typography = theme.typography;
-  final nextTypography = typography.copyWith(
-    display: _typefaceWithFontFamily(typography.display, fontSpec),
-    body: _typefaceWithFontFamily(typography.body, fontSpec),
-  );
-  final nextHeaderStyles = FHeaderStyles.inherit(
-    colors: theme.colors,
-    typography: nextTypography,
-    style: theme.style,
-    touch: true,
-  );
-  final headerStylesDelta =
-      FVariantsDelta<
-        FHeaderVariantConstraint,
-        FHeaderVariant,
-        FHeaderStyle,
-        FHeaderStyleDelta
-      >.delta([
-        FVariantOperation<
-          FHeaderVariantConstraint,
-          FHeaderVariant,
-          FHeaderStyle,
-          FHeaderStyleDelta
-        >.all(
-          FHeaderStyleDelta.delta(
-            titleTextStyle: TextStyleDelta.delta(
-              fontSize: 20,
-              fontWeight: FontWeight.w400,
-              height: 1.2,
-            ),
-          ),
-        ),
-      ]);
-  final patchedHeaderStyles = headerStylesDelta(nextHeaderStyles);
-
-  return FThemeData(
-    colors: theme.colors,
-    touch: true,
-    debugLabel: theme.debugLabel,
-    breakpoints: theme.breakpoints,
-    typography: nextTypography,
-    icons: theme.icons,
-    style: theme.style,
-    hapticFeedback: theme.hapticFeedback,
-    accordionStyle: theme.accordionStyle,
-    autocompleteStyle: theme.autocompleteStyle,
-    alertStyles: theme.alertStyles,
-    avatarStyle: theme.avatarStyle,
-    badgeStyles: theme.badgeStyles,
-    bottomNavigationBarStyle: theme.bottomNavigationBarStyle,
-    breadcrumbStyle: theme.breadcrumbStyle,
-    buttonStyles: theme.buttonStyles,
-    calendarStyle: theme.calendarStyle,
-    cardStyle: theme.cardStyle,
-    checkboxStyle: theme.checkboxStyle,
-    circularProgressStyles: theme.circularProgressStyles,
-    dateFieldStyle: theme.dateFieldStyle,
-    dateTimePickerStyle: theme.dateTimePickerStyle,
-    determinateProgressStyle: theme.determinateProgressStyle,
-    dialogRouteStyle: theme.dialogRouteStyle,
-    dialogStyle: theme.dialogStyle,
-    dividerStyles: theme.dividerStyles,
-    headerStyles: patchedHeaderStyles,
-    itemStyles: theme.itemStyles,
-    itemGroupStyle: theme.itemGroupStyle,
-    labelStyles: theme.labelStyles,
-    lineCalendarStyle: theme.lineCalendarStyle,
-    multiSelectStyle: theme.multiSelectStyle,
-    modalSheetStyle: theme.modalSheetStyle,
-    otpFieldStyle: theme.otpFieldStyle,
-    paginationStyle: theme.paginationStyle,
-    persistentSheetStyle: theme.persistentSheetStyle,
-    pickerStyle: theme.pickerStyle,
-    popoverStyle: theme.popoverStyle,
-    popoverMenuStyle: theme.popoverMenuStyle,
-    progressStyle: theme.progressStyle,
-    radioStyle: theme.radioStyle,
-    resizableStyles: theme.resizableStyles,
-    scaffoldStyle: theme.scaffoldStyle,
-    selectStyle: theme.selectStyle,
-    selectGroupStyle: theme.selectGroupStyle,
-    selectMenuTileStyle: theme.selectMenuTileStyle,
-    sidebarStyle: theme.sidebarStyle,
-    sliderStyles: theme.sliderStyles,
-    toasterStyle: theme.toasterStyle,
-    switchStyle: theme.switchStyle,
-    tabsStyle: theme.tabsStyle,
-    tappableStyle: theme.tappableStyle,
-    textFieldStyles: theme.textFieldStyles,
-    tileStyles: theme.tileStyles,
-    tileGroupStyle: theme.tileGroupStyle,
-    timeFieldStyle: theme.timeFieldStyle,
-    timePickerStyle: theme.timePickerStyle,
-    tooltipStyle: theme.tooltipStyle,
-    extensions: theme.extensions,
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontSpec.fontFamilyFallback,
+    ),
   );
 }
 
@@ -204,58 +93,6 @@ Locale? _localeFromSettings(String localeTag) {
     }
   }
   return Locale(languageCode);
-}
-
-FThemeData _foruiThemeData(ForuiTheme theme, Brightness brightness) {
-  final pair = switch (theme) {
-    ForuiTheme.neutral => FThemes.neutral,
-    ForuiTheme.zinc => FThemes.zinc,
-    ForuiTheme.slate => FThemes.slate,
-    ForuiTheme.blue => FThemes.blue,
-    ForuiTheme.green => FThemes.green,
-    ForuiTheme.orange => FThemes.orange,
-    ForuiTheme.red => FThemes.red,
-    ForuiTheme.rose => FThemes.rose,
-    ForuiTheme.violet => FThemes.violet,
-    ForuiTheme.yellow => FThemes.yellow,
-  };
-  final base = brightness == Brightness.dark
-      ? pair.dark.touch
-      : pair.light.touch;
-  return base.copyWith(
-    headerStyles: FVariantsDelta.delta([
-      FVariantOperation.all(
-        FHeaderStyleDelta.delta(
-          titleTextStyle: TextStyleDelta.delta(
-            fontSize: 20,
-            fontWeight: FontWeight.w400,
-            height: 1.2,
-          ),
-        ),
-      ),
-    ]),
-  );
-}
-
-ThemeData _appThemeData(FThemeData forui, {required AppFontSpec fontSpec}) {
-  final material = forui.toApproximateMaterialTheme();
-  final themed = material.copyWith(
-    pageTransitionsTheme: HyperosNavigation.pageTransitionsTheme,
-  );
-  final fontFamily = fontSpec.fontFamily;
-  if (fontFamily == null || fontFamily.isEmpty) {
-    return themed;
-  }
-  return themed.copyWith(
-    textTheme: themed.textTheme.apply(
-      fontFamily: fontFamily,
-      fontFamilyFallback: fontSpec.fontFamilyFallback,
-    ),
-    primaryTextTheme: themed.primaryTextTheme.apply(
-      fontFamily: fontFamily,
-      fontFamilyFallback: fontSpec.fontFamilyFallback,
-    ),
-  );
 }
 
 String _bootSwitcherLabel(PackageInfo packageInfo, AppLocalizations l10n) {
@@ -293,7 +130,7 @@ Future<void> main() async {
       unawaited(AppLogService.instance.initialize());
       Workmanager().initialize(backgroundHtmlRefreshCallback);
       WidgetsBinding.instance.addObserver(AppLifecycleLogObserver());
-      WidgetsBinding.instance.addObserver(_AppLifecycleLogObserver());
+      FairMemoryService.instance.ensureInitialized();
 
       FlutterError.onError = (details) {
         FlutterError.presentError(details);
@@ -405,28 +242,18 @@ class MyApp extends StatelessWidget {
           Selector<
             TimetableProvider,
             ({
-              ForuiTheme foruiTheme,
               AppFontMode fontMode,
               AppThemeMode themeMode,
               String localeTag,
             })
           >(
             selector: (_, p) => (
-              foruiTheme: p.settings.foruiTheme,
               fontMode: p.settings.appFontMode,
               themeMode: p.settings.appThemeMode,
               localeTag: p.settings.appLocaleTag,
             ),
             builder: (context, settings, child) {
               final fontSpec = settings.fontMode.fontSpec;
-              final foruiLight = _foruiThemeDataWithFont(
-                _foruiThemeData(settings.foruiTheme, Brightness.light),
-                fontSpec,
-              );
-              final foruiDark = _foruiThemeDataWithFont(
-                _foruiThemeData(settings.foruiTheme, Brightness.dark),
-                fontSpec,
-              );
 
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
@@ -443,8 +270,8 @@ class MyApp extends StatelessWidget {
                 supportedLocales: AppLocalizations.supportedLocales,
                 locale: _localeFromSettings(settings.localeTag),
                 themeMode: _themeModeFromSettings(settings.themeMode),
-                theme: _appThemeData(foruiLight, fontSpec: fontSpec),
-                darkTheme: _appThemeData(foruiDark, fontSpec: fontSpec),
+                theme: _appThemeData(Brightness.light, fontSpec: fontSpec),
+                darkTheme: _appThemeData(Brightness.dark, fontSpec: fontSpec),
                 // Android VIEW deep links (mikcb-debug://...) are also delivered
                 // as Flutter pushNamed routes. We navigate via MethodChannel +
                 // DebugDeepLinkNavigator; swallow unknown platform routes so
@@ -452,11 +279,10 @@ class MyApp extends StatelessWidget {
                 onUnknownRoute: _buildUnknownPlatformRoute,
                 navigatorObservers: <NavigatorObserver>[
                   _AppRouteLogObserver(),
+                  FairMemoryService.instance.routeObserver,
                   hyperosRouteObserver,
                 ],
                 builder: (context, child) {
-                  final isDark =
-                      Theme.of(context).brightness == Brightness.dark;
                   final frostedAppearance = context
                       .watch<TimetableProvider>()
                       .settings
@@ -465,18 +291,15 @@ class MyApp extends StatelessWidget {
                     child: HyperosMotionHost(
                       child: FrostedAppearanceScope(
                         appearance: frostedAppearance,
-                        child: FTheme(
-                          data: isDark ? foruiDark : foruiLight,
-                          child: FTooltipGroup(
-                            child: ScaffoldMessenger(
+                        child: ScaffoldMessenger(
                               child: Scaffold(
                                 backgroundColor: Colors.transparent,
                                 resizeToAvoidBottomInset: false,
-                                body: DebugTuningOverlayHost(child: child!),
+                                body: DebugTuningOverlayHost(
+                                  child: MiuixFontWeightScope(child: child!),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
                       ),
                     ),
                   );
@@ -534,11 +357,21 @@ class _AppEntryScreenState extends State<AppEntryScreen>
   bool _startupHandled = false;
   bool _isBootstrapping = true;
   bool _mainContentReady = false;
+  bool _fairMemoryRecoveryHandled = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final provider = context.read<TimetableProvider>();
+    FairMemoryService.instance.registerSnapshotProvider(() async {
+      return <String, Object?>{
+        'activeProfileId': provider.activeProfileId,
+        'currentWeek': provider.currentWeek,
+        'currentDateWeek': provider.currentDateWeek,
+        'currentDayOfWeek': provider.currentDayOfWeek,
+      };
+    });
     scheduleCloudSyncUpload = _cloudSyncCoordinator.scheduleUpload;
     // Shared MethodChannel handler for external import + debug deep links.
     // Installed early so routes that arrive during splash are not dropped.
@@ -813,6 +646,89 @@ class _AppEntryScreenState extends State<AppEntryScreen>
       return;
     }
     setState(() => _isBootstrapping = false);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) {
+      await _restoreFairMemoryScene();
+    }
+  }
+
+  Future<void> _restoreFairMemoryScene() async {
+    if (_fairMemoryRecoveryHandled) {
+      return;
+    }
+    _fairMemoryRecoveryHandled = true;
+    final snapshot = await FairMemoryService.instance
+        .takePendingRecoverySnapshot();
+    if (!mounted) {
+      return;
+    }
+    if (snapshot != null) {
+      await _restoreFairMemoryBusinessState(snapshot.businessState);
+      if (!mounted) {
+        return;
+      }
+    }
+    final lastRoute = snapshot?.lastNamedRoute;
+    if (lastRoute == null || lastRoute == '/') {
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    if (lastRoute == '/settings/lan-edit') {
+      unawaited(
+        navigator.push<void>(
+          HyperosPageRoute(
+            settings: const RouteSettings(name: '/settings/lan-edit'),
+            builder: (_) => const LanEditScreen(),
+          ),
+        ),
+      );
+      return;
+    }
+    if (lastRoute.startsWith('/settings')) {
+      unawaited(
+        navigator.push<void>(
+          HyperosPageRoute(
+            settings: const RouteSettings(name: '/settings'),
+            builder: (_) => const TimetableSettingsScreen(),
+          ),
+        ),
+      );
+      return;
+    }
+    if (lastRoute.startsWith('/courses/import')) {
+      unawaited(
+        navigator.push<void>(
+          HyperosPageRoute(
+            settings: const RouteSettings(name: '/courses/import'),
+            builder: (_) => const CourseImportScreen(),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreFairMemoryBusinessState(
+    Map<String, Object?> businessState,
+  ) async {
+    final provider = context.read<TimetableProvider>();
+    try {
+      await provider.initialize();
+      final profileId = businessState['activeProfileId'];
+      if (profileId is String &&
+          profileId.isNotEmpty &&
+          profileId != provider.activeProfileId &&
+          provider.profiles.any((profile) => profile.id == profileId)) {
+        await provider.switchProfile(profileId);
+      }
+      final weekValue = businessState['currentWeek'];
+      final week = weekValue is num ? weekValue.toInt() : 0;
+      if (week > 0 && week != provider.currentWeek) {
+        await provider.setCurrentWeek(week);
+      }
+    } catch (_) {
+      // Normal startup state remains the fallback if recovery is incomplete.
+    }
   }
 
   Future<bool> _openGuide({
@@ -1081,19 +997,6 @@ class _AppEntryScreenState extends State<AppEntryScreen>
 }
 
 enum _BackupImportMode { replaceCurrent, importAsNew }
-
-class _AppLifecycleLogObserver with WidgetsBindingObserver {
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    unawaited(
-      AppLogService.instance.info(
-        'app_lifecycle_state_changed',
-        AppLogMessages.appLifecycleChanged,
-        extras: {'state': state.name},
-      ),
-    );
-  }
-}
 
 class _AppRouteLogObserver extends NavigatorObserver {
   @override

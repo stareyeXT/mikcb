@@ -1,0 +1,25 @@
+HFT Plan Final Review (controller run) - 4b31a32..HEAD (f01bd79, 5b6bb4f, ea528ab, 29fbe48, 7942e4a, c97d1d7)
+
+Reviewer: general subagent (ses_049267100ffe68C1MbBPB4YGbu)
+Verdict: READY
+
+Verification (actual outputs):
+- flutter analyze: 8 issues, all pre-existing baseline (3 course_import_screen infos, 5 use_null_aware_elements)
+- flutter test: +716 ~3 all passed
+- HFT widget tests: 2/2 green
+- l10n generated files in sync, no pending changes
+
+End-to-end checks passed:
+1. Layer consistency: getHyperFocusDebugStatus/sendTestFocus/export/clear all matched across Dart-Kotlin; channel constant unified (companion :88, used :1308/:1310/:1316)
+2. 42 keys x 6 locales identical; only placeholder {time} in hfTestingLastTestAt
+3. Flow: tile -> screen -> chips (12 summary keys match Kotlin) -> send -> recordHyperFocusTestResult -> last-test section refresh (post-send refresh :2992 + 1s auto-refresh)
+4. LiveUpdateScheduler/MainActivity diffs purely additive
+5. RED tests green, scaffolding-only diff, expects preserved
+6. Section order mirrors Live; auto-refresh default ON; old bottom-sheet tile removed (-76), replaced by push :1830-1833
+
+Minors (deferred, pre-approved):
+- Dead keys hfTestingChannelMissing/hfTestingLastTestAt
+- hfTestingBeforeClassBlockedUntil always 无 (no native key per plan)
+- nextTriggerStage label 当前阶段 semantic drift
+- Double Log.e on same exception (:1128 + :1329)
+- templatesLoaded threaded but unused

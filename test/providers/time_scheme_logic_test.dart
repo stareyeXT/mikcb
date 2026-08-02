@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:university_timetable/models/course.dart';
+import 'package:university_timetable/models/location_time_group.dart';
+import 'package:university_timetable/models/schedule_date_rule.dart';
 import 'package:university_timetable/models/time_scheme.dart';
 import 'package:university_timetable/models/timetable_profile.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
@@ -100,6 +102,188 @@ void main() {
       expect(
         TimeSchemeLogic.resolveCourseTimeScheme([scheme], settings, course),
         scheme,
+      );
+    });
+
+    test('uses location match when no override', () {
+      final defaultScheme = _scheme('default');
+      final otherScheme = _scheme('other');
+      final settings = TimetableSettings.defaults().copyWith(
+        activeTimeSchemeId: defaultScheme.id,
+      );
+      final course = Course(
+        id: '1',
+        name: 'Course',
+        teacher: 'T',
+        location: 'A1062',
+        dayOfWeek: 1,
+        startSection: 1,
+        endSection: 2,
+        startTime: '08:00',
+        endTime: '09:40',
+        startWeek: 1,
+        endWeek: 16,
+        color: '#FF0000',
+      );
+      final groups = [
+        LocationTimeGroup(
+          id: 'g1',
+          name: '其他教学楼',
+          timeSchemeId: otherScheme.id,
+          keywords: const [
+            LocationKeyword(
+              pattern: 'A1',
+              mode: LocationKeywordMatchMode.prefix,
+            ),
+          ],
+        ),
+      ];
+
+      expect(
+        TimeSchemeLogic.resolveCourseTimeScheme(
+          [defaultScheme, otherScheme],
+          settings,
+          course,
+          locationTimeGroups: groups,
+        ),
+        otherScheme,
+      );
+    });
+
+    test('manual override still beats location match', () {
+      final defaultScheme = _scheme('default');
+      final otherScheme = _scheme('other');
+      final overrideScheme = _scheme('override');
+      final settings = TimetableSettings.defaults().copyWith(
+        activeTimeSchemeId: defaultScheme.id,
+      );
+      final course = _course(
+        id: '1',
+        timeSchemeIdOverride: overrideScheme.id,
+      ).copyWith(location: 'A1062');
+      final groups = [
+        LocationTimeGroup(
+          id: 'g1',
+          name: '其他教学楼',
+          timeSchemeId: otherScheme.id,
+          keywords: const [
+            LocationKeyword(
+              pattern: 'A1',
+              mode: LocationKeywordMatchMode.prefix,
+            ),
+          ],
+        ),
+      ];
+
+      expect(
+        TimeSchemeLogic.resolveCourseTimeScheme(
+          [defaultScheme, otherScheme, overrideScheme],
+          settings,
+          course,
+          locationTimeGroups: groups,
+        ),
+        overrideScheme,
+      );
+    });
+
+    test('date rules do not soft-overlay resolve (bulk apply is separate)', () {
+      final defaultScheme = _scheme('default');
+      final summerScheme = _scheme('summer');
+      final settings = TimetableSettings.defaults().copyWith(
+        activeTimeSchemeId: defaultScheme.id,
+      );
+      final course = _course(id: '1');
+      final rules = [
+        ScheduleDateRule(
+          id: 'r1',
+          name: '夏令时',
+          timeSchemeId: summerScheme.id,
+          startDate: '2026-05-01',
+          endDate: '2026-09-30',
+        ),
+      ];
+
+      expect(
+        TimeSchemeLogic.resolveCourseTimeScheme(
+          [defaultScheme, summerScheme],
+          settings,
+          course,
+          scheduleDateRules: rules,
+          onDate: DateTime(2026, 7, 1),
+        ),
+        defaultScheme,
+      );
+    });
+
+    test('resolve always uses profile default when no override/location', () {
+      final defaultScheme = _scheme('default');
+      final summerScheme = _scheme('summer');
+      final settings = TimetableSettings.defaults().copyWith(
+        activeTimeSchemeId: defaultScheme.id,
+      );
+      final course = _course(id: '1');
+      final rules = [
+        ScheduleDateRule(
+          id: 'r1',
+          name: '夏令时',
+          timeSchemeId: summerScheme.id,
+          startDate: '2026-05-01',
+          endDate: '2026-09-30',
+        ),
+      ];
+
+      expect(
+        TimeSchemeLogic.resolveCourseTimeScheme(
+          [defaultScheme, summerScheme],
+          settings,
+          course,
+          scheduleDateRules: rules,
+        ),
+        defaultScheme,
+      );
+    });
+
+    test('location match beats date rule', () {
+      final defaultScheme = _scheme('default');
+      final summerScheme = _scheme('summer');
+      final buildingScheme = _scheme('building');
+      final settings = TimetableSettings.defaults().copyWith(
+        activeTimeSchemeId: defaultScheme.id,
+      );
+      final course = _course(id: '1').copyWith(location: 'A1062');
+      final groups = [
+        LocationTimeGroup(
+          id: 'g1',
+          name: '其他教学楼',
+          timeSchemeId: buildingScheme.id,
+          keywords: const [
+            LocationKeyword(
+              pattern: 'A1',
+              mode: LocationKeywordMatchMode.prefix,
+            ),
+          ],
+        ),
+      ];
+      final rules = [
+        ScheduleDateRule(
+          id: 'r1',
+          name: '夏令时',
+          timeSchemeId: summerScheme.id,
+          startDate: '2026-05-01',
+          endDate: '2026-09-30',
+        ),
+      ];
+
+      expect(
+        TimeSchemeLogic.resolveCourseTimeScheme(
+          [defaultScheme, summerScheme, buildingScheme],
+          settings,
+          course,
+          locationTimeGroups: groups,
+          scheduleDateRules: rules,
+          onDate: DateTime(2026, 7, 1),
+        ),
+        buildingScheme,
       );
     });
   });

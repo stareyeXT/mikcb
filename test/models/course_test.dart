@@ -118,4 +118,81 @@ void main() {
     expect(course.startWeek, 1);
     expect(course.endWeek, 30);
   });
+
+  test('session notes serialize and support homework helpers', () {
+    final course = Course(
+      id: 'course-notes',
+      name: '高等数学',
+      teacher: '张老师',
+      location: 'A101',
+      dayOfWeek: 1,
+      startSection: 1,
+      endSection: 2,
+      startTime: '08:00',
+      endTime: '09:40',
+      note: '这个老师容易逃课',
+      sessionNotes: {
+        7: const CourseSessionNote(text: '交第三章习题', hasHomework: true),
+        8: const CourseSessionNote(text: '带电脑'),
+      },
+    );
+
+    final restored = Course.fromJson(course.toJson());
+    expect(restored.note, '这个老师容易逃课');
+    expect(restored.hasHomeworkInWeek(7), isTrue);
+    expect(restored.hasHomeworkInWeek(8), isFalse);
+    expect(restored.sessionNoteForWeek(7)?.text, '交第三章习题');
+    expect(restored.sessionNoteForWeek(8)?.text, '带电脑');
+
+    final withoutWeek7 = restored.copyWith(
+      sessionNotes: restored.withoutSessionNote(7),
+    );
+    expect(withoutWeek7.hasHomeworkInWeek(7), isFalse);
+    expect(withoutWeek7.sessionNoteForWeek(8)?.text, '带电脑');
+
+    final moved = restored.sessionNotesForSingleWeek(
+      sourceWeek: 7,
+      targetWeek: 10,
+    );
+    expect(moved?[10]?.hasHomework, isTrue);
+    expect(moved?[7], isNull);
+  });
+
+  test(
+    'relocatingSessionNote moves week key and excluding strips source week',
+    () {
+      final course = Course(
+        id: 'course-relocate',
+        name: '高等数学',
+        teacher: '张老师',
+        location: 'A101',
+        dayOfWeek: 1,
+        startSection: 1,
+        endSection: 2,
+        startTime: '08:00',
+        endTime: '09:40',
+        sessionNotes: {
+          5: const CourseSessionNote(text: '测验', hasHomework: true),
+          6: const CourseSessionNote(text: '复习'),
+        },
+      );
+
+      final relocated = course.relocatingSessionNote(fromWeek: 5, toWeek: 12);
+      expect(relocated?[12]?.text, '测验');
+      expect(relocated?[12]?.hasHomework, isTrue);
+      expect(relocated?[5], isNull);
+      expect(relocated?[6]?.text, '复习');
+
+      final remaining = course.sessionNotesExcludingWeek(5);
+      expect(remaining?[5], isNull);
+      expect(remaining?[6]?.text, '复习');
+
+      final single = course.sessionNotesForSingleWeek(
+        sourceWeek: 5,
+        targetWeek: 12,
+      );
+      expect(single?.keys, [12]);
+      expect(single?[12]?.hasHomework, isTrue);
+    },
+  );
 }

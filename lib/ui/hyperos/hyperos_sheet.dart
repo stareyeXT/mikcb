@@ -5,6 +5,7 @@ import 'hyperos_miuix_spec.dart';
 import 'hyperos_theme.dart';
 import 'hyperos_tokens.dart';
 import 'hyperos_widgets.dart';
+import 'liquid/hyperos_liquid_glass_surface.dart';
 
 /// Marks descendants as sitting on a frosted (blur + milky tint) panel.
 ///
@@ -112,6 +113,24 @@ class HyperosSheetFrame extends StatelessWidget {
     final borderRadius = BorderRadius.circular(HyperosTokens.cardRadius);
     final content = Padding(padding: padding, child: child);
 
+    final panel = frosted
+        ? _buildFrostedSurface(
+            context: context,
+            borderRadius: borderRadius,
+            content: content,
+          )
+        : Material(
+            color: HyperosColors.surfaceContainer(context),
+            shape: HyperosTheme.cardShape(),
+            clipBehavior: Clip.antiAlias,
+            child: content,
+          );
+
+    // BoxShadow creates a dark ring around the panel — visible on all sides,
+    // moves with the panel (no tracking), and matches the panel's rounded
+    // corners naturally.  The shadow sits BEHIND the frosted glass, so
+    // BackdropFilter inside the glass samples the bright page content, not
+    // the shadow.
     return Padding(
       padding: EdgeInsets.fromLTRB(
         outerInset,
@@ -119,18 +138,18 @@ class HyperosSheetFrame extends StatelessWidget {
         outerInset,
         outerInset + bottomSafeInset,
       ),
-      child: frosted
-          ? _buildFrostedSurface(
-              context: context,
-              borderRadius: borderRadius,
-              content: content,
-            )
-          : Material(
-              color: HyperosColors.surfaceContainer(context),
-              shape: HyperosTheme.cardShape(),
-              clipBehavior: Clip.antiAlias,
-              child: content,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.20),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
+          ],
+        ),
+        child: panel,
+      ),
     );
   }
 
@@ -172,6 +191,7 @@ class HyperosSheetFrame extends StatelessWidget {
     required BorderRadius borderRadius,
     required Widget content,
   }) {
+    final appearance = FrostedAppearanceScope.of(context);
     final useBlur = HyperosBlurredHeader.backdropBlurEnabled(context);
 
     // Blur off → solid opaque panel (no translucent scrim over the page).
@@ -186,6 +206,19 @@ class HyperosSheetFrame extends StatelessWidget {
       );
     }
 
+    // Liquid glass mode: real-time refraction shader panel.
+    if (appearance.glassMode == FrostedGlassMode.liquidGlass) {
+      return HyperosFrostedPanelScope(
+        child: HyperosLiquidGlassSurface(
+          role: HyperosLiquidGlassRole.sheet,
+          borderRadius: borderRadius.topLeft.x,
+          instantUnderlay: true,
+          child: content,
+        ),
+      );
+    }
+
+    // Frosted / gaussian / translucent: BackdropFilter + tint.
     final tint = HyperosBlurredHeader.sheetTintColor(context, withBlur: true);
 
     return HyperosFrostedPanelScope(
@@ -246,36 +279,230 @@ class HyperosSheet extends StatelessWidget {
   }
 }
 
+/// Bottom velocity threshold to dismiss (pixels/second).
+const double _kDismissVelocity = 600.0;
+
+/// Bottom distance threshold to dismiss (fraction of sheet height).
+const double _kDismissFraction = 0.3;
+
+/// A wrapper that adds vertical drag-to-dismiss for the sheet content.
+///
+/// Wraps the sheet content (not the full-screen Align) so that the
+/// [LayoutBuilder] measures the actual sheet height, enabling the
+/// distance-based dismiss threshold.
+///
+/// Dragging only translates the panel — the sheet never fades out. An
+/// `Opacity` layer here would degrade frosted [BackdropFilter] / liquid glass
+/// shaders (the same reason [_SheetSlideUp] avoids animated Opacity), showing
+/// as transparency flicker while the panel is dragged down.
+class _DragDismissableSheet extends StatefulWidget {
+  const _DragDismissableSheet({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DragDismissableSheet> createState() => _DragDismissableSheetState();
+}
+
+class _DragDismissableSheetState extends State<_DragDismissableSheet>
+    with SingleTickerProviderStateMixin {
+  /// Pixel offset the sheet has been dragged down (0 = at rest).
+  ///
+  /// A [ValueNotifier] instead of `setState`: dragging would otherwise rebuild
+  /// the whole frosted / liquid glass subtree on every pointer move. The
+  /// notifier only rebuilds the [Transform.translate] layer while the sheet
+  /// subtree stays mounted untouched (same pattern as [HyperosPage]).
+  final _dragOffset = ValueNotifier<double>(0);
+  double _sheetHeight = 0.0;
+
+  late AnimationController _resetController;
+  late final CurvedAnimation _resetCurve;
+  Animation<double> _resetAnimation = const AlwaysStoppedAnimation<double>(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _resetController = AnimationController(vsync: this);
+    _resetCurve = CurvedAnimation(
+      parent: _resetController,
+      curve: Curves.easeOutCubic,
+    );
+    _resetAnimation = Tween<double>(begin: 0, end: 0).animate(_resetCurve)
+      ..addListener(_onResetTick);
+  }
+
+  @override
+  void dispose() {
+    _resetAnimation.removeListener(_onResetTick);
+    _resetCurve.dispose();
+    _resetController.dispose();
+    _dragOffset.dispose();
+    super.dispose();
+  }
+
+  void _onResetTick() {
+    _dragOffset.value = _resetAnimation.value;
+  }
+
+  void _onVerticalDragUpdate(DragUpdateDetails details) {
+    final dy = details.primaryDelta ?? 0;
+    if (dy > 0 || _dragOffset.value > 0) {
+      _dragOffset.value = (_dragOffset.value + dy).clamp(0.0, double.infinity);
+    }
+  }
+
+  void _onVerticalDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+
+    // Dismiss if velocity or distance exceeds threshold.
+    if (velocity > _kDismissVelocity ||
+        (_sheetHeight > 0 &&
+            _dragOffset.value > _sheetHeight * _kDismissFraction)) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Animate back to origin.
+    if (_dragOffset.value > 0) {
+      final startOffset = _dragOffset.value;
+      _resetController.stop();
+      _resetAnimation.removeListener(_onResetTick);
+      _resetAnimation = Tween<double>(
+        begin: startOffset,
+        end: 0,
+      ).animate(_resetCurve)..addListener(_onResetTick);
+      final durationMs =
+          (250 * (startOffset / (_sheetHeight > 0 ? _sheetHeight : 300))).clamp(
+            100,
+            350,
+          );
+      _resetController
+        ..duration = Duration(milliseconds: durationMs.toInt())
+        ..forward(from: 1.0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _sheetHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height * 0.5;
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onVerticalDragUpdate: _onVerticalDragUpdate,
+          onVerticalDragEnd: _onVerticalDragEnd,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _dragOffset,
+            // Kept outside the builder so the sheet subtree (frosted glass /
+            // liquid glass shaders) never rebuilds while dragging.
+            child: widget.child,
+            builder: (context, dragOffset, child) {
+              return Transform.translate(
+                offset: Offset(0, dragOffset),
+                child: child,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Internal slide-up animation for sheet entrance. Uses a simple spring on
+/// initial build — no route-level transition needed, so frosted glass never
+/// sits inside an animated Opacity layer (which breaks LiquidGlass shaders).
+class _SheetSlideUp extends StatefulWidget {
+  const _SheetSlideUp({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SheetSlideUp> createState() => _SheetSlideUpState();
+}
+
+class _SheetSlideUpState extends State<_SheetSlideUp>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, 0.3),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(position: _slide, child: widget.child);
+  }
+}
+
 /// Shows a HyperOS-styled modal bottom sheet (replaces Forui `showFSheet`).
 ///
 /// Content should use [HyperosSheetFrame] / [HyperosSheet] / [HyperosDialog].
 /// Default chrome is [HyperosSheetChrome.floating] unless [chrome] or a
 /// [HyperosSheetChromeScope] says otherwise.
+///
+/// When [padForKeyboard] is true (default), the sheet is lifted by
+/// [MediaQuery.viewInsets] so it sits above the IME. Set it to false when the
+/// sheet body manages keyboard avoidance itself (e.g. scroll-to-field).
 Future<T?> showHyperosSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool isDismissible = true,
   bool enableDrag = true,
   bool useRootNavigator = false,
+  bool padForKeyboard = true,
   Color? barrierColor,
   HyperosSheetChrome chrome = HyperosSheetChrome.floating,
 }) {
-  return showModalBottomSheet<T>(
+  final dimColor =
+      barrierColor ?? HyperosBlurredHeader.modalBarrierColor(context);
+
+  return showGeneralDialog<T>(
     context: context,
-    isScrollControlled: true,
-    isDismissible: isDismissible,
-    enableDrag: enableDrag,
+    barrierDismissible: isDismissible,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: dimColor,
+    transitionDuration: Duration.zero,
     useRootNavigator: useRootNavigator,
-    backgroundColor: Colors.transparent,
-    barrierColor: barrierColor ?? HyperosColors.windowDimming(context),
-    builder: (sheetContext) {
-      return HyperosSheetChromeScope(
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      final keyboardInset = padForKeyboard
+          ? MediaQuery.viewInsetsOf(dialogContext).bottom
+          : 0.0;
+      final sheetContent = HyperosSheetChromeScope(
         chrome: chrome,
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        child: builder(dialogContext),
+      );
+
+      // Wrap drag-to-dismiss around the sheet content (not the full-screen
+      // Align) so LayoutBuilder measures the actual sheet height.
+      final sheet = enableDrag
+          ? _DragDismissableSheet(child: sheetContent)
+          : sheetContent;
+
+      return _SheetSlideUp(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: sheet,
           ),
-          child: builder(sheetContext),
         ),
       );
     },
@@ -290,6 +517,7 @@ Future<T?> showHomeHyperosSheet<T>({
   bool isDismissible = true,
   bool enableDrag = true,
   bool useRootNavigator = false,
+  bool padForKeyboard = true,
   Color? barrierColor,
   HyperosSheetChrome chrome = HyperosSheetChrome.edge,
 }) {
@@ -299,6 +527,7 @@ Future<T?> showHomeHyperosSheet<T>({
     isDismissible: isDismissible,
     enableDrag: enableDrag,
     useRootNavigator: useRootNavigator,
+    padForKeyboard: padForKeyboard,
     chrome: chrome,
     barrierColor:
         barrierColor ??

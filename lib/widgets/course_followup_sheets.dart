@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 
 import '../models/course.dart';
@@ -259,7 +258,7 @@ class _DeleteCourseConfirmSheetBody extends StatelessWidget {
                   onPressed: () => Navigator.of(context).pop(false),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: HyperosButton(
                   label: l10n.deleteAction,
@@ -580,7 +579,7 @@ class _CourseRescheduleSheetBodyState
                 enabled: canDecrementWeek,
                 onPress: () => _shiftWeek(-1),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: _buildCompactSelectField(
                   label: l10n.rescheduleTargetWeekLabel,
@@ -596,7 +595,7 @@ class _CourseRescheduleSheetBodyState
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               _RescheduleStepButton(
                 icon: Icons.add_rounded,
                 enabled: canIncrementWeek,
@@ -646,7 +645,7 @@ class _CourseRescheduleSheetBodyState
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: _buildCompactSelectField(
                   label: l10n.endSectionLabel,

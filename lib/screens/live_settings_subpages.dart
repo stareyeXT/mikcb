@@ -4,8 +4,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/enum_localizations.dart';
 import 'package:path_provider/path_provider.dart';
@@ -94,13 +92,15 @@ class _LiveReminderTimingScreenState extends State<LiveReminderTimingScreen> {
   static const double _timeCorrectionMax = 30;
 
   late TimetableSettings _draft;
+  late final TimetableProvider _provider;
   Timer? _autoSaveTimer;
   Future<void> _saveQueue = Future<void>.value();
 
   @override
   void initState() {
     super.initState();
-    _draft = context.read<TimetableProvider>().settings;
+    _provider = context.read<TimetableProvider>();
+    _draft = _provider.settings;
   }
 
   @override
@@ -281,12 +281,11 @@ class _LiveReminderTimingScreenState extends State<LiveReminderTimingScreen> {
   }
 
   Future<void> _persistDraft(TimetableSettings next) async {
-    final provider = context.read<TimetableProvider>();
-    final message = await provider.updateTimetableSettings(next);
+    final message = await _provider.updateTimetableSettings(next);
     if (!mounted) return;
     if (message != null) {
       showAppToast(context, message: message);
-      setState(() => _draft = provider.settings);
+      setState(() => _draft = _provider.settings);
     }
   }
 }
@@ -308,15 +307,17 @@ class LiveDisplaySettingsScreen extends StatefulWidget {
 
 class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
   late TimetableSettings _draft;
+  late final TimetableProvider _provider;
   Timer? _autoSaveTimer;
   Future<void> _saveQueue = Future<void>.value();
 
   @override
   void initState() {
     super.initState();
-    _draft = context.read<TimetableProvider>().settings;
+    _provider = context.read<TimetableProvider>();
+    _draft = _provider.settings;
     unawaited(
-      context.read<TimetableProvider>().refreshLiveActivityNow(
+      _provider.refreshLiveActivityNow(
         forceSnapshotSync: true,
       ),
     );
@@ -819,12 +820,11 @@ class _LiveDisplaySettingsScreenState extends State<LiveDisplaySettingsScreen> {
   }
 
   Future<void> _persistDraft(TimetableSettings next) async {
-    final provider = context.read<TimetableProvider>();
-    final message = await provider.updateTimetableSettings(next);
+    final message = await _provider.updateTimetableSettings(next);
     if (!mounted) return;
     if (message != null) {
       showAppToast(context, message: message);
-      setState(() => _draft = provider.settings);
+      setState(() => _draft = _provider.settings);
     }
   }
 
@@ -1451,7 +1451,6 @@ class _HyperFocusIslandTimeoutScreenState
       field: HyperosTextField(
         controller: controller,
         keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9]'))],
         onChanged: (text) {
           final minutes = int.tryParse(text) ?? 0;
           final clamped = minutes.clamp(1, 60);
@@ -1491,10 +1490,12 @@ class _HyperFocusIslandTimeoutScreenState
 class _VariableMultiSelectSheet extends StatefulWidget {
   const _VariableMultiSelectSheet({
     required this.variables,
+    required this.phrases,
     required this.initial,
   });
 
   final List<String> variables;
+  final List<String> phrases;
   final List<String> initial;
 
   @override
@@ -1509,29 +1510,57 @@ class _VariableMultiSelectSheetState extends State<_VariableMultiSelectSheet> {
   Widget build(BuildContext context) {
     return HyperosSheet(
       title: '选择显示信息',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final v in widget.variables)
-            HyperosCheckboxTile(
-              title: v,
-              value: _selected.contains(v),
-              onChanged: (on) => setState(() {
-                if (on) {
-                  _selected.add(v);
-                } else {
-                  _selected.remove(v);
-                }
-              }),
-            ),
-          const SizedBox(height: 12),
-          HyperosButton(
-            label: '确定',
-            expand: true,
-            onPressed: () => Navigator.pop(context, _selected.toList()),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '课程变量（自动填入真实数据）',
+                style: HyperosTypography.listDetail(context),
+              ),
+              for (final v in widget.variables)
+                HyperosCheckboxTile(
+                  title: v,
+                  value: _selected.contains(v),
+                  onChanged: (on) => setState(() {
+                    if (on) {
+                      _selected.add(v);
+                    } else {
+                      _selected.remove(v);
+                    }
+                  }),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                '常用短语（原样显示）',
+                style: HyperosTypography.listDetail(context),
+              ),
+              for (final p in widget.phrases)
+                HyperosCheckboxTile(
+                  title: p,
+                  value: _selected.contains(p),
+                  onChanged: (on) => setState(() {
+                    if (on) {
+                      _selected.add(p);
+                    } else {
+                      _selected.remove(p);
+                    }
+                  }),
+                ),
+              const SizedBox(height: 12),
+              HyperosButton(
+                label: '确定',
+                expand: true,
+                onPressed: () => Navigator.pop(context, _selected.toList()),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1563,26 +1592,19 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
     '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
   ];
 
+  static const _availablePhrases = [
+    '即将上课', '正在上课', '上课中', '距下课', '距离下课', '已经下课', '已下课',
+  ];
+
   late Map<String, TextEditingController> _controllers;
-  late TimetableSettings _draft;
 
   String get _s => _selectedStage;
 
   static const _tabOrder = ['pre', 'active', 'post'];
 
-  static const _glowColors = [
-    '#FFFFFF',
-    '#BFDBFE',
-    '#A7F3D0',
-    '#FDE68A',
-    '#F9A8D4',
-    '#FBCFE8',
-  ];
-
   @override
   void initState() {
     super.initState();
-    _draft = context.read<TimetableProvider>().settings;
     _controllers = {};
     for (final key in ['ticker', 'islandA', 'islandB']) {
       for (final stage in _tabOrder) {
@@ -1591,14 +1613,6 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
       }
     }
     _loadTemplates();
-  }
-
-  void _updateDraft(TimetableSettings next) {
-    setState(() => _draft = next);
-    final provider = context.read<TimetableProvider>();
-    unawaited(
-      provider.updateTimetableSettings(next).then<void>((_) {}).catchError((_) {}),
-    );
   }
 
   Future<void> _loadTemplates() async {
@@ -1643,7 +1657,7 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
     );
   }
 
-  Future<void> _saveTemplates() async {
+  Future<void> _saveTemplates({bool silent = false}) async {
     final service = MiuiLiveActivitiesService();
     final provider = context.read<TimetableProvider>();
 
@@ -1672,7 +1686,9 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
     final ok = await service.saveHyperFocusTemplates(merged);
     await _persistTemplatesToSettings(provider, merged);
     if (!mounted) return;
-    showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+    if (!silent) {
+      showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+    }
   }
 
   Future<void> _resetStage() async {
@@ -1706,6 +1722,7 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
       context: context,
       builder: (sheetContext) => _VariableMultiSelectSheet(
         variables: _availableVariables,
+        phrases: _availablePhrases,
         initial: selected,
       ),
     );
@@ -1729,87 +1746,66 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
       title: const Text('状态栏岛自定义'),
-      child: Column(
-        children: [
-          HyperosTabRow(
-            tabs: ['课前', '课中', '课后'],
-            selectedIndex: _tabOrder.indexOf(_selectedStage),
-            onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '点击选择要在各区域显示的信息',
-                    style: HyperosTypography.listDetail(context),
-                  ),
-                  const SizedBox(height: 8),
-                  HyperosSectionLabel(text: '状态栏岛'),
-                  _variableSelectField('ticker_$_s', '状态栏/息屏文本'),
-                  _variableSelectField('islandA_$_s', '岛左侧文字'),
-                  _variableSelectField('islandB_$_s', '岛右侧后缀'),
-                  const HyperosSectionGap(),
-                  Row(
+      child: Builder(
+        builder: (childContext) {
+          final headerInset = HyperosBlurredHeaderScope.insetOf(childContext);
+          return Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: headerInset),
+                child: HyperosTabRow(
+                  tabs: ['课前', '课中', '课后'],
+                  selectedIndex: _tabOrder.indexOf(_selectedStage),
+                  onChanged: (i) =>
+                      setState(() => _selectedStage = _tabOrder[i]),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: FButton(
-                          onPress: _saveTemplates,
-                          child: const Text('保存'),
-                        ),
+                      Text(
+                        '点击选择要在各区域显示的信息',
+                        style: HyperosTypography.listDetail(context),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FButton(
-                          onPress: _resetStage,
-                          child: const Text('恢复默认'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const HyperosSectionGap(),
-                  HyperosSectionLabel(text: '岛视觉'),
-                  HyperosListGroup(
-                    children: [
-                      HyperosSwitchTile(
-                        title: '岛A图标',
-                        value: _draft.hfIconAEnabled,
-                        onChanged: (v) =>
-                            _updateDraft(_draft.copyWith(hfIconAEnabled: v)),
-                      ),
-                      HyperosSwitchTile(
-                        title: '发光效果',
-                        value: _draft.hfOutEffectStatusEnabled,
-                        onChanged: (v) => _updateDraft(
-                          _draft.copyWith(hfOutEffectStatusEnabled: v),
-                        ),
-                      ),
-                      if (_draft.hfOutEffectStatusEnabled)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          child: HyperosHexColorChipGroup(
-                            colorHexes: _glowColors,
-                            selectedHex: _normalizeHexForSelection(
-                              _draft.hfOutEffectStatusColor,
-                            ),
-                            colorParser: _parseColor,
-                            onSelectedHex: (hex) => _updateDraft(
-                              _draft.copyWith(hfOutEffectStatusColor: hex),
+                      const SizedBox(height: 8),
+                      HyperosSectionLabel(text: '状态栏岛'),
+                      _variableSelectField('ticker_$_s', '状态栏/息屏文本'),
+                      _variableSelectField('islandA_$_s', '岛左侧文字'),
+                      _variableSelectField('islandB_$_s', '岛右侧后缀'),
+                      const HyperosSectionGap(),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: HyperosButton(
+                              label: '保存',
+                              expand: true,
+                              onPressed: _saveTemplates,
                             ),
                           ),
-                        ),
-                    ],
-                  ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: HyperosButton(
+                              label: '恢复默认',
+                              expand: true,
+                              onPressed: _resetStage,
+                            ),
+                          ),
+                        ],
+                      ),
+                  const HyperosSectionGap(),
                 ],
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+            ],
+          );
+      },
+    ),
+  );
+}
 }
 
 class HyperFocusExpandedIslandScreen extends StatefulWidget {
@@ -1850,11 +1846,39 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
   ];
 
+  static const _availablePhrases = [
+    '即将上课', '正在上课', '上课中', '距下课', '距离下课', '已经下课', '已下课',
+  ];
+
   late Map<String, TextEditingController> _controllers;
 
   String get _s => _selectedStage;
 
   static const _tabOrder = ['pre', 'active', 'post'];
+
+  Future<void> _sendTestNotification() async {
+    final provider = context.read<TimetableProvider>();
+    final displaySettings = _s == 'pre'
+        ? provider.settings.beforeClassDisplaySettings
+        : provider.settings.duringEndDisplaySettings;
+    final showCountdown = displaySettings.showCountdown;
+    await _saveTemplates(silent: true);
+    final service = MiuiLiveActivitiesService();
+    final error = await service.sendTestFocusNotification(
+      courseName: '高等数学',
+      startTime: '08:00',
+      endTime: '09:40',
+      location: '教科A-101',
+      teacher: '张老师',
+      stage: _s,
+      showCountdown: showCountdown,
+    );
+    if (!mounted) return;
+    showHyperosSnackBar(
+      context,
+      message: error ?? '测试通知已发送，请下拉通知栏查看效果',
+    );
+  }
 
   @override
   void initState() {
@@ -1911,7 +1935,7 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     );
   }
 
-  Future<void> _saveTemplates() async {
+  Future<void> _saveTemplates({bool silent = false}) async {
     final service = MiuiLiveActivitiesService();
     final provider = context.read<TimetableProvider>();
 
@@ -1940,7 +1964,9 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     final ok = await service.saveHyperFocusTemplates(merged);
     await _persistTemplatesToSettings(provider, merged);
     if (!mounted) return;
-    showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+    if (!silent) {
+      showHyperosSnackBar(context, message: ok ? '模板已保存' : '保存失败');
+    }
   }
 
   Future<void> _resetStage() async {
@@ -1974,6 +2000,7 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
       context: context,
       builder: (sheetContext) => _VariableMultiSelectSheet(
         variables: _availableVariables,
+        phrases: _availablePhrases,
         initial: selected,
       ),
     );
@@ -1997,12 +2024,18 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     return HyperosSubpage(
       onBack: () => Navigator.pop(context),
       title: const Text('展开态自定义'),
-      child: Column(
-        children: [
-          HyperosTabRow(
-            tabs: ['课前', '课中', '课后'],
-            selectedIndex: _tabOrder.indexOf(_selectedStage),
-            onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
+      child: Builder(
+        builder: (childContext) {
+          final headerInset = HyperosBlurredHeaderScope.insetOf(childContext);
+          return Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: headerInset),
+                child: HyperosTabRow(
+              tabs: ['课前', '课中', '课后'],
+              selectedIndex: _tabOrder.indexOf(_selectedStage),
+              onChanged: (i) => setState(() => _selectedStage = _tabOrder[i]),
+            ),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -2014,7 +2047,13 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
                     '点击选择要在各区域显示的信息',
                     style: HyperosTypography.listDetail(context),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
+                  HyperosButton(
+                    label: '发送测试通知',
+                    expand: true,
+                    onPressed: _sendTestNotification,
+                  ),
+                  const SizedBox(height: 12),
                   HyperosSectionLabel(text: '展开态'),
                   _variableSelectField('baseTitle_$_s', '主要标题'),
                   _variableSelectField('baseContent_$_s', '次要文本1'),
@@ -2027,25 +2066,42 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
                   Row(
                     children: [
                       Expanded(
-                        child: FButton(
-                          onPress: _saveTemplates,
-                          child: const Text('保存'),
+                        child: HyperosButton(
+                          label: '保存',
+                          expand: true,
+                          onPressed: _saveTemplates,
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: FButton(
-                          onPress: _resetStage,
-                          child: const Text('恢复默认'),
+                        child: HyperosButton(
+                          label: '恢复默认',
+                          expand: true,
+                          onPressed: _resetStage,
                         ),
                       ),
                     ],
+                  ),
+                  const HyperosSectionGap(),
+                  Text(
+                    '参考样式',
+                    style: HyperosTypography.listDetail(context),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/hyperfocus/expanded_reference.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -2053,12 +2109,4 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
 
 Color _parseColor(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
-}
-
-String _normalizeHexForSelection(String hex) {
-  final h = hex.trim();
-  if (h.startsWith('#') && h.length == 9) {
-    return '#${h.substring(3)}';
-  }
-  return h;
 }

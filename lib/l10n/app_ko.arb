@@ -267,21 +267,21 @@
   "unifiedCourseCardColorTitle": "수업 카드 색상 통일",
   "unifiedCourseCardColorSubtitle": "끄면 각 수업의 개별 색상을 계속 사용합니다",
   "importRandomCourseColorTitle": "수업 색상 무작위",
-  "importRandomCourseColorSubtitle": "켜면 수업명과 교수로 프리셋 색을 배정하여 전부 같은 파란색이 되지 않게 합니다",
+  "importRandomCourseColorSubtitle": "수업명과 교수로 프리셋 색을 자동 배정",
   "courseImportTitle": "수업 가져오기",
   "chooseImportMethodTitle": "가져오기 방법 선택",
   "chooseImportMethodSubtitle": "기존 .ics 캘린더 가져오기, 이미지 인식 가져오기, 저장소에서 어댑터를 읽어오는 교무 시스템 가져오기를 지원합니다",
   "importMethodIcsTitle": ".ics 캘린더 가져오기",
-  "importMethodIcsSubtitle": "WakeUp 등 시간표 앱에서 내보낸 캘린더 파일에 적합하며, 절차가 가장 짧습니다",
+  "importMethodIcsSubtitle": "다른 시간표 앱에서 내보낸 캘린더 파일",
   "importMethodIcsFooter": "진입 후 .ics 파일을 선택하여 추가 가져오기 또는 기존 수업을 대체할 수 있습니다.",
   "importMethodAiTitle": "이미지 인식 가져오기",
-  "importMethodAiSubtitle": "시간표 스크린샷에서 바로 가져오기에 적합합니다. 1장 또는 연속 여러 장을 지원합니다",
+  "importMethodAiSubtitle": "시간표 스크린샷에서 인식해 가져오기",
   "importMethodAiFooter": "프롬프트를 복사한 뒤 Doubao 전문가 모드에서 스크린샷과 프롬프트를 전송하고, 반환된 JSON을 복사하여 가져온 후 학기 시작일을 선택합니다.",
   "importMethodWarehouseTitle": "교무 시스템 가져오기",
-  "importMethodWarehouseSubtitle": "qingyu_warehouse에서 학교와 어댑터를 읽어 웹 로그인으로 수업을 가져옵니다",
+  "importMethodWarehouseSubtitle": "학교 교무 시스템에 로그인하여 가져오기",
   "importMethodWarehouseFooter": "진입 후 학교와 어댑터를 선택하면 교무 웹페이지를 열어 로그인 후 가져오기를 실행할 수 있습니다.",
   "importMethodSpreadsheetTitle": "표 가져오기",
-  "importMethodSpreadsheetSubtitle": "Excel/WPS에서 경량섬 시간표 템플릿을 작성한 뒤 가져오기. .ics 사전보내기 불필요",
+  "importMethodSpreadsheetSubtitle": "Excel / CSV 템플릿을 작성해 가져오기",
   "importMethodSpreadsheetFooter": ".csv와 .xlsx 지원. 템플릿을 다운로드해 작성 후 파일을 선택하세요.",
   "spreadsheetImportTitle": "표 가져오기",
   "spreadsheetScenarioIntro": "경량섬 템플릿은 헤더로 열을 인식합니다. 필수: 과목명, 요일, 시작/종료 절, 주차. 나머지는 선택. 전체 템플릿을 받거나 필수 열만 유지해도 됩니다. WakeUp 7열 형식도 지원",
@@ -454,6 +454,42 @@
   },
   "keepAtLeastOneProfile": "최소 1개의 시간표를 유지하세요",
   "dataTransferTitle": "데이터 백업 및 마이그레이션",
+  "qrTransferSectionTitle": "QR코드 직접 전송",
+  "qrTransferSectionSubtitle": "두 기기를 가까이 대고 QR코드를 스캔하면 시간표와 설정을 네트워크 없이 전송합니다",
+  "qrTransferSendCurrent": "현재 시간표 전송",
+  "qrTransferSendAll": "모든 데이터 전송",
+  "qrTransferScanReceive": "스캔하여 받기",
+  "qrTransferFrameProgress": "{sent}프레임 전송 / 약 {total}프레임 필요",
+  "@qrTransferFrameProgress": {
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "qrTransferSendHint": "상대방이 「스캔하여 받기」를 열고 이 화면에 카메라를 대고 있게 하세요",
+  "qrTransferStop": "전송 중지",
+  "qrTransferScanTitle": "스캔하여 받기",
+  "qrTransferScanHint": "상대방 화면에 카메라를 대고 완료될 때까지 유지하세요",
+  "qrTransferReceiveProgress": "{received}프레임 수신 · {decoded}/{total} 복호화됨",
+  "@qrTransferReceiveProgress": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "decoded": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "qrTransferReceiveComplete": "데이터 수신 완료, 가져오는 중…",
+  "qrTransferSessionMismatch": "다른 전송 내용이 감지되었습니다. 하나의 화면에만 정면으로 대세요",
   "fullExportTitle": "전체 내보내기",
   "fullExportSubtitle": "현재 시간표 또는 모든 시간표, 시간 템플릿, 현재 선택 상태를 한 번에 내보낼 수 있습니다",
   "exportCurrentTimetable": "현재 시간표 내보내기",
@@ -736,7 +772,7 @@
       }
     }
   },
-  "followCurrentTimetableDescription": "기본으로 현재 시간표의 메인 템플릿에 연동됩니다. 대부분의 수업에 적합합니다",
+  "followCurrentTimetableDescription": "Without a manual override, auto-match by location keywords; otherwise follow the timetable main scheme",
   "overrideTimeSchemeDescription": "이 수업은 선택한 템플릿을 개별 사용하며 메인 템플릿에 연동되지 않습니다",
   "weekdayLabel": "요일",
   "startSectionLabel": "시작 교시",
@@ -885,7 +921,7 @@
   "aboutOpenSourceLicensesLoadFailed": "라이선스를 불러오지 못했습니다. 나중에 다시 시도하세요.",
   "aboutOpenSourceLicensesEmpty": "일치하는 패키지가 없습니다",
   "aboutAppLogsTitle": "앱 로그",
-  "aboutAppLogsSubtitle": "error / warn / info / debug / verbose 전 레벨의 로그 확인",
+  "aboutAppLogsSubtitle": "전 레벨 로그 확인",
   "appLogsShareText": "경屿 시간표가 내보낸 앱 로그입니다. 로컬 실행 기록을 포함하며, 업데이트, 가져오기, 알림, 페이지, 충돌 문제의 트러블슈팅에 사용할 수 있습니다.",
   "appLogsShareSubject": "경屿 시간표 - 앱 로그",
   "appLogsRecordingEnabled": "앱 로그 기록 중",
@@ -2122,7 +2158,7 @@
   "aboutParticipateWarehouseSubtitle": "패킷 캡처, 웹 디버깅, JavaScript를 할 수 있거나 자신의 학교 교무 시스템을 장기 유지보수하고 싶다면, qingyu_warehouse에서 새 학교 적응과 수정을 제출해 주세요",
   "importFileReadFailed": "선택한 파일을 읽을 수 없습니다",
   "importReplaceExistingTitle": "수업 가져오기",
-  "importReplaceExistingMessage": "{name}을(를) 가져올 때 기존 수업을 대체하시겠습니까?",
+  "importReplaceExistingMessage": "{name}을(를) 가져올 때 기존 수업을 대체하시겠습니까? 이 작업은 현재 시간표의 독립 일정(자습, 회의 등)도 함께 비웁니다.",
   "@importReplaceExistingMessage": {
     "placeholders": {
       "name": {
@@ -2210,7 +2246,7 @@
   "aiPasteJsonFirst": "먼저 AI가 반환한 JSON을 붙여넣으세요",
   "aiParseFailedIncompleteJson": "파싱 실패. 완전한 JSON이 붙여넣어졌는지 확인하세요",
   "importAiResultTitle": "AI 파싱 결과 가져오기",
-  "importAiReplaceMessage": "현재 AI 파싱 결과로 기존 수업을 대체하시겠습니까?",
+  "importAiReplaceMessage": "현재 AI 파싱 결과로 기존 수업을 대체하시겠습니까? 이 작업은 현재 시간표의 독립 일정(자습, 회의 등)도 함께 비웁니다.",
   "importConfirmSemesterMappingSubtitleAi": "학교 학사일정의 학기 시작일을 선택하고, 시간표의 1주차가 학사일정의 몇 주차에 해당하는지 확인하세요. 학교 첫 주에 수업이 없으면 보통 2주차로 변경해야 합니다",
   "aiWarningExtraSuffix": ", 추가로 {count}건 인식 주의사항",
   "@aiWarningExtraSuffix": {
@@ -2254,6 +2290,11 @@
   "goFeedbackAction": "피드백 페이지로",
   "warehouseFeedbackMissingSchoolTitle": "학교가 없으신가요? 피드백으로",
   "warehouseCustomDebugTitle": "사용자 정의 디버그",
+  "warehouseImportExecutionLogTitle": "시간표 가져오기 실행 로그",
+  "warehouseImportExecutionLogMenuLabel": "시간표 가져오기 실행 로그",
+  "warehouseImportExecutionLogShareText": "경屿 시간표에서 내보낸 교무 가져오기 실행 로그입니다. 스크립트 주입, 브리지 메시지, 시간 초과, 가져오기 결과 등 과정 기록이 포함되어 개발자에게 피드백할 수 있습니다.",
+  "warehouseImportExecutionLogShareSubject": "경屿 시간표 - 시간표 가져오기 실행 로그",
+  "warehouseImportExecutionLogEmpty": "가져오기 실행 기록이 아직 없습니다. 교무 웹페이지를 열고 가져오기 스크립트를 실행한 뒤 다시 확인하세요.",
   "warehouseRootLoadFailedTitle": "적응 저장소를 일시적으로 읽을 수 없습니다",
   "searchSchoolHint": "학교 이름, 이니셜 또는 코드로 검색",
   "clearSearchTooltip": "비우기",
@@ -2366,6 +2407,10 @@
   "quickImportFinishedTitle": "가져오기 완료",
   "quickImportDismissAction": "완료",
   "quickImportRetryAction": "재시도",
+  "homePullQuickImportTitle": "홈 당겨서 빠른 가져오기",
+  "homePullQuickImportSubtitle": "홈 시간표를 아래로 당기면 교무 빠른 가져오기를 백그라운드에서 실행합니다",
+  "homePullQuickImportFetchingCourses": "새 수업을 가져오는 중…",
+  "homePullQuickImportNeedsManualAction": "수동 작업이 필요합니다. 교무 가져오기 페이지에서 계속하세요",
   "quickImportPlaybackStepProgress": "단계 {current} / {total}",
   "@quickImportPlaybackStepProgress": {
     "placeholders": {
@@ -4450,6 +4495,7 @@
   "macroReplayStepWaitManual": "Waiting for user action",
   "macroReplayStepExecuteScript": "Running import script…",
   "macroReplayStepDelay": "Waiting…",
+  "macroReplayAcceleratedFallbackTip": "Quick path failed; retrying with the full recorded steps…",
   "macroReplayNoSteps": "No recorded steps",
   "macroReplayUserCancelled": "Cancelled by user",
   "macroReplayStepFailed": "Step {current}/{total} failed: {error}",
@@ -4611,11 +4657,20 @@
   "courseImportScriptFailed": "Script execution failed",
   "courseImportRecordingStatus": "Recording… tap Stop to finish",
   "courseImportRecordingStartedTip": "Recording started. Continue through the academic portal as usual",
+  "courseImportAutoRecordingStartedTip": "조작을 백그라운드에서 기록 중입니다. 가져오기 성공 후 빠른 가져오기로 저장할 수 있습니다",
   "courseImportRecordingEmptyStatus": "No actions recorded",
   "courseImportRecordingEmptyTip": "No actions recorded",
   "courseImportSaveRecordingTitle": "Save recording",
   "courseImportSaveRecordingMessage": "Recorded {count} steps. Save as quick import?",
   "@courseImportSaveRecordingMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "courseImportSaveAutoRecordingMessage": "가져오기에 성공했습니다. {count}개 단계를 기록했습니다. 다음 빠른 가져오기를 위해 이 경로를 저장할까요?",
+  "@courseImportSaveAutoRecordingMessage": {
     "placeholders": {
       "count": {
         "type": "int"
@@ -5022,5 +5077,347 @@
         "type": "int"
       }
     }
-  }
+  },
+  "coupleWebdavTitle": "견과클라우드 가져오기",
+  "coupleWebdavSubtitle": "상대(또는 공용) 견과클라우드에 로그인하여 업로드된 시간표를 가져옵니다. 클라우드 동기화 계정과 별개입니다",
+  "coupleWebdavNotConnected": "견과클라우드 미연결",
+  "coupleWebdavMySlotLabel": "이 기기 슬롯",
+  "coupleWebdavMySlotHint": "양쪽이 서로 다른 슬롯을 선택해야 합니다. 한쪽은 1, 다른 쪽은 2. 같으면 상대 시간표를 읽을 수 없습니다",
+  "coupleWebdavSlotOne": "슬롯 1",
+  "coupleWebdavSlotTwo": "슬롯 2",
+  "locationTimeMatchEntryTitle": "Location-based schedule",
+  "locationTimeMatchEntrySubtitle": "Auto-select time schemes by classroom keywords",
+  "locationTimeMatchTitle": "Location-based schedule",
+  "locationTimeMatchSubtitle": "Match time schemes by location keywords. Rematching updates clocks for matched courses only; unmatched courses stay unchanged.",
+  "locationTimeMatchWeekAxisNote": "Note: the week-view time axis still shows the timetable default scheme. Card/live times use the matched scheme.",
+  "locationTimeMatchPreviewLabel": "Try a location",
+  "locationTimeMatchPreviewHint": "e.g. A1062 or A主201",
+  "locationTimeMatchPreviewNoMatch": "No group matched; the default timetable scheme will be used",
+  "locationTimeMatchPreviewResult": "Matches: {group} · {scheme} (keyword {keyword})",
+  "@locationTimeMatchPreviewResult": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "scheme": {
+        "type": "String"
+      },
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchApplyActive": "Rematch current timetable",
+  "locationTimeMatchApplyTitle": "Rematch current timetable?",
+  "locationTimeMatchApplyMessage": "{count} courses currently match a location rule. Courses whose sections fit will return to automatic routing and update their clocks; any manual scheme on those courses will be cleared. Unmatched courses will remain unchanged.",
+  "@locationTimeMatchApplyMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyConfirm": "Rematch",
+  "locationTimeMatchApplyUpdated": "Rematched {matched} courses, updated {updated} clocks",
+  "@locationTimeMatchApplyUpdated": {
+    "placeholders": {
+      "matched": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyAlreadyAligned": "Rematched {matched} courses; clocks already correct",
+  "@locationTimeMatchApplyAlreadyAligned": {
+    "placeholders": {
+      "matched": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyNoneMatched": "No courses matched the place rules",
+  "locationTimeMatchApplyOverflowResult": "Matched {matched}; {count} exceed the scheme sections",
+  "@locationTimeMatchApplyOverflowResult": {
+    "placeholders": {
+      "matched": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyOverflowHint": "Examples: {names}",
+  "@locationTimeMatchApplyOverflowHint": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchEmpty": "No place groups yet",
+  "locationTimeMatchCreateGroup": "New place group",
+  "locationTimeMatchEditGroup": "Edit place group",
+  "locationTimeMatchUnknownScheme": "Unknown time scheme",
+  "locationTimeMatchNoKeywords": "No keywords",
+  "locationTimeMatchBoundScheme": "Time scheme: {name}",
+  "@locationTimeMatchBoundScheme": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchKeywordsLine": "Keywords: {keywords}",
+  "@locationTimeMatchKeywordsLine": {
+    "placeholders": {
+      "keywords": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchDeleteTitle": "Delete place group?",
+  "locationTimeMatchDeleteMessage": "Delete \"{name}\"? Automatically matched courses will return to the timetable default; manually selected schemes will stay unchanged.",
+  "@locationTimeMatchDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchDeleted": "Place group deleted",
+  "locationTimeMatchGroupNameLabel": "Group name",
+  "locationTimeMatchGroupNameHint": "e.g. Main building",
+  "locationTimeMatchBoundSchemeLabel": "Bound time scheme",
+  "locationTimeMatchNeedTimeScheme": "Create at least one time scheme first",
+  "locationTimeMatchEnabledLabel": "Enable this group",
+  "locationTimeMatchKeywordsSection": "Location keywords",
+  "locationTimeMatchKeywordsHelp": "Pick buildings from your timetable locations, or type keywords (A主, A1, A6). Prefer prefix match; longer keywords win.",
+  "locationTimeMatchAddKeyword": "Add keyword manually",
+  "locationTimeMatchKeywordLabel": "Keyword",
+  "locationTimeMatchKeywordHint": "A1 / A主",
+  "locationTimeMatchModeLabel": "Match mode",
+  "locationTimeMatchModePrefix": "Prefix",
+  "locationTimeMatchModeContains": "Contains",
+  "locationTimeMatchModeExact": "Exact",
+  "locationTimeMatchKeywordTooShort": "Keyword is very short and may mis-match",
+  "locationTimeMatchNameRequired": "Enter a group name",
+  "locationTimeMatchKeywordRequired": "Add at least one keyword",
+  "locationTimeMatchSaved": "Place group saved",
+  "locationTimeMatchSaveFailed": "Save failed",
+  "followLocationAutoTimeScheme": "Follow timetable / location auto",
+  "followLocationAutoTimeSchemeDescription": "Without a manual override, match a time scheme by location keywords; otherwise use the timetable default",
+  "locationTimeMatchedSchemeHint": "Auto · {scheme}",
+  "@locationTimeMatchedSchemeHint": {
+    "placeholders": {
+      "scheme": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeAutoResolvedByGroup": "Place group \"{group}\" → {scheme}",
+  "@locationTimeAutoResolvedByGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "scheme": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeAutoResolvedByTimetable": "Timetable default → {scheme}",
+  "@locationTimeAutoResolvedByTimetable": {
+    "placeholders": {
+      "scheme": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchSelectedKeywords": "Selected keywords",
+  "locationTimeMatchNoSelectedKeywords": "No keywords yet",
+  "locationTimeMatchPickFromLocations": "Pick from timetable locations",
+  "locationTimeMatchBuildingSuggestions": "Buildings found in timetable",
+  "locationTimeMatchNoBuildingSuggestions": "No recognizable building locations yet",
+  "locationTimeMatchAddBuilding": "Add",
+  "locationTimeMatchAddAllBuildings": "Add all uncovered buildings",
+  "locationTimeMatchBuildingRoomCount": "{count} rooms",
+  "@locationTimeMatchBuildingRoomCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchBuildingGateTags": "Tags: {tags}",
+  "@locationTimeMatchBuildingGateTags": {
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchKeywordExtracted": "Extracted keyword {keyword}",
+  "@locationTimeMatchKeywordExtracted": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchKeywordAlreadyExists": "Keyword already added",
+  "locationTimeMatchKeywordUsedByGroup": "Keyword already used by \"{group}\"",
+  "@locationTimeMatchKeywordUsedByGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleSavedAndApplied": "Date rule saved; every timetable's default schedule has been updated today",
+  "scheduleDateRuleSavedForFuture": "Date rule saved; every timetable's default schedule will update on the start date",
+  "scheduleDateRuleSavedButApplyFailed": "Date rule saved, but today's auto-apply failed (check scheme section count)",
+  "scheduleDateRuleSectionTitle": "Date-based schedule",
+  "scheduleDateRuleSectionSubtitle": "On the start date, apply the selected scheme as the default for all timetables. Max 2 non-overlapping rules; location-based schedule takes priority.",
+  "scheduleDateRuleAdd": "Add date rule",
+  "scheduleDateRuleEdit": "Edit date rule",
+  "scheduleDateRuleEmpty": "No date rules",
+  "scheduleDateRuleNameLabel": "Rule name",
+  "scheduleDateRuleNameHint": "e.g. Summer / Winter",
+  "scheduleDateRuleStartDate": "Start date",
+  "scheduleDateRuleEndDate": "End date",
+  "scheduleDateRuleBoundScheme": "Time scheme",
+  "scheduleDateRuleEnabled": "Enabled",
+  "scheduleDateRuleActiveToday": "In range today",
+  "scheduleDateRuleRangeSummary": "{start} ~ {end}",
+  "@scheduleDateRuleRangeSummary": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleMaxReached": "At most 2 date rules",
+  "scheduleDateRuleNeedScheme": "Create a time scheme first",
+  "scheduleDateRuleNameRequired": "Enter a rule name",
+  "scheduleDateRuleSaved": "Date rule saved",
+  "scheduleDateRuleDeleted": "Date rule deleted",
+  "scheduleDateRuleDeleteTitle": "Delete date rule?",
+  "scheduleDateRuleDeleteMessage": "Delete “{name}”? Already-applied schedules are not rolled back automatically; adjust them manually if needed.",
+  "@scheduleDateRuleDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleSaveFailed": "Save failed: {reason}",
+  "@scheduleDateRuleSaveFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleErrorMax": "Limit of 2 rules reached",
+  "scheduleDateRuleErrorOverlap": "Date range overlaps another rule",
+  "scheduleDateRuleErrorInvalidDate": "Invalid date",
+  "scheduleDateRuleErrorEndBeforeStart": "End date cannot be before start date",
+  "scheduleDateRuleErrorSchemeRequired": "Pick a time scheme",
+  "scheduleDateRuleErrorNameRequired": "Enter a name",
+  "scheduleDateRuleNote": "Location match takes priority over date rules.",
+  "frostedGlassModeLabel": "유리 모드",
+  "frostedGlassModeFrosted": "클래식 프로스트",
+  "frostedGlassModeLiquid": "리퀴드 글래스",
+  "frostedGlassModeGaussian": "가우시안 블러",
+  "frostedGlassModeTranslucent": "반투명",
+  "frostedSheetSectionTitle": "프로스트 글래스",
+  "frostedSheetBlurLabel": "블러 강도",
+  "frostedBlurEnabledTitle": "블러 활성화",
+  "frostedSheetPreviewDemoTitle": "미리보기",
+  "frostedSheetPreviewDemoSubtitle": "프로스트 글래스 효과 실시간 미리보기",
+  "frostedSheetPreviewOpenAction": "미리보기 패널 열기",
+  "frostedSheetPreviewShowTitle": "미리보기 표시",
+  "frostedSheetPreviewShowSubtitle": "상단에 프로스트 글래스 미리보기를 표시합니다",
+  "frostedLiquidGlassHint": "리퀴드 글래스는 고성능 기기가 필요합니다",
+  "advancedMaterialTitle": "고급 재질",
+  "advancedMaterialEntrySubtitle": "리퀴드 글래스 매개변수 미세 조정",
+  "liquidGlassPresetLabel": "리퀴드 글래스 프리셋",
+  "liquidGlassPresetClear": "클리어",
+  "liquidGlassPresetLight": "라이트 미스트",
+  "liquidGlassPresetStandard": "표준",
+  "liquidGlassPresetDense": "덴스",
+  "liquidGlassPresetCustom": "사용자 정의",
+  "courseCardSettingsTitle": "강의 카드",
+  "courseCardSectionFields": "표시 필드",
+  "courseCardSectionLayout": "레이아웃",
+  "courseCardSurfaceStyleLabel": "카드 외관",
+  "courseCardSurfaceStyleSubtitle": "강의 카드의 시각적 스타일을 선택하세요",
+  "courseCardSurfaceStyleSolid": "솔리드",
+  "courseCardSurfaceStyleTranslucent": "반투명",
+  "courseCardSurfaceStyleLiquidGlass": "리퀴드 글래스",
+  "courseCardSurfaceStyleGaussian": "가우시안 블러",
+  "courseCardSectionColor": "색상",
+  "liveSelfCheckTitle": "자체 점검",
+  "collapsibleLargeTitle": "접을 수 있는 큰 제목",
+  "liquidGlassCustomExpandedTitle": "사용자 정의 매개변수",
+  "liquidGlassThicknessLabel": "두께",
+  "liquidGlassBlurLabel": "블러 강도",
+  "liquidGlassTintLabel": "색조 강도",
+  "liquidGlassLightIntensityLabel": "조명 강도",
+  "liquidGlassAmbientStrengthLabel": "환경광 강도",
+  "liquidGlassRefractiveIndexLabel": "굴절률",
+  "liquidGlassSaturationLabel": "채도",
+  "liquidGlassChromaticAberrationLabel": "색수차",
+  "liquidGlassLightAngleLabel": "조명 각도",
+  "liquidGlassVisibilityLabel": "가시성",
+  "liquidGlassResetAction": "기본값으로 초기화",
+  "diagnosticsEntryTitle": "진단",
+  "memoryStatsEntryTitle": "메모리 상태",
+  "generalSettingsTitle": "일반",
+  "settingsResetDefaultsTitle": "기본 설정으로 초기화",
+  "settingsResetDefaultsConfirmTitle": "초기화 확인",
+  "settingsResetDefaultsConfirmBody": "모든 설정이 공장 기본값으로 초기화됩니다.",
+  "settingsResetDoneMessage": "설정이 초기화되었습니다",
+  "timetablePageSettingsTitle": "시간표 페이지",
+  "timetablePageSectionDensity": "밀도",
+  "timetablePageSectionBackToWeek": "현재 주로 돌아가기",
+  "timetablePageSectionBackground": "배경",
+  "largeTitleContentGap": "16.0",
+  "selectTimeTitle": "시간 선택",
+  "liveSelfCheckSubtitle": "자체 점검 실행",
+  "aboutSupportUpdatesSectionTitle": "지원 및 업데이트",
+  "aboutProductSectionTitle": "제품",
+  "aboutCommunitySectionTitle": "커뮤니티",
+  "selectStartTimeTitle": "시작 시간 선택",
+  "selectEndTimeTitle": "종료 시간 선택",
+  "weekdayInkContrastTitle": "텍스트 대비 향상",
+  "weekdayInkContrastBodyDark": "다크 모드에서 강의 텍스트 대비를 향상시킵니다",
+  "weekdayInkContrastBodyLight": "라이트 모드에서 강의 텍스트 대비를 향상시킵니다",
+  "keepCurrentColorAction": "현재 색상 유지",
+  "settingsTimetableSectionTitle": "시간표",
+  "liveIslandLabelEntryEnabled": "활성화됨",
+  "liveIslandLabelEntryDisabled": "비활성화됨",
+  "settingsDisplayAppearanceSectionTitle": "디스플레이 및 외관",
+  "settingsReminderDesktopSectionTitle": "알림 및 데스크톱",
+  "settingsAppSectionTitle": "앱",
+  "settingsDataShareSectionTitle": "데이터 및 공유",
+  "coupleTimetableEntryUnboundLabel": "연결 안 됨",
+  "settingsAboutSectionTitle": "정보",
+  "diagnosticsEntrySubtitle": "런타임 진단 로그 보기",
+  "settingsSemesterScreenTitle": "학기 설정",
+  "syncCurrentWeekNeedsStartDate": "먼저 시작일을 설정해 주세요",
+  "liveNotificationPermissionMissing": "알림 권한이 없습니다",
+  "developerSectionTitle": "개발자 옵션",
+  "liveTestingFixtureEntryTitle": "라이브 테스트 픽스처",
+  "hyperosShowcaseEntryTitle": "HyperOS 컴포넌트 쇼케이스",
+  "hyperosShowcaseEntrySubtitle": "HyperOS 컴포넌트 미리보기",
+  "miuixShowcaseEntryTitle": "Miuix 컴포넌트 쇼케이스",
+  "miuixShowcaseEntrySubtitle": "Miuix 컴포넌트 미리보기",
+  "debugUiOverlayToggleTitle": "디버그 UI 오버레이"
 }

@@ -1,158 +1,182 @@
-# Task 1: Kotlin 侧默认值 + resolveTemplate + 迁移 + Dart 默认值
+### Task 1: 写失败测试（新页面共用 live 设置）
 
 **Files:**
-- Modify: `android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt`
-- Modify: `lib/screens/live_settings_subpages.dart`
+- Create: `test/widgets/hyperfocus_timing_screen_test.dart`
 
-## Step 1: 更新 hfDefaultTemplates 默认值
+**Interfaces:**
+- Consumes: `createInitializedTestProvider(tester)` 与 `TestApp`（`test/helpers_test_app.dart`）、`TimetableSettingsScreen`（`lib/screens/timetable_settings_screen.dart`）、`TimetableSettings`/`TimetableProfile`（`lib/models/`）、`StorageService().resetForTesting()`（`lib/services/storage_service.dart`）。
+- Produces: 导航辅助函数 `openHyperFocusTimingScreen(tester) → Future<TimetableProvider>`，两个测试用例（Task 2 实现后必须通过）。
 
-将 `hfDefaultTemplates` map 的值从模板字符串改为逗号分隔的变量名列表。
+- [ ] **Step 1: 创建测试文件**
 
-```kotlin
-private val hfDefaultTemplates = mapOf(
-    "ticker_pre" to "课名",
-    "ticker_active" to "课名",
-    "ticker_post" to "课名",
-    "islandA_pre" to "教室",
-    "islandA_active" to "短课名",
-    "islandA_post" to "短课名",
-    "islandB_pre" to "",
-    "islandB_active" to "上课中",
-    "islandB_post" to "已下课",
-    "baseTitle_pre" to "课名",
-    "baseTitle_active" to "课名",
-    "baseTitle_post" to "课名",
-    "baseContent_pre" to "开始,结束",
-    "baseContent_active" to "开始,结束",
-    "baseContent_post" to "开始,结束",
-    "baseSubcontent_pre" to "教室",
-    "baseSubcontent_active" to "教室",
-    "baseSubcontent_post" to "教室",
-    "hintTitle_pre" to "",
-    "hintTitle_active" to "上课中",
-    "hintTitle_post" to "已下课",
-)
-```
-
-关键变更：
-- `ticker_pre`: `"即将上课：{课名}"` → `"课名"`
-- `islandA_pre`: `"{教室}"` → `"教室"`
-- `islandB_pre`: `"上课"` → `""`
-- `baseContent_pre/active/post`: `"{开始} - {结束}"` → `"开始,结束"`
-- `hintTitle_pre`: `"即将上课"` → `""`
-- `islandA_active/post`: `"{课名}"` → `"短课名"`
-- `islandB_active`: `"下课"` → `"上课中"`
-- `hintTitle_active/post`: 保持不变
-
-## Step 2: 重写 resolveTemplate() 支持新格式
-
-原来的 `resolveTemplate` 做 `{变量}` 查找替换。新逻辑：
-1. 如果值包含 `{` → 旧格式，走原来的替换逻辑（兼容现有用户）
-2. 否则 → 新格式：按逗号分割，映射变量名到实际值，空格拼接
-
-```kotlin
-private fun resolveTemplate(
-    tpl: String,
-    courseName: String,
-    shortName: String,
-    location: String,
-    teacher: String,
-    startTime: String,
-    endTime: String,
-    countdownText: String,
-    elapsedText: String,
-): String {
-    if (tpl.contains("{")) {
-        var result = tpl
-        result = result.replace("{课名}", courseName)
-        result = result.replace("{短课名}", shortName.ifBlank { courseName })
-        result = result.replace("{教室}", location.ifBlank { courseName })
-        result = result.replace("{教师}", teacher)
-        result = result.replace("{开始}", startTime)
-        result = result.replace("{结束}", endTime)
-        result = result.replace("{倒计时}", countdownText)
-        result = result.replace("{正计时}", elapsedText)
-        return result
-    }
-    val variableMap = mapOf(
-        "课名" to courseName,
-        "短课名" to shortName.ifBlank { courseName },
-        "教室" to location.ifBlank { courseName },
-        "教师" to teacher,
-        "开始" to startTime,
-        "结束" to endTime,
-        "倒计时" to countdownText,
-        "正计时" to elapsedText,
-    )
-    return tpl.split(",")
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .map { variableMap[it] ?: "" }
-        .filter { it.isNotEmpty() }
-        .joinToString(" ")
-}
-```
-
-## Step 3: 更新 loadHyperFocusTemplates() 添加迁移
-
-检测已保存的 JSON 中是否包含旧格式（值含 `{`），如果检测到就丢弃并返回 `hfDefaultTemplates`：
-
-```kotlin
-private fun loadHyperFocusTemplates(): Map<String, String> {
-    val json = getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
-        .getString("templates_json", null) ?: return hfDefaultTemplates
-    return try {
-        val obj = org.json.JSONObject(json)
-        for (key in obj.keys()) {
-            val v = obj.optString(key, "")
-            if (v.contains("{")) {
-                return hfDefaultTemplates
-            }
-        }
-        val merged = hfDefaultTemplates.toMutableMap()
-        for (key in obj.keys()) {
-            merged[key] = obj.optString(key, hfDefaultTemplates[key] ?: "")
-        }
-        merged
-    } catch (_: Exception) {
-        hfDefaultTemplates
-    }
-}
-```
-
-## Step 4: 更新 Dart 侧 _defaultTemplates 常量
-
-在 `live_settings_subpages.dart` 中更新 `_defaultTemplates`：
+创建 `test/widgets/hyperfocus_timing_screen_test.dart`：
 
 ```dart
-static const _defaultTemplates = {
-  'ticker_pre': '课名',
-  'ticker_active': '课名',
-  'ticker_post': '课名',
-  'islandA_pre': '教室',
-  'islandA_active': '短课名',
-  'islandA_post': '短课名',
-  'islandB_pre': '',
-  'islandB_active': '上课中',
-  'islandB_post': '已下课',
-  'baseTitle_pre': '课名',
-  'baseTitle_active': '课名',
-  'baseTitle_post': '课名',
-  'baseContent_pre': '开始,结束',
-  'baseContent_active': '开始,结束',
-  'baseContent_post': '开始,结束',
-  'baseSubcontent_pre': '教室',
-  'baseSubcontent_active': '教室',
-  'baseSubcontent_post': '教室',
-  'hintTitle_pre': '',
-  'hintTitle_active': '上课中',
-  'hintTitle_post': '已下课',
-};
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:university_timetable/models/timetable_profile.dart';
+import 'package:university_timetable/models/timetable_settings.dart';
+import 'package:university_timetable/providers/timetable_provider.dart';
+import 'package:university_timetable/screens/timetable_settings_screen.dart';
+import 'package:university_timetable/services/storage_service.dart';
+import '../helpers_test_app.dart';
+
+Future<void> _pumpScreen(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+void _seedInitializedPrefs() {
+  final now = DateTime(2026, 4, 12);
+  final settings = TimetableSettings.defaults();
+  final profile = TimetableProfile(
+    id: 'profile-1',
+    name: '默认课表',
+    courses: const [],
+    settings: settings,
+    currentWeek: 1,
+    createdAt: now,
+    lastUsedAt: now,
+  );
+  SharedPreferences.setMockInitialValues({
+    'did_migrate_app_logs_default': true,
+    'did_migrate_live_hide_prefix_default': true,
+    'timetable_profiles': jsonEncode([profile.toJson()]),
+    'active_timetable_profile_id': profile.id,
+    'time_schemes': '[]',
+  });
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const homeWidgetChannel = MethodChannel('com.mutx163.qingyu/home_widget');
+  const analyticsChannel = MethodChannel('com.mutx163.qingyu/umeng_analytics');
+  const liveChannel = MethodChannel('com.mutx163.qingyu/miui_live');
+
+  setUp(() {
+    StorageService().resetForTesting();
+    _seedInitializedPrefs();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(homeWidgetChannel, (call) async => null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(analyticsChannel, (call) async => null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(liveChannel, (call) async => null);
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(homeWidgetChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(analyticsChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(liveChannel, null);
+  });
+
+  Future<TimetableProvider> openHyperFocusTimingScreen(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final provider = await createInitializedTestProvider(tester);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: provider,
+        child: const TestApp(home: TimetableSettingsScreen()),
+      ),
+    );
+    await _pumpScreen(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('超级岛与通知'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('超级岛与通知'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('小米超级岛'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('小米超级岛'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('提醒时机'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('提醒时机'));
+    await tester.pumpAndSettle();
+    return provider;
+  }
+
+  testWidgets('hyper focus timing switches edit shared live settings', (
+    tester,
+  ) async {
+    final provider = await openHyperFocusTimingScreen(tester);
+
+    expect(find.text('上课前提醒'), findsOneWidget);
+    expect(provider.settings.liveEnableBeforeClass, isTrue);
+
+    await tester.tap(find.text('上课前提醒'));
+    await tester.pumpAndSettle();
+    expect(provider.settings.liveEnableBeforeClass, isFalse);
+
+    await tester.tap(find.text('课中与下课提醒'));
+    await tester.pumpAndSettle();
+    expect(provider.settings.liveEnableDuringClass, isFalse);
+    expect(provider.settings.liveEnableBeforeEnd, isFalse);
+    expect(find.text('重点提醒切入时机'), findsNothing);
+
+    await tester.tap(find.text('课中与下课提醒'));
+    await tester.pumpAndSettle();
+    expect(provider.settings.liveEnableDuringClass, isTrue);
+    expect(provider.settings.liveEnableBeforeEnd, isTrue);
+    expect(find.text('重点提醒切入时机'), findsOneWidget);
+  });
+
+  testWidgets('hyper focus timing thresholds share live settings', (
+    tester,
+  ) async {
+    final provider = await openHyperFocusTimingScreen(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('时间阈值'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('20 分钟').first);
+    await tester.pumpAndSettle();
+    for (final minutes in [30, 40, 50, 60]) {
+      expect(find.text('$minutes 分钟'), findsWidgets);
+    }
+    await tester.tap(find.text('30 分钟').first);
+    await tester.pumpAndSettle();
+    expect(provider.settings.liveShowBeforeClassMinutes, 30);
+  });
+}
 ```
 
-## 报告要求
+- [ ] **Step 2: 运行测试确认失败**
 
-执行完毕后写入 `docs/superpowers/reports/task-1-report.md`，包含：
-1. 修改的文件列表及变更摘要
-2. 编译检查结果（`./gradlew assembleDebug` 和 `flutter analyze`）
-3. 任何疑问或注意事项
+Run: `flutter test test\widgets\hyperfocus_timing_screen_test.dart`
+Expected: 失败 — 找不到 `上课前提醒`（当前页面只有 `课前提醒`），第一个用例在第一个 `expect` 处 FAIL。
+
+- [ ] **Step 3: 提交测试**
+
+```bash
+git add test/widgets/hyperfocus_timing_screen_test.dart
+git commit -m "test: hyper focus timing page shares live settings"
+```
+
+---
+

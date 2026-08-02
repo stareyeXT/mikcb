@@ -234,7 +234,29 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coupleTimetableSharedFreeTitle => '今日共同空闲';
 
   @override
+  String get coupleTimetableSharedFreeTitleOtherDay => '该日共同空闲';
+
+  @override
   String get coupleTimetableNoSharedFree => '今天没有共同空闲时段';
+
+  @override
+  String get coupleTimetableNoSharedFreeOtherDay => '该日没有共同空闲时段';
+
+  @override
+  String coupleTimetableSharedFreeMeta(int count) {
+    return '共 $count 段';
+  }
+
+  @override
+  String coupleTimetableSharedFreeMoreCount(int count) {
+    return '还有 $count 段';
+  }
+
+  @override
+  String get coupleTimetableSharedFreeUnavailable => '暂时算不出共同空闲';
+
+  @override
+  String get coupleTimetableSharedFreeStaleHint => '对方课表可能不是最新';
 
   @override
   String get coupleTimetablePartnerReadOnlyBadge => '对方课表（只读）';
@@ -279,14 +301,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get partnerImportRequiresSingleProfile => '请导入单课表备份文件，不支持全量备份';
 
   @override
-  String get coupleWebdavTitle => '坚果云拉取';
+  String get coupleWebdavTitle => 'Nutstoreで取得';
 
   @override
   String get coupleWebdavSubtitle =>
-      '登录对方（或你们共用的）坚果云账号，自动下载对方上传的课表文件，与「云同步」账号独立，互不影响';
+      'パートナー（または共有）のNutstoreにログインし、相手がアップロードした時間割を取得します。クラウド同期のアカウントとは独立です';
 
   @override
-  String get coupleWebdavNotConnected => '尚未连接坚果云';
+  String get coupleWebdavNotConnected => 'Nutstore未接続';
 
   @override
   String coupleWebdavConnectedAs(String username) {
@@ -324,6 +346,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get coupleWebdavConfirmConnect => '连接并拉取';
+
+  @override
+  String get coupleWebdavMySlotLabel => 'この端末のスロット';
+
+  @override
+  String get coupleWebdavMySlotHint =>
+      '双方で異なるスロットを選んでください。一方が1、もう一方が2。同じだと相手の時間割を読めません';
+
+  @override
+  String get coupleWebdavSlotOne => 'スロット 1';
+
+  @override
+  String get coupleWebdavSlotTwo => 'スロット 2';
 
   @override
   String get coupleWebdavTestSuccess => '坚果云连接成功';
@@ -770,8 +805,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importRandomCourseColorTitle => '授業カラーをランダム';
 
   @override
-  String get importRandomCourseColorSubtitle =>
-      'オンにすると授業名と教員でプリセット色を割り当て、一括で同じ青になるのを防ぎます';
+  String get importRandomCourseColorSubtitle => '授業名と教員でプリセット色を自動割り当て';
 
   @override
   String get courseImportTitle => '授業インポート';
@@ -787,7 +821,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importMethodIcsTitle => '.icsカレンダーインポート';
 
   @override
-  String get importMethodIcsSubtitle => 'WakeUpなどの時間割アプリからエクスポートしたカレンダーファイルに最適';
+  String get importMethodIcsSubtitle => '他の時間割アプリから書き出したカレンダー';
 
   @override
   String get importMethodIcsFooter => '進入後、.icsファイルを選択して追加インポートまたは既存授業を置換可能。';
@@ -796,7 +830,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importMethodAiTitle => '画像認識インポート';
 
   @override
-  String get importMethodAiSubtitle => '時間割のスクリーンショットから直接インポート，1枚または連続複数枚に対応';
+  String get importMethodAiSubtitle => '時間割のスクリーンショットから認識';
 
   @override
   String get importMethodAiFooter =>
@@ -806,8 +840,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importMethodWarehouseTitle => '教務システムインポート';
 
   @override
-  String get importMethodWarehouseSubtitle =>
-      'qingyu_warehouseから学校とアダプタを読み込み、Webログインで授業をインポート';
+  String get importMethodWarehouseSubtitle => '学校の教務システムにログインして取込';
 
   @override
   String get importMethodWarehouseFooter =>
@@ -817,8 +850,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importMethodSpreadsheetTitle => '表インポート';
 
   @override
-  String get importMethodSpreadsheetSubtitle =>
-      'Excel/WPSで軽嶼課表テンプレートを記入してインポート，.icsの事前エクスポートは不要';
+  String get importMethodSpreadsheetSubtitle => 'Excel / CSV テンプレートから取込';
 
   @override
   String get importMethodSpreadsheetFooter =>
@@ -828,28 +860,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importMethodHtmlTitle => '从网址导入';
 
   @override
-  String get importMethodHtmlSubtitle => '输入课表页面网址，读取 HTML 中的课程信息。';
+  String get importMethodHtmlSubtitle => '输入课表页面网址，读取 HTML 中的课程信息';
 
   @override
-  String get importMethodHtmlFooter => '适用于学校教务系统提供课表页面的场景。';
+  String get importMethodHtmlFooter => '适用于学校教务系统提供课表页面的场景';
 
   @override
   String get htmlInputUrlLabel => '输入课表网址';
 
   @override
-  String get htmlScenarioIntro => '适用于学校教务系统提供课表页面的场景，直接输入课表页面网址即可读取课程信息。';
+  String get htmlScenarioIntro => '适用于学校教务系统提供课表页面的场景，直接输入课表页面网址即可读取课程信息';
 
   @override
-  String get htmlStep1Subtitle => '在浏览器中打开学校教务系统的课表页面。';
+  String get htmlStep1Subtitle => '在浏览器中打开学校教务系统的课表页面';
 
   @override
-  String get htmlStep2Subtitle => '复制课表页面的完整网址。';
+  String get htmlStep2Subtitle => '复制课表页面的完整网址';
 
   @override
-  String get htmlStep3Subtitle => '将网址粘贴到下方输入框，点击获取并导入，将自动获取一周课程。';
+  String get htmlStep3Subtitle => '将网址粘贴到下方输入框，点击获取并导入，将自动获取一周课程';
 
   @override
-  String get htmlSupportedFilesSuffix => '支持从标准 HTML 课表页面解析。';
+  String get htmlSupportedFilesSuffix => '支持从标准 HTML 课表页面解析';
 
   @override
   String get htmlFetchImportLabel => '获取并导入';
@@ -1174,6 +1206,50 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get dataTransferTitle => 'データバックアップと移行';
+
+  @override
+  String get qrTransferSectionTitle => 'QRコードで直接転送';
+
+  @override
+  String get qrTransferSectionSubtitle =>
+      '2台のスマホを近づけ、QRコードを読み取るだけで時間割と設定を転送。ネットワーク不要';
+
+  @override
+  String get qrTransferSendCurrent => '現在の時間割を送信';
+
+  @override
+  String get qrTransferSendAll => 'すべてのデータを送信';
+
+  @override
+  String get qrTransferScanReceive => '読み取って受信';
+
+  @override
+  String qrTransferFrameProgress(int sent, int total) {
+    return '送信 $sent フレーム / 目安 $total フレーム';
+  }
+
+  @override
+  String get qrTransferSendHint => '相手に「読み取って受信」を開いてもらい、カメラをこの画面に向けてもらってください';
+
+  @override
+  String get qrTransferStop => '送信を停止';
+
+  @override
+  String get qrTransferScanTitle => '読み取って受信';
+
+  @override
+  String get qrTransferScanHint => '相手の画面にカメラを向け、完了まで安定して構えてください';
+
+  @override
+  String qrTransferReceiveProgress(int received, int decoded, int total) {
+    return '受信 $received フレーム · 解読 $decoded/$total';
+  }
+
+  @override
+  String get qrTransferReceiveComplete => 'データを受信しました。インポート中…';
+
+  @override
+  String get qrTransferSessionMismatch => '別の転送内容を検出しました。1つの画面だけに正対してください';
 
   @override
   String get fullExportTitle => '完全エクスポート';
@@ -1561,7 +1637,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get followCurrentTimetableDescription =>
-      'デフォルトで現在の時間割のメインテンプレートに連携，ほとんどの授業に最適';
+      'Without a manual override, auto-match by location keywords; otherwise follow the timetable main scheme';
 
   @override
   String get overrideTimeSchemeDescription =>
@@ -1849,8 +1925,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get aboutAppLogsTitle => 'アプリログ';
 
   @override
-  String get aboutAppLogsSubtitle =>
-      'error / warn / info / debug / verbose全レベルのログを確認';
+  String get aboutAppLogsSubtitle => '全レベルのログを確認';
 
   @override
   String get appLogsShareText =>
@@ -2962,30 +3037,30 @@ class AppLocalizationsJa extends AppLocalizations {
   String get themeSeedSectionSubtitle => 'トップバー、アクセントカラーとグローバルメインカラーに影響';
 
   @override
-  String get frostedSheetSectionTitle => '弹窗磨砂玻璃';
+  String get frostedSheetSectionTitle => 'フロストガラス';
 
   @override
   String get frostedSheetSectionSubtitle =>
       '调节首页弹出面板的高斯模糊强度与磨砂亮度，滑块越靠右，白色磨砂层越明显';
 
   @override
-  String get frostedBlurEnabledTitle => '高斯模糊';
+  String get frostedBlurEnabledTitle => 'ぼかしを有効にする';
 
   @override
   String get frostedBlurEnabledSubtitle =>
       '关闭后，弹窗、首页模糊区域与「回本周」按钮仅保留半透明底色，不再采样模糊';
 
   @override
-  String get frostedSheetPreviewOpenAction => '打开弹窗预览';
+  String get frostedSheetPreviewOpenAction => 'プレビューパネルを開く';
 
   @override
-  String get frostedSheetPreviewDemoTitle => '弹窗预览';
+  String get frostedSheetPreviewDemoTitle => 'プレビュー';
 
   @override
-  String get frostedSheetPreviewDemoSubtitle => '与首页右上角菜单相同的磨砂玻璃效果';
+  String get frostedSheetPreviewDemoSubtitle => 'フロストガラス効果のリアルタイムプレビュー';
 
   @override
-  String get frostedSheetBlurLabel => '模糊强度';
+  String get frostedSheetBlurLabel => 'ぼかし強度';
 
   @override
   String get frostedSheetTintLabel => '磨砂亮度';
@@ -4284,7 +4359,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String importReplaceExistingMessage(String name) {
-    return '$nameをインポートする際、既存の授業を置換しますか？';
+    return '$nameをインポートする際、既存の授業を置換しますか？この操作では、現在の時間割上の独立した予定（自習・会議など）も削除されます。';
   }
 
   @override
@@ -4425,7 +4500,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importAiResultTitle => 'AI解析結果をインポート';
 
   @override
-  String get importAiReplaceMessage => '現在のAI解析結果で既存の授業を置換しますか？';
+  String get importAiReplaceMessage =>
+      '現在のAI解析結果で既存の授業を置換しますか？この操作では、現在の時間割上の独立した予定（自習・会議など）も削除されます。';
 
   @override
   String get importConfirmSemesterMappingSubtitleAi =>
@@ -4482,6 +4558,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get warehouseCustomDebugTitle => 'カスタムデバッグ';
+
+  @override
+  String get warehouseImportExecutionLogTitle => '時間割インポート実行ログ';
+
+  @override
+  String get warehouseImportExecutionLogMenuLabel => '時間割インポート実行ログ';
+
+  @override
+  String get warehouseImportExecutionLogShareText =>
+      '軽屿時間割から書き出した教務インポート実行ログです。スクリプト注入、ブリッジ通信、タイムアウト、インポート結果などの過程記録が含まれ、開発者へのフィードバックに使えます。';
+
+  @override
+  String get warehouseImportExecutionLogShareSubject => '軽屿時間割 - 時間割インポート実行ログ';
+
+  @override
+  String get warehouseImportExecutionLogEmpty =>
+      'インポート実行記録はまだありません。教務ページを開き、インポートスクリプトを実行してから再度確認してください。';
 
   @override
   String get warehouseRootLoadFailedTitle => '適応倉庫を一時的に読み込めません';
@@ -4678,6 +4771,20 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get quickImportRetryAction => '再試行';
+
+  @override
+  String get homePullQuickImportTitle => 'ホーム下引きでクイックインポート';
+
+  @override
+  String get homePullQuickImportSubtitle =>
+      'ホーム画面を下に引くと、教務のクイックインポートをバックグラウンドで実行します';
+
+  @override
+  String get homePullQuickImportFetchingCourses => '新しい授業を取得中…';
+
+  @override
+  String get homePullQuickImportNeedsManualAction =>
+      '手動操作が必要です。教務インポート画面で続行してください';
 
   @override
   String quickImportPlaybackStepProgress(int current, int total) {
@@ -5527,6 +5634,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get examDateRequired => '試験日を選択してください';
 
   @override
+  String get examEndTimeBeforeStart => '结束时间不能早于开始时间';
+
+  @override
   String get examStartTimeLabel => '開始時間';
 
   @override
@@ -5734,6 +5844,68 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get courseActionDeleteSecondary => '削除';
+
+  @override
+  String get courseNoteSheetTitle => '课程备注';
+
+  @override
+  String get courseNoteAction => '备注';
+
+  @override
+  String get courseNoteSaveAction => '保存';
+
+  @override
+  String get courseNoteTabWholeCourse => '课程简介';
+
+  @override
+  String get courseNoteTabThisSession => '本节课';
+
+  @override
+  String get courseNoteWholeCourseLabel => '课程简介';
+
+  @override
+  String get courseNoteWholeCourseHint => '同名课程共享，长期有效（例如课程说明、课堂注意点）。';
+
+  @override
+  String get courseNoteWholeCoursePlaceholder => '例如：这个老师容易点名、教室在新楼…';
+
+  @override
+  String get courseNoteSessionLabel => '本节课备注';
+
+  @override
+  String courseNoteSessionHint(int week) {
+    return '仅对第 $week 周这一次课生效，适合记录作业或携带物品。';
+  }
+
+  @override
+  String get courseNoteSessionPlaceholder => '例如：交第三章习题、带电脑…';
+
+  @override
+  String get courseNoteHasHomeworkTitle => '有作业';
+
+  @override
+  String get courseNoteHasHomeworkSubtitle => '开启后，周视图课程卡片会显示作业圆标';
+
+  @override
+  String get courseNoteHomeworkMarked => '本节有作业';
+
+  @override
+  String get courseNoteTileSubtitleEmpty => '记录作业、带电脑或课堂提醒';
+
+  @override
+  String get courseNoteTileSubtitleWhole => '已有课程简介';
+
+  @override
+  String get courseNoteTileSubtitleSession => '已有本节课备注';
+
+  @override
+  String get courseNoteTileSubtitleBoth => '课程简介与本节课均有备注';
+
+  @override
+  String get courseNoteReadOnlyNotice => '对方课程仅可查看备注，无法编辑。';
+
+  @override
+  String get courseNoteDoneEditingAction => '完成';
 
   @override
   String courseActionSheetNotice(int week) {
@@ -7476,6 +7648,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get macroReplayStepDelay => 'Waiting…';
 
   @override
+  String get macroReplayAcceleratedFallbackTip =>
+      'Quick path failed; retrying with the full recorded steps…';
+
+  @override
   String get macroReplayNoSteps => 'No recorded steps';
 
   @override
@@ -7774,6 +7950,10 @@ class AppLocalizationsJa extends AppLocalizations {
       'Recording started. Continue through the academic portal as usual';
 
   @override
+  String get courseImportAutoRecordingStartedTip =>
+      '操作をバックグラウンドで記録中です。インポート成功後にクイックインポートとして保存できます';
+
+  @override
   String get courseImportRecordingEmptyStatus => 'No actions recorded';
 
   @override
@@ -7785,6 +7965,11 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String courseImportSaveRecordingMessage(int count) {
     return 'Recorded $count steps. Save as quick import?';
+  }
+
+  @override
+  String courseImportSaveAutoRecordingMessage(int count) {
+    return 'インポートに成功しました。$count ステップを記録しました。次回のクイックインポート用にこの経路を保存しますか？';
   }
 
   @override
@@ -8731,4 +8916,598 @@ class AppLocalizationsJa extends AppLocalizations {
   String guidePermissionsProgressLabel(int ready, int total) {
     return 'Ready $ready/$total';
   }
+
+  @override
+  String get locationTimeMatchEntryTitle => 'Location-based schedule';
+
+  @override
+  String get locationTimeMatchEntrySubtitle =>
+      'Auto-select time schemes by classroom keywords';
+
+  @override
+  String get locationTimeMatchTitle => 'Location-based schedule';
+
+  @override
+  String get locationTimeMatchSubtitle =>
+      'Match time schemes by location keywords. Rematching updates clocks for matched courses only; unmatched courses stay unchanged.';
+
+  @override
+  String get locationTimeMatchWeekAxisNote =>
+      'Note: the week-view time axis still shows the timetable default scheme. Card/live times use the matched scheme.';
+
+  @override
+  String get locationTimeMatchPreviewLabel => 'Try a location';
+
+  @override
+  String get locationTimeMatchPreviewHint => 'e.g. A1062 or A主201';
+
+  @override
+  String get locationTimeMatchPreviewNoMatch =>
+      'No group matched; the default timetable scheme will be used';
+
+  @override
+  String locationTimeMatchPreviewResult(
+    String group,
+    String scheme,
+    String keyword,
+  ) {
+    return 'Matches: $group · $scheme (keyword $keyword)';
+  }
+
+  @override
+  String get locationTimeMatchApplyActive => 'Rematch current timetable';
+
+  @override
+  String get locationTimeMatchApplyTitle => 'Rematch current timetable?';
+
+  @override
+  String locationTimeMatchApplyMessage(int count) {
+    return '$count courses currently match a location rule. Courses whose sections fit will return to automatic routing and update their clocks; any manual scheme on those courses will be cleared. Unmatched courses will remain unchanged.';
+  }
+
+  @override
+  String get locationTimeMatchApplyConfirm => 'Rematch';
+
+  @override
+  String locationTimeMatchApplyUpdated(int matched, int updated) {
+    return 'Rematched $matched courses, updated $updated clocks';
+  }
+
+  @override
+  String locationTimeMatchApplyAlreadyAligned(int matched) {
+    return 'Rematched $matched courses; clocks already correct';
+  }
+
+  @override
+  String get locationTimeMatchApplyNoneMatched =>
+      'No courses matched the place rules';
+
+  @override
+  String locationTimeMatchApplyOverflowResult(int matched, int count) {
+    return 'Matched $matched; $count exceed the scheme sections';
+  }
+
+  @override
+  String locationTimeMatchApplyOverflowHint(String names) {
+    return 'Examples: $names';
+  }
+
+  @override
+  String get locationTimeMatchEmpty => 'No place groups yet';
+
+  @override
+  String get locationTimeMatchCreateGroup => 'New place group';
+
+  @override
+  String get locationTimeMatchEditGroup => 'Edit place group';
+
+  @override
+  String get locationTimeMatchUnknownScheme => 'Unknown time scheme';
+
+  @override
+  String get locationTimeMatchNoKeywords => 'No keywords';
+
+  @override
+  String locationTimeMatchBoundScheme(String name) {
+    return 'Time scheme: $name';
+  }
+
+  @override
+  String locationTimeMatchKeywordsLine(String keywords) {
+    return 'Keywords: $keywords';
+  }
+
+  @override
+  String get locationTimeMatchDeleteTitle => 'Delete place group?';
+
+  @override
+  String locationTimeMatchDeleteMessage(String name) {
+    return 'Delete \"$name\"? Automatically matched courses will return to the timetable default; manually selected schemes will stay unchanged.';
+  }
+
+  @override
+  String get locationTimeMatchDeleted => 'Place group deleted';
+
+  @override
+  String get locationTimeMatchGroupNameLabel => 'Group name';
+
+  @override
+  String get locationTimeMatchGroupNameHint => 'e.g. Main building';
+
+  @override
+  String get locationTimeMatchBoundSchemeLabel => 'Bound time scheme';
+
+  @override
+  String get locationTimeMatchNeedTimeScheme =>
+      'Create at least one time scheme first';
+
+  @override
+  String get locationTimeMatchEnabledLabel => 'Enable this group';
+
+  @override
+  String get locationTimeMatchKeywordsSection => 'Location keywords';
+
+  @override
+  String get locationTimeMatchKeywordsHelp =>
+      'Pick buildings from your timetable locations, or type keywords (A主, A1, A6). Prefer prefix match; longer keywords win.';
+
+  @override
+  String get locationTimeMatchSelectedKeywords => 'Selected keywords';
+
+  @override
+  String get locationTimeMatchNoSelectedKeywords => 'No keywords yet';
+
+  @override
+  String get locationTimeMatchPickFromLocations =>
+      'Pick from timetable locations';
+
+  @override
+  String get locationTimeMatchBuildingSuggestions =>
+      'Buildings found in timetable';
+
+  @override
+  String get locationTimeMatchNoBuildingSuggestions =>
+      'No recognizable building locations yet';
+
+  @override
+  String get locationTimeMatchAddBuilding => 'Add';
+
+  @override
+  String get locationTimeMatchAddAllBuildings => 'Add all uncovered buildings';
+
+  @override
+  String locationTimeMatchBuildingRoomCount(int count) {
+    return '$count rooms';
+  }
+
+  @override
+  String locationTimeMatchBuildingGateTags(String tags) {
+    return 'Tags: $tags';
+  }
+
+  @override
+  String locationTimeMatchKeywordExtracted(String keyword) {
+    return 'Extracted keyword $keyword';
+  }
+
+  @override
+  String get locationTimeMatchKeywordAlreadyExists => 'Keyword already added';
+
+  @override
+  String locationTimeMatchKeywordUsedByGroup(String group) {
+    return 'Keyword already used by \"$group\"';
+  }
+
+  @override
+  String get locationTimeMatchAddKeyword => 'Add keyword manually';
+
+  @override
+  String get locationTimeMatchKeywordLabel => 'Keyword';
+
+  @override
+  String get locationTimeMatchKeywordHint => 'A1 / A主';
+
+  @override
+  String get locationTimeMatchModeLabel => 'Match mode';
+
+  @override
+  String get locationTimeMatchModePrefix => 'Prefix';
+
+  @override
+  String get locationTimeMatchModeContains => 'Contains';
+
+  @override
+  String get locationTimeMatchModeExact => 'Exact';
+
+  @override
+  String get locationTimeMatchKeywordTooShort =>
+      'Keyword is very short and may mis-match';
+
+  @override
+  String get locationTimeMatchNameRequired => 'Enter a group name';
+
+  @override
+  String get locationTimeMatchKeywordRequired => 'Add at least one keyword';
+
+  @override
+  String get locationTimeMatchSaved => 'Place group saved';
+
+  @override
+  String get locationTimeMatchSaveFailed => 'Save failed';
+
+  @override
+  String get followLocationAutoTimeScheme => 'Follow timetable / location auto';
+
+  @override
+  String get followLocationAutoTimeSchemeDescription =>
+      'Without a manual override, match a time scheme by location keywords; otherwise use the timetable default';
+
+  @override
+  String locationTimeMatchedSchemeHint(String scheme) {
+    return 'Auto · $scheme';
+  }
+
+  @override
+  String locationTimeAutoResolvedByGroup(String group, String scheme) {
+    return 'Place group \"$group\" → $scheme';
+  }
+
+  @override
+  String locationTimeAutoResolvedByTimetable(String scheme) {
+    return 'Timetable default → $scheme';
+  }
+
+  @override
+  String get scheduleDateRuleSectionTitle => 'Date-based schedule';
+
+  @override
+  String get scheduleDateRuleSectionSubtitle =>
+      'On the start date, apply the selected scheme as the default for all timetables. Max 2 non-overlapping rules; location-based schedule takes priority.';
+
+  @override
+  String get scheduleDateRuleAdd => 'Add date rule';
+
+  @override
+  String get scheduleDateRuleEdit => 'Edit date rule';
+
+  @override
+  String get scheduleDateRuleEmpty => 'No date rules';
+
+  @override
+  String get scheduleDateRuleNameLabel => 'Rule name';
+
+  @override
+  String get scheduleDateRuleNameHint => 'e.g. Summer / Winter';
+
+  @override
+  String get scheduleDateRuleStartDate => 'Start date';
+
+  @override
+  String get scheduleDateRuleEndDate => 'End date';
+
+  @override
+  String get scheduleDateRuleBoundScheme => 'Time scheme';
+
+  @override
+  String get scheduleDateRuleEnabled => 'Enabled';
+
+  @override
+  String get scheduleDateRuleActiveToday => 'In range today';
+
+  @override
+  String scheduleDateRuleRangeSummary(String start, String end) {
+    return '$start ~ $end';
+  }
+
+  @override
+  String get scheduleDateRuleMaxReached => 'At most 2 date rules';
+
+  @override
+  String get scheduleDateRuleNeedScheme => 'Create a time scheme first';
+
+  @override
+  String get scheduleDateRuleNameRequired => 'Enter a rule name';
+
+  @override
+  String get scheduleDateRuleSaved => 'Date rule saved';
+
+  @override
+  String get scheduleDateRuleSavedAndApplied =>
+      'Date rule saved; every timetable\'s default schedule has been updated today';
+
+  @override
+  String get scheduleDateRuleSavedForFuture =>
+      'Date rule saved; every timetable\'s default schedule will update on the start date';
+
+  @override
+  String get scheduleDateRuleSavedButApplyFailed =>
+      'Date rule saved, but today\'s auto-apply failed (check scheme section count)';
+
+  @override
+  String get scheduleDateRuleDeleted => 'Date rule deleted';
+
+  @override
+  String get scheduleDateRuleDeleteTitle => 'Delete date rule?';
+
+  @override
+  String scheduleDateRuleDeleteMessage(String name) {
+    return 'Delete “$name”? Already-applied schedules are not rolled back automatically; adjust them manually if needed.';
+  }
+
+  @override
+  String scheduleDateRuleSaveFailed(String reason) {
+    return 'Save failed: $reason';
+  }
+
+  @override
+  String get scheduleDateRuleErrorMax => 'Limit of 2 rules reached';
+
+  @override
+  String get scheduleDateRuleErrorOverlap => 'Date range overlaps another rule';
+
+  @override
+  String get scheduleDateRuleErrorInvalidDate => 'Invalid date';
+
+  @override
+  String get scheduleDateRuleErrorEndBeforeStart =>
+      'End date cannot be before start date';
+
+  @override
+  String get scheduleDateRuleErrorSchemeRequired => 'Pick a time scheme';
+
+  @override
+  String get scheduleDateRuleErrorNameRequired => 'Enter a name';
+
+  @override
+  String get scheduleDateRuleNote =>
+      'Location match takes priority over date rules.';
+
+  @override
+  String get frostedGlassModeLabel => 'ガラスモード';
+
+  @override
+  String get frostedGlassModeFrosted => 'クラシックフロスト';
+
+  @override
+  String get frostedGlassModeLiquid => 'リキッドガラス';
+
+  @override
+  String get frostedGlassModeGaussian => 'ガウスぼかし';
+
+  @override
+  String get frostedGlassModeTranslucent => '半透明';
+
+  @override
+  String get frostedLiquidGlassHint => 'リキッドガラスには高性能デバイスが必要です';
+
+  @override
+  String get advancedMaterialTitle => '高度なマテリアル';
+
+  @override
+  String get advancedMaterialEntrySubtitle => 'リキッドガラスのパラメータ調整';
+
+  @override
+  String get liquidGlassPresetLabel => 'リキッドガラスプリセット';
+
+  @override
+  String get liquidGlassPresetClear => 'クリア';
+
+  @override
+  String get liquidGlassPresetLight => 'ライトミスト';
+
+  @override
+  String get liquidGlassPresetStandard => 'スタンダード';
+
+  @override
+  String get liquidGlassPresetDense => 'デンス';
+
+  @override
+  String get liquidGlassPresetCustom => 'カスタム';
+
+  @override
+  String get courseCardSettingsTitle => 'コースカード';
+
+  @override
+  String get courseCardSectionFields => '表示フィールド';
+
+  @override
+  String get courseCardSectionLayout => 'レイアウト';
+
+  @override
+  String get courseCardSurfaceStyleLabel => 'カードの外観';
+
+  @override
+  String get courseCardSurfaceStyleSubtitle => 'コースカードのビジュアルスタイルを選択';
+
+  @override
+  String get courseCardSurfaceStyleSolid => 'ソリッド';
+
+  @override
+  String get courseCardSurfaceStyleTranslucent => '半透明';
+
+  @override
+  String get courseCardSurfaceStyleLiquidGlass => 'リキッドガラス';
+
+  @override
+  String get courseCardSurfaceStyleGaussian => 'ガウスぼかし';
+
+  @override
+  String get courseCardSectionColor => '色';
+
+  @override
+  String get liveSelfCheckTitle => 'セルフチェック';
+
+  @override
+  String get collapsibleLargeTitle => '折りたたみ大タイトル';
+
+  @override
+  String get liquidGlassCustomExpandedTitle => 'カスタムパラメータ';
+
+  @override
+  String get liquidGlassThicknessLabel => '厚さ';
+
+  @override
+  String get liquidGlassBlurLabel => 'ぼかし強度';
+
+  @override
+  String get liquidGlassTintLabel => '色合い強度';
+
+  @override
+  String get liquidGlassLightIntensityLabel => '光の強度';
+
+  @override
+  String get liquidGlassAmbientStrengthLabel => '環境光の強度';
+
+  @override
+  String get liquidGlassRefractiveIndexLabel => '屈折率';
+
+  @override
+  String get liquidGlassSaturationLabel => '彩度';
+
+  @override
+  String get liquidGlassChromaticAberrationLabel => '色収差';
+
+  @override
+  String get liquidGlassLightAngleLabel => '光の角度';
+
+  @override
+  String get liquidGlassVisibilityLabel => '可視性';
+
+  @override
+  String get liquidGlassResetAction => 'デフォルトに戻す';
+
+  @override
+  String get diagnosticsEntryTitle => '診断';
+
+  @override
+  String get memoryStatsEntryTitle => 'メモリ統計';
+
+  @override
+  String get generalSettingsTitle => '一般';
+
+  @override
+  String get settingsResetDefaultsTitle => 'デフォルトにリセット';
+
+  @override
+  String get settingsResetDefaultsConfirmTitle => 'リセットの確認';
+
+  @override
+  String get settingsResetDefaultsConfirmBody => 'すべての設定が出荷時デフォルトにリセットされます。';
+
+  @override
+  String get settingsResetDoneMessage => '設定がリセットされました';
+
+  @override
+  String get timetablePageSettingsTitle => '時間割ページ';
+
+  @override
+  String get timetablePageSectionDensity => '密度';
+
+  @override
+  String get timetablePageSectionBackToWeek => '現在の週に戻る';
+
+  @override
+  String get timetablePageSectionBackground => '背景';
+
+  @override
+  String get largeTitleContentGap => '16.0';
+
+  @override
+  String get selectTimeTitle => '時間を選択';
+
+  @override
+  String get liveSelfCheckSubtitle => 'セルフチェックを実行';
+
+  @override
+  String get frostedSheetPreviewShowTitle => 'プレビューを表示';
+
+  @override
+  String get frostedSheetPreviewShowSubtitle => '上部にフロストガラスプレビューを表示';
+
+  @override
+  String get aboutSupportUpdatesSectionTitle => 'サポートと更新';
+
+  @override
+  String get aboutProductSectionTitle => '製品';
+
+  @override
+  String get aboutCommunitySectionTitle => 'コミュニティ';
+
+  @override
+  String get selectStartTimeTitle => '開始時間を選択';
+
+  @override
+  String get selectEndTimeTitle => '終了時間を選択';
+
+  @override
+  String get weekdayInkContrastTitle => 'テキストコントラスト強化';
+
+  @override
+  String get weekdayInkContrastBodyDark => 'ダークモードでコーステキストのコントラストを強化';
+
+  @override
+  String get weekdayInkContrastBodyLight => 'ライトモードでコーステキストのコントラストを強化';
+
+  @override
+  String get keepCurrentColorAction => '現在の色を保持';
+
+  @override
+  String get settingsTimetableSectionTitle => '時間割';
+
+  @override
+  String get liveIslandLabelEntryEnabled => '有効';
+
+  @override
+  String get liveIslandLabelEntryDisabled => '無効';
+
+  @override
+  String get settingsDisplayAppearanceSectionTitle => '表示と外観';
+
+  @override
+  String get settingsReminderDesktopSectionTitle => 'リマインダーとデスクトップ';
+
+  @override
+  String get settingsAppSectionTitle => 'アプリ';
+
+  @override
+  String get settingsDataShareSectionTitle => 'データと共有';
+
+  @override
+  String get coupleTimetableEntryUnboundLabel => '未バインド';
+
+  @override
+  String get settingsAboutSectionTitle => 'このアプリについて';
+
+  @override
+  String get diagnosticsEntrySubtitle => 'ランタイム診断ログを表示';
+
+  @override
+  String get settingsSemesterScreenTitle => '学期設定';
+
+  @override
+  String get syncCurrentWeekNeedsStartDate => '先に学期開始日を設定してください';
+
+  @override
+  String get liveNotificationPermissionMissing => '通知権限がありません';
+
+  @override
+  String get developerSectionTitle => '開発者向けオプション';
+
+  @override
+  String get liveTestingFixtureEntryTitle => 'ライブテストフィクスチャ';
+
+  @override
+  String get hyperosShowcaseEntryTitle => 'HyperOS コンポーネントショーケース';
+
+  @override
+  String get hyperosShowcaseEntrySubtitle => 'HyperOS コンポーネントプレビュー';
+
+  @override
+  String get miuixShowcaseEntryTitle => 'Miuix コンポーネントショーケース';
+
+  @override
+  String get miuixShowcaseEntrySubtitle => 'Miuix コンポーネントプレビュー';
+
+  @override
+  String get debugUiOverlayToggleTitle => 'デバッグ UI オーバーレイ';
 }

@@ -1,0 +1,132 @@
+diff --git a/lib/screens/live_settings_subpages.dart b/lib/screens/live_settings_subpages.dart
+index 4a754f8..e576857 100644
+--- a/lib/screens/live_settings_subpages.dart
++++ b/lib/screens/live_settings_subpages.dart
+@@ -1,16 +1,17 @@
+ import 'dart:async';
+ import 'dart:convert';
+ import 'dart:io';
+ 
+ import 'package:file_picker/file_picker.dart';
+ import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
+ import 'package:forui/forui.dart';
+ import 'package:university_timetable/l10n/app_localizations.dart';
+ import 'package:university_timetable/l10n/enum_localizations.dart';
+ import 'package:path_provider/path_provider.dart';
+ import 'package:provider/provider.dart';
+ 
+ import '../models/timetable_settings.dart';
+ import '../providers/timetable_provider.dart';
+ import '../services/miui_live_activities_service.dart';
+ import '../utils/hex_color.dart';
+@@ -1374,77 +1375,95 @@ class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
+ class HyperFocusIslandTimeoutScreen extends StatefulWidget {
+   const HyperFocusIslandTimeoutScreen({super.key});
+ 
+   @override
+   State<HyperFocusIslandTimeoutScreen> createState() =>
+       _HyperFocusIslandTimeoutScreenState();
+ }
+ 
+ class _HyperFocusIslandTimeoutScreenState
+     extends State<HyperFocusIslandTimeoutScreen> {
+-  static const int _minSeconds = 30;
+-  static const int _maxSeconds = 3600;
+   late TimetableSettings _draft;
++  late final TextEditingController _preMinutesCtrl;
++  late final TextEditingController _activeMinutesCtrl;
++  late final TextEditingController _postMinutesCtrl;
+   Timer? _autoSaveTimer;
+ 
+   @override
+   void initState() {
+     super.initState();
+     _draft = context.read<TimetableProvider>().settings;
++    _preMinutesCtrl = TextEditingController(
++      text: (_draft.hfIslandTimeoutPre / 60).round().toString(),
++    );
++    _activeMinutesCtrl = TextEditingController(
++      text: (_draft.hfIslandTimeoutActive / 60).round().toString(),
++    );
++    _postMinutesCtrl = TextEditingController(
++      text: (_draft.hfIslandTimeoutPost / 60).round().toString(),
++    );
+   }
+ 
+   @override
+   void dispose() {
++    _preMinutesCtrl.dispose();
++    _activeMinutesCtrl.dispose();
++    _postMinutesCtrl.dispose();
+     if (_autoSaveTimer?.isActive ?? false) {
+       _autoSaveTimer?.cancel();
+       _persistDraft(_draft);
+     } else {
+       _autoSaveTimer?.cancel();
+     }
+     super.dispose();
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     return HyperosSubpage(
+       onBack: () => Navigator.pop(context),
+       title: const Text('岛消失时间'),
+       child: HyperosListView(
+         children: [
+-          HyperosSectionLabel(text: '状态栏岛消失时间（秒）'),
++          HyperosSectionLabel(text: '状态栏岛消失时间（分钟）'),
+           HyperosListGroup(
+             children: [
+-              _buildTimeoutTile('课前', _draft.hfIslandTimeoutPre,
++              _buildTimeoutTile('课前', _preMinutesCtrl,
+                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPre: v))),
+-              _buildTimeoutTile('课中', _draft.hfIslandTimeoutActive,
++              _buildTimeoutTile('课中', _activeMinutesCtrl,
+                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutActive: v))),
+-              _buildTimeoutTile('课后', _draft.hfIslandTimeoutPost,
++              _buildTimeoutTile('课后', _postMinutesCtrl,
+                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPost: v))),
+             ],
+           ),
+         ],
+       ),
+     );
+   }
+ 
+   Widget _buildTimeoutTile(
+     String label,
+-    int value,
++    TextEditingController controller,
+     ValueChanged<int> onChanged,
+   ) {
+-    return HyperosNumberPickerTile(
+-      title: label,
+-      picker: HyperosNumberPicker(
+-        min: _minSeconds,
+-        max: _maxSeconds,
+-        value: value,
+-        onChanged: onChanged,
++    return HyperosTextFieldTile(
++      cardTitle: label,
++      cardSubtitle: '分钟（1~60）',
++      field: HyperosTextField(
++        controller: controller,
++        keyboardType: TextInputType.number,
++        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9]'))],
++        onChanged: (text) {
++          final minutes = int.tryParse(text) ?? 0;
++          final clamped = minutes.clamp(1, 60);
++          onChanged(clamped * 60);
++        },
+       ),
+     );
+   }
+ 
+   void _updateDraft(TimetableSettings next, {bool debounce = true}) {
+     setState(() => _draft = next);
+     _autoSaveTimer?.cancel();
+     if (debounce) {
+       _autoSaveTimer = Timer(
+         const Duration(milliseconds: 250),

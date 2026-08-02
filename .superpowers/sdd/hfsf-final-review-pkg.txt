@@ -1,0 +1,686 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index 7149c07..acc00f9 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -1154,42 +1154,52 @@ class MainActivity : FlutterActivity() {
+                 )
+                 return "系统通知权限未开启，请先在设置中开启通知权限"
+             }
+ 
+             val now = System.currentTimeMillis()
+             val templateStage = when (stage) {
+                 "active", "beforeEnd" -> "active"
+                 "post" -> "post"
+                 else -> "pre"
+             }
++            val realStart = buildCourseTimeMillis(startTime)
++            val realEnd = buildCourseTimeMillis(endTime)
++            val hasRealTime = realStart != null && realEnd != null && realEnd > realStart
+             val classStartAt: Long
+             val classEndAt: Long
+             val timerTarget: Long
+             val hintText: String
+             when (templateStage) {
+                 "active" -> {
+                     classStartAt = now - 10 * 60_000L
+                     classEndAt = now + 5 * 60_000L
+                     timerTarget = classEndAt
+                     hintText = "距下课还有 5 分钟"
+                 }
+                 "post" -> {
+                     classStartAt = now - 20 * 60_000L
+                     classEndAt = now - 60_000L
+                     timerTarget = 0L
+                     hintText = "已下课"
+                 }
+                 else -> {
+-                    classStartAt = now + 5 * 60_000L
+-                    classEndAt = classStartAt + 100 * 60_000L
+-                    timerTarget = classStartAt
+-                    hintText = "距离上课还有 5 分钟"
++                    if (hasRealTime && realStart!! > now) {
++                        classStartAt = realStart
++                        classEndAt = realEnd!!
++                        timerTarget = classStartAt
++                        hintText = "距离上课还有 ${((classStartAt - now) / 60_000L + 1)} 分钟"
++                    } else {
++                        classStartAt = now + 5 * 60_000L
++                        classEndAt = classStartAt + 100 * 60_000L
++                        timerTarget = classStartAt
++                        hintText = "距离上课还有 5 分钟"
++                    }
+                 }
+             }
+ 
+             UmengDiagnosticReporter.record(
+                 context = applicationContext,
+                 category = "send_test_focus_started",
+                 message = DiagnosticLogMessages.SEND_TEST_FOCUS_STARTED,
+                 extras = mapOf(
+                     "stage" to stage,
+                     "courseName" to courseName,
+@@ -1367,20 +1377,25 @@ class MainActivity : FlutterActivity() {
+             val notification = Notification.Builder(this, HYPERFOCUS_TEST_CHANNEL_ID)
+                 .setContentTitle(baseTitleText.ifBlank { courseName })
+                 .setContentText(baseContentText.ifBlank { "查看课表" })
+                 .setSmallIcon(R.mipmap.ic_launcher)
+                 .setOngoing(true)
+                 .setAutoCancel(false)
+                 .addExtras(extras)
+                 .build()
+ 
+             notificationManager.notify(10001, notification)
++            if (timerTarget > 0L && timerTarget > now) {
++                Handler(Looper.getMainLooper()).postDelayed({
++                    notificationManager.cancel(10001)
++                }, timerTarget - now)
++            }
+             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+             val activeIds = notificationManager.activeNotifications.map { it.id }
+             val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
+             Log.d(
+                 "HyperFocusApi",
+                 "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
+             )
+             val activeContainsTest = activeIds.contains(10001)
+             UmengDiagnosticReporter.record(
+@@ -1977,20 +1992,37 @@ class MainActivity : FlutterActivity() {
+     private fun resolveDefaultVibrator(): Vibrator? {
+         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+             val manager =
+                 getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+             manager?.defaultVibrator
+         } else {
+             @Suppress("DEPRECATION")
+             getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+         }
+     }
++
++    private fun buildCourseTimeMillis(timeText: String): Long? {
++        val parts = timeText.split(":")
++        if (parts.size != 2) {
++            return null
++        }
++
++        val hour = parts[0].toIntOrNull() ?: return null
++        val minute = parts[1].toIntOrNull() ?: return null
++
++        return Calendar.getInstance().apply {
++            set(Calendar.HOUR_OF_DAY, hour)
++            set(Calendar.MINUTE, minute)
++            set(Calendar.SECOND, 0)
++            set(Calendar.MILLISECOND, 0)
++        }.timeInMillis
++    }
+ }
+ 
+ internal fun liveShouldMirrorStatusIntoMiuiFocusHint(
+     sdkInt: Int,
+     shouldPromote: Boolean,
+ ): Boolean {
+     return !(sdkInt >= 36 && shouldPromote)
+ }
+ 
+ class LiveUpdateService : Service() {
+diff --git a/lib/screens/live_settings_subpages.dart b/lib/screens/live_settings_subpages.dart
+index 6aea16e..e576857 100644
+--- a/lib/screens/live_settings_subpages.dart
++++ b/lib/screens/live_settings_subpages.dart
+@@ -1,16 +1,17 @@
+ import 'dart:async';
+ import 'dart:convert';
+ import 'dart:io';
+ 
+ import 'package:file_picker/file_picker.dart';
+ import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
+ import 'package:forui/forui.dart';
+ import 'package:university_timetable/l10n/app_localizations.dart';
+ import 'package:university_timetable/l10n/enum_localizations.dart';
+ import 'package:path_provider/path_provider.dart';
+ import 'package:provider/provider.dart';
+ 
+ import '../models/timetable_settings.dart';
+ import '../providers/timetable_provider.dart';
+ import '../services/miui_live_activities_service.dart';
+ import '../utils/hex_color.dart';
+@@ -1374,77 +1375,95 @@ class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
+ class HyperFocusIslandTimeoutScreen extends StatefulWidget {
+   const HyperFocusIslandTimeoutScreen({super.key});
+ 
+   @override
+   State<HyperFocusIslandTimeoutScreen> createState() =>
+       _HyperFocusIslandTimeoutScreenState();
+ }
+ 
+ class _HyperFocusIslandTimeoutScreenState
+     extends State<HyperFocusIslandTimeoutScreen> {
+-  static const int _minSeconds = 30;
+-  static const int _maxSeconds = 3600;
+   late TimetableSettings _draft;
++  late final TextEditingController _preMinutesCtrl;
++  late final TextEditingController _activeMinutesCtrl;
++  late final TextEditingController _postMinutesCtrl;
+   Timer? _autoSaveTimer;
+ 
+   @override
+   void initState() {
+     super.initState();
+     _draft = context.read<TimetableProvider>().settings;
++    _preMinutesCtrl = TextEditingController(
++      text: (_draft.hfIslandTimeoutPre / 60).round().toString(),
++    );
++    _activeMinutesCtrl = TextEditingController(
++      text: (_draft.hfIslandTimeoutActive / 60).round().toString(),
++    );
++    _postMinutesCtrl = TextEditingController(
++      text: (_draft.hfIslandTimeoutPost / 60).round().toString(),
++    );
+   }
+ 
+   @override
+   void dispose() {
++    _preMinutesCtrl.dispose();
++    _activeMinutesCtrl.dispose();
++    _postMinutesCtrl.dispose();
+     if (_autoSaveTimer?.isActive ?? false) {
+       _autoSaveTimer?.cancel();
+       _persistDraft(_draft);
+     } else {
+       _autoSaveTimer?.cancel();
+     }
+     super.dispose();
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     return HyperosSubpage(
+       onBack: () => Navigator.pop(context),
+       title: const Text('岛消失时间'),
+       child: HyperosListView(
+         children: [
+-          HyperosSectionLabel(text: '状态栏岛消失时间（秒）'),
++          HyperosSectionLabel(text: '状态栏岛消失时间（分钟）'),
+           HyperosListGroup(
+             children: [
+-              _buildTimeoutTile('课前', _draft.hfIslandTimeoutPre,
++              _buildTimeoutTile('课前', _preMinutesCtrl,
+                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPre: v))),
+-              _buildTimeoutTile('课中', _draft.hfIslandTimeoutActive,
++              _buildTimeoutTile('课中', _activeMinutesCtrl,
+                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutActive: v))),
+-              _buildTimeoutTile('课后', _draft.hfIslandTimeoutPost,
++              _buildTimeoutTile('课后', _postMinutesCtrl,
+                   (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPost: v))),
+             ],
+           ),
+         ],
+       ),
+     );
+   }
+ 
+   Widget _buildTimeoutTile(
+     String label,
+-    int value,
++    TextEditingController controller,
+     ValueChanged<int> onChanged,
+   ) {
+-    return HyperosNumberPickerTile(
+-      title: label,
+-      picker: HyperosNumberPicker(
+-        min: _minSeconds,
+-        max: _maxSeconds,
+-        value: value,
+-        onChanged: onChanged,
++    return HyperosTextFieldTile(
++      cardTitle: label,
++      cardSubtitle: '分钟（1~60）',
++      field: HyperosTextField(
++        controller: controller,
++        keyboardType: TextInputType.number,
++        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9]'))],
++        onChanged: (text) {
++          final minutes = int.tryParse(text) ?? 0;
++          final clamped = minutes.clamp(1, 60);
++          onChanged(clamped * 60);
++        },
+       ),
+     );
+   }
+ 
+   void _updateDraft(TimetableSettings next, {bool debounce = true}) {
+     setState(() => _draft = next);
+     _autoSaveTimer?.cancel();
+     if (debounce) {
+       _autoSaveTimer = Timer(
+         const Duration(milliseconds: 250),
+@@ -1462,20 +1481,69 @@ class _HyperFocusIslandTimeoutScreenState
+         if (!mounted) return;
+         if (message != null) {
+           showAppToast(context, message: message);
+           setState(() => _draft = provider.settings);
+         }
+       }).catchError((_) {}),
+     );
+   }
+ }
+ 
++class _VariableMultiSelectSheet extends StatefulWidget {
++  const _VariableMultiSelectSheet({
++    required this.variables,
++    required this.initial,
++  });
++
++  final List<String> variables;
++  final List<String> initial;
++
++  @override
++  State<_VariableMultiSelectSheet> createState() =>
++      _VariableMultiSelectSheetState();
++}
++
++class _VariableMultiSelectSheetState extends State<_VariableMultiSelectSheet> {
++  late final Set<String> _selected = widget.initial.toSet();
++
++  @override
++  Widget build(BuildContext context) {
++    return HyperosSheet(
++      title: '选择显示信息',
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          for (final v in widget.variables)
++            HyperosCheckboxTile(
++              title: v,
++              value: _selected.contains(v),
++              onChanged: (on) => setState(() {
++                if (on) {
++                  _selected.add(v);
++                } else {
++                  _selected.remove(v);
++                }
++              }),
++            ),
++          const SizedBox(height: 12),
++          HyperosButton(
++            label: '确定',
++            expand: true,
++            onPressed: () => Navigator.pop(context, _selected.toList()),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
+ class HyperFocusStatusIslandScreen extends StatefulWidget {
+   const HyperFocusStatusIslandScreen({super.key});
+ 
+   @override
+   State<HyperFocusStatusIslandScreen> createState() => _HyperFocusStatusIslandScreenState();
+ }
+ 
+ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScreen> {
+   String _selectedStage = 'pre';
+ 
+@@ -1609,65 +1677,49 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
+ 
+   Future<void> _resetStage() async {
+     for (final key in _controllers.keys) {
+       if (key.endsWith('_$_s')) {
+         _controllers[key]?.text = _defaultTemplates[key]!;
+       }
+     }
+     await _saveTemplates();
+   }
+ 
+-  Widget _variableChipField(String key, String label) {
++  Widget _variableSelectField(String key, String label) {
+     final current = _controllers[key]?.text ?? '';
+-    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
+-    return Padding(
+-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+-      child: Column(
+-        crossAxisAlignment: CrossAxisAlignment.start,
+-        children: [
+-          Text(label, style: HyperosTypography.listTitle(context)),
+-          const SizedBox(height: 8),
+-          Wrap(
+-            spacing: 8,
+-            runSpacing: 8,
+-            children: _availableVariables.map((v) {
+-              final isOn = selected.contains(v);
+-              return ChoiceChip(
+-                label: Text(v, style: TextStyle(
+-                  fontSize: 13,
+-                  color: isOn ? Colors.white : null,
+-                )),
+-                selected: isOn,
+-                onSelected: (on) {
+-                  setState(() {
+-                    final list = current.isEmpty
+-                        ? <String>[]
+-                        : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+-                    if (on && !list.contains(v)) {
+-                      list.add(v);
+-                    } else if (!on) {
+-                      list.remove(v);
+-                    }
+-                    _controllers[key]?.text = list.join(',');
+-                  });
+-                },
+-                selectedColor: Theme.of(context).colorScheme.primary,
+-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+-                side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
+-                visualDensity: VisualDensity.compact,
+-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+-              );
+-            }).toList(),
+-          ),
+-        ],
++    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
++    return HyperosListTile(
++      icon: Icons.tune,
++      title: label,
++      details: _selectedSummary(selected),
++      onTap: () => _openVariableMultiSelect(key, selected),
++    );
++  }
++
++  String _selectedSummary(List<String> selected) {
++    if (selected.isEmpty) return '未选择';
++    if (selected.length <= 4) return selected.join('、');
++    return '${selected.sublist(0, 4).join('、')}…';
++  }
++
++  Future<void> _openVariableMultiSelect(String key, List<String> selected) async {
++    final result = await showHyperosSheet<List<String>>(
++      context: context,
++      builder: (sheetContext) => _VariableMultiSelectSheet(
++        variables: _availableVariables,
++        initial: selected,
+       ),
+     );
++    if (result == null) return;
++    setState(() {
++      _controllers[key]?.text = result.join(',');
++    });
+   }
+ 
+   @override
+   void dispose() {
+     for (final c in _controllers.values) {
+       c.dispose();
+     }
+     super.dispose();
+   }
+ 
+@@ -1688,23 +1740,23 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
+               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                 children: [
+                   Text(
+                     '点击选择要在各区域显示的信息',
+                     style: HyperosTypography.listDetail(context),
+                   ),
+                   const SizedBox(height: 8),
+                   HyperosSectionLabel(text: '状态栏岛'),
+-                  _variableChipField('ticker_$_s', '状态栏/息屏文本'),
+-                  _variableChipField('islandA_$_s', '岛左侧文字'),
+-                  _variableChipField('islandB_$_s', '岛右侧后缀'),
++                  _variableSelectField('ticker_$_s', '状态栏/息屏文本'),
++                  _variableSelectField('islandA_$_s', '岛左侧文字'),
++                  _variableSelectField('islandB_$_s', '岛右侧后缀'),
+                   const HyperosSectionGap(),
+                   Row(
+                     children: [
+                       Expanded(
+                         child: FButton(
+                           onPress: _saveTemplates,
+                           child: const Text('保存'),
+                         ),
+                       ),
+                       const SizedBox(width: 12),
+@@ -1892,65 +1944,49 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
+ 
+   Future<void> _resetStage() async {
+     for (final key in _controllers.keys) {
+       if (key.endsWith('_$_s')) {
+         _controllers[key]?.text = _defaultTemplates[key]!;
+       }
+     }
+     await _saveTemplates();
+   }
+ 
+-  Widget _variableChipField(String key, String label) {
++  Widget _variableSelectField(String key, String label) {
+     final current = _controllers[key]?.text ?? '';
+-    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
+-    return Padding(
+-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+-      child: Column(
+-        crossAxisAlignment: CrossAxisAlignment.start,
+-        children: [
+-          Text(label, style: HyperosTypography.listTitle(context)),
+-          const SizedBox(height: 8),
+-          Wrap(
+-            spacing: 8,
+-            runSpacing: 8,
+-            children: _availableVariables.map((v) {
+-              final isOn = selected.contains(v);
+-              return ChoiceChip(
+-                label: Text(v, style: TextStyle(
+-                  fontSize: 13,
+-                  color: isOn ? Colors.white : null,
+-                )),
+-                selected: isOn,
+-                onSelected: (on) {
+-                  setState(() {
+-                    final list = current.isEmpty
+-                        ? <String>[]
+-                        : current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+-                    if (on && !list.contains(v)) {
+-                      list.add(v);
+-                    } else if (!on) {
+-                      list.remove(v);
+-                    }
+-                    _controllers[key]?.text = list.join(',');
+-                  });
+-                },
+-                selectedColor: Theme.of(context).colorScheme.primary,
+-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+-                side: isOn ? BorderSide.none : BorderSide(color: Theme.of(context).dividerColor),
+-                visualDensity: VisualDensity.compact,
+-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+-              );
+-            }).toList(),
+-          ),
+-        ],
++    final selected = current.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
++    return HyperosListTile(
++      icon: Icons.tune,
++      title: label,
++      details: _selectedSummary(selected),
++      onTap: () => _openVariableMultiSelect(key, selected),
++    );
++  }
++
++  String _selectedSummary(List<String> selected) {
++    if (selected.isEmpty) return '未选择';
++    if (selected.length <= 4) return selected.join('、');
++    return '${selected.sublist(0, 4).join('、')}…';
++  }
++
++  Future<void> _openVariableMultiSelect(String key, List<String> selected) async {
++    final result = await showHyperosSheet<List<String>>(
++      context: context,
++      builder: (sheetContext) => _VariableMultiSelectSheet(
++        variables: _availableVariables,
++        initial: selected,
+       ),
+     );
++    if (result == null) return;
++    setState(() {
++      _controllers[key]?.text = result.join(',');
++    });
+   }
+ 
+   @override
+   void dispose() {
+     for (final c in _controllers.values) {
+       c.dispose();
+     }
+     super.dispose();
+   }
+ 
+@@ -1971,27 +2007,27 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
+               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                 children: [
+                   Text(
+                     '点击选择要在各区域显示的信息',
+                     style: HyperosTypography.listDetail(context),
+                   ),
+                   const SizedBox(height: 8),
+                   HyperosSectionLabel(text: '展开态'),
+-                  _variableChipField('baseTitle_$_s', '主要标题'),
+-                  _variableChipField('baseContent_$_s', '次要文本1'),
+-                  _variableChipField('baseSubcontent_$_s', '次要文本2'),
+-                  _variableChipField('hintTitle_$_s', '主要小文本1'),
+-                  _variableChipField('hintContent_$_s', '前置文本1'),
+-                  _variableChipField('hintSubcontent_$_s', '前置文本2'),
+-                  _variableChipField('hintSubtitle_$_s', '主要小文本2'),
++                  _variableSelectField('baseTitle_$_s', '主要标题'),
++                  _variableSelectField('baseContent_$_s', '次要文本1'),
++                  _variableSelectField('baseSubcontent_$_s', '次要文本2'),
++                  _variableSelectField('hintTitle_$_s', '主要小文本1'),
++                  _variableSelectField('hintContent_$_s', '前置文本1'),
++                  _variableSelectField('hintSubcontent_$_s', '前置文本2'),
++                  _variableSelectField('hintSubtitle_$_s', '主要小文本2'),
+                   const HyperosSectionGap(),
+                   Row(
+                     children: [
+                       Expanded(
+                         child: FButton(
+                           onPress: _saveTemplates,
+                           child: const Text('保存'),
+                         ),
+                       ),
+                       const SizedBox(width: 12),
+diff --git a/lib/screens/timetable_settings_screen.dart b/lib/screens/timetable_settings_screen.dart
+index c5db775..2883385 100644
+--- a/lib/screens/timetable_settings_screen.dart
++++ b/lib/screens/timetable_settings_screen.dart
+@@ -1824,56 +1824,20 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
+                 await HyperosNavigation.push(
+                   context,
+                   builder: (_) => const HyperFocusExpandedIslandScreen(),
+                 );
+                 if (!mounted) return;
+                 setState(() {
+                   _draft = context.read<TimetableProvider>().settings;
+                 });
+               },
+             ),
+-            HyperosListTile(
+-              icon: Icons.image_outlined,
+-              title: '岛视觉',
+-              details: '岛标签图、Logo、字号、偏移、展开图标',
+-              onTap: () async {
+-                await HyperosNavigation.push(
+-                  context,
+-                  builder: (_) => LiveDisplaySettingsScreen(
+-                    title: '岛视觉（课前）',
+-                    forDuringEnd: false,
+-                  ),
+-                );
+-                if (!mounted) return;
+-                setState(() {
+-                  _draft = context.read<TimetableProvider>().settings;
+-                });
+-              },
+-            ),
+-            HyperosListTile(
+-              icon: Icons.image_outlined,
+-              title: '岛视觉（课中/课后）',
+-              details: '岛标签图、Logo、字号、偏移、展开图标',
+-              onTap: () async {
+-                await HyperosNavigation.push(
+-                  context,
+-                  builder: (_) => LiveDisplaySettingsScreen(
+-                    title: '岛视觉（课中/课后）',
+-                    forDuringEnd: true,
+-                  ),
+-                );
+-                if (!mounted) return;
+-                setState(() {
+-                  _draft = context.read<TimetableProvider>().settings;
+-                });
+-              },
+-            ),
+           ],
+         ),
+         const HyperosSectionGap(),
+         HyperosSectionLabel(text: '消失时间'),
+         HyperosListGroup(
+           children: [
+             HyperosListTile(
+               icon: Icons.timer_outlined,
+               title: '岛消失时间',
+               details: '按课前/课中/课后配置状态栏岛消失时间',
+@@ -3417,43 +3381,49 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+         title: l10n.liveTestingRawDataTitle,
+         entries: const {},
+         trailingJson: _debugStatus == null
+             ? ''
+             : const JsonEncoder.withIndent('  ').convert(_debugStatus),
+       ),
+       _HyperFocusTestingSection.localLogs => _buildLocalLogsSection(context),
+     };
+   }
+ 
++  String _ellipsize(String? value, {int max = 24}) {
++    final v = value?.trim() ?? '';
++    if (v.length <= max) return v;
++    return '${v.substring(0, max)}…';
++  }
++
+   Widget _buildDebugSection({
+     required BuildContext context,
+     required String title,
+     required Map<String, String> entries,
+     String trailingJson = '',
+   }) {
+     return Column(
+       mainAxisSize: MainAxisSize.min,
+       children: [
+         HyperosSectionLabel(text: title),
+         HyperosListGroup(
+           children: [
+             for (final entry in entries.entries)
+               HyperosListTile(
+                 icon: Icons.label_outline,
+                 title: entry.key,
+-                details: entry.value,
++                details: _ellipsize(entry.value),
+               ),
+             if (trailingJson.isNotEmpty)
+               HyperosListTile(
+                 icon: Icons.data_object,
+                 title: 'JSON',
+-                details: trailingJson,
++                details: _ellipsize(trailingJson, max: 60),
+               ),
+           ],
+         ),
+         const HyperosSectionGap(),
+       ],
+     );
+   }
+ 
+   Widget _buildLocalLogsSection(BuildContext context) {
+     final l10n = AppLocalizations.of(context)!;

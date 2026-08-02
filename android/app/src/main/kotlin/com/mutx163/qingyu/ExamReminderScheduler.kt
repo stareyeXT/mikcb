@@ -31,6 +31,7 @@ object ExamReminderScheduler {
     private const val EXTRA_OFFSET_MINUTES = "offsetMinutes"
     private const val EXTRA_TITLE = "title"
     private const val EXTRA_BODY = "body"
+    private const val OVERDUE_DELIVERY_WINDOW_MILLIS = 24L * 60L * 60L * 1000L
 
     data class Fire(
         val examId: String,
@@ -61,7 +62,11 @@ object ExamReminderScheduler {
         manager.createNotificationChannel(channel)
     }
 
-    fun reconcile(context: Context, firesPayload: List<*>) {
+    fun reconcile(
+        context: Context,
+        firesPayload: List<*>,
+        activeExamIds: Set<String> = emptySet(),
+    ) {
         ensureChannel(context)
         val appContext = context.applicationContext
         val newFires = parseFires(firesPayload)
@@ -70,11 +75,30 @@ object ExamReminderScheduler {
 
         val nowMillis = System.currentTimeMillis()
         val futureFires = newFires.filter { it.fireAtMillis > nowMillis - 30_000L }
-        for (fire in futureFires) {
+        val futureRequestCodes = futureFires.mapTo(mutableSetOf()) { it.requestCode }
+        val failedOverdueFires = oldFires.mapNotNull { fire ->
+            val originalFireAt = originalFireAtMillis(fire)
+            val isRecentFailure = originalFireAt <= nowMillis &&
+                originalFireAt > nowMillis - OVERDUE_DELIVERY_WINDOW_MILLIS
+            if (
+                fire.examId !in activeExamIds ||
+                fire.requestCode in futureRequestCodes ||
+                !isRecentFailure
+            ) {
+                null
+            } else {
+                // Successful notifications remove themselves from oldFires.
+                // Only a retained entry can represent a permission/posting
+                // failure, so retry it once the app reconciles again.
+                fire.copy(fireAtMillis = nowMillis + 1_000L)
+            }
+        }
+        val schedulableFires = futureFires + failedOverdueFires
+        for (fire in schedulableFires) {
             scheduleAlarm(appContext, fire)
         }
-        persistFires(appContext, futureFires)
-        Log.d(TAG, "reconcile scheduled=${futureFires.size} cancelledOld=${oldFires.size}")
+        persistFires(appContext, schedulableFires)
+        Log.d(TAG, "reconcile scheduled=${schedulableFires.size} cancelledOld=${oldFires.size}")
     }
 
     fun clear(context: Context) {
@@ -96,13 +120,11 @@ object ExamReminderScheduler {
         cancelFires(appContext, fires)
         val nowMillis = System.currentTimeMillis()
         val rearmed = fires.mapNotNull { fire ->
-            val fireAt = if (fire.examStartMillis > 0L && fire.offsetMinutes > 0) {
-                fire.examStartMillis - fire.offsetMinutes * 60_000L
-            } else {
-                fire.fireAtMillis
-            }
-            if (fireAt <= nowMillis) {
+            val fireAt = originalFireAtMillis(fire)
+            if (fireAt <= nowMillis - OVERDUE_DELIVERY_WINDOW_MILLIS) {
                 null
+            } else if (fireAt <= nowMillis) {
+                fire.copy(fireAtMillis = nowMillis + 1_000L)
             } else {
                 fire.copy(fireAtMillis = fireAt)
             }
@@ -114,37 +136,58 @@ object ExamReminderScheduler {
         Log.d(TAG, "boot reschedule count=${rearmed.size}")
     }
 
+    private fun originalFireAtMillis(fire: Fire): Long {
+        return if (fire.examStartMillis > 0L && fire.offsetMinutes > 0) {
+            fire.examStartMillis - fire.offsetMinutes * 60_000L
+        } else {
+            fire.fireAtMillis
+        }
+    }
+
     fun handleFire(context: Context, intent: Intent) {
         ensureChannel(context)
         val appContext = context.applicationContext
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, -1)
         val examId = intent.getStringExtra(EXTRA_EXAM_ID).orEmpty()
         val offsetMinutes = intent.getIntExtra(EXTRA_OFFSET_MINUTES, 0)
-        val title = intent.getStringExtra(EXTRA_TITLE)
-            ?: appContext.getString(R.string.notification_exam_reminder_default_title)
-        val body = intent.getStringExtra(EXTRA_BODY).orEmpty()
 
-        val stillScheduled = loadFires(appContext).any {
+        // Only deliver fires that are still in the persisted schedule. Receiver is
+        // exported for BOOT_COMPLETED etc.; never trust Intent extras alone or an
+        // external app can forge exam-reminder notifications.
+        val scheduled = loadFires(appContext)
+        val matched = scheduled.firstOrNull {
             it.requestCode == requestCode ||
-                (it.examId == examId && it.offsetMinutes == offsetMinutes)
+                (examId.isNotBlank() && it.examId == examId && it.offsetMinutes == offsetMinutes)
         }
-        if (!stillScheduled && requestCode < 0) {
+        if (matched == null) {
+            Log.w(TAG, "drop fire: not scheduled requestCode=$requestCode examId=$examId")
             return
         }
 
-        postNotification(
+        // Prefer persisted copy over Intent extras so spoofed payloads cannot override.
+        val title = matched.title.takeIf { it.isNotBlank() }
+            ?: appContext.getString(R.string.notification_exam_reminder_default_title)
+        val body = matched.body.ifBlank {
+            appContext.getString(R.string.notification_exam_reminder_default_body)
+        }
+
+        val posted = postNotification(
             context = appContext,
-            notificationId = if (requestCode >= 0) requestCode else examId.hashCode(),
+            notificationId = if (matched.requestCode != 0) matched.requestCode else matched.examId.hashCode(),
             title = title,
-            body = body.ifBlank {
-                appContext.getString(R.string.notification_exam_reminder_default_body)
-            },
+            body = body,
         )
 
-        // Drop the fired entry so later cancels / boot reschedule stay accurate.
-        val remaining = loadFires(appContext).filterNot {
-            it.requestCode == requestCode ||
-                (it.examId == examId && it.offsetMinutes == offsetMinutes)
+        // Only drop the fire after a successful notify. If POST_NOTIFICATIONS is
+        // denied (or NotificationManager is unavailable), keep the entry so the
+        // user can still receive it after granting permission / reboot.
+        if (!posted) {
+            Log.w(TAG, "keep fire after notify failure requestCode=$requestCode examId=$examId")
+            return
+        }
+        val remaining = scheduled.filterNot {
+            it.requestCode == matched.requestCode ||
+                (it.examId == matched.examId && it.offsetMinutes == matched.offsetMinutes)
         }
         persistFires(appContext, remaining)
     }
@@ -154,15 +197,15 @@ object ExamReminderScheduler {
         notificationId: Int,
         title: String,
         body: String,
-    ) {
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+    ): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = context.checkSelfPermission(
                 android.Manifest.permission.POST_NOTIFICATIONS,
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!granted) {
                 Log.w(TAG, "skip notify: POST_NOTIFICATIONS not granted")
-                return
+                return false
             }
         }
 
@@ -195,6 +238,7 @@ object ExamReminderScheduler {
             .build()
 
         manager.notify(notificationId, notification)
+        return true
     }
 
     private fun scheduleAlarm(context: Context, fire: Fire) {

@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/partner_timetable_binding.dart';
 import '../models/course.dart';
+import '../models/location_time_group.dart';
+import '../models/schedule_date_rule.dart';
 import '../models/time_scheme.dart';
 import '../models/timetable_profile.dart';
 import '../models/timetable_settings.dart';
@@ -17,6 +19,10 @@ class StorageService {
   static const String _profilesKey = 'timetable_profiles';
   static const String _activeProfileIdKey = 'active_timetable_profile_id';
   static const String _timeSchemesKey = 'time_schemes';
+  static const String _locationTimeGroupsKey = 'location_time_groups';
+  static const String _scheduleDateRulesKey = 'schedule_date_rules';
+  static const String _scheduleDateRuleLastAppliedSignatureKey =
+      'schedule_date_rule_last_applied_signature';
   static const String _hasSeenUserGuideKey = 'has_seen_user_guide';
   static const String _acceptedPrivacyPolicyKey = 'accepted_privacy_policy';
   static const String _hasCompletedOnboardingKey = 'has_completed_onboarding';
@@ -44,6 +50,8 @@ class StorageService {
   bool _timeSchemesEnsured = false;
   List<TimetableProfile>? _profilesListCache;
   List<TimeScheme>? _timeSchemesListCache;
+  List<LocationTimeGroup>? _locationTimeGroupsListCache;
+  List<ScheduleDateRule>? _scheduleDateRulesListCache;
 
   void _invalidateProfilesListCache() {
     _profilesListCache = null;
@@ -69,6 +77,8 @@ class StorageService {
     _ensuredForPrefs = null;
     _profilesListCache = null;
     _timeSchemesListCache = null;
+    _locationTimeGroupsListCache = null;
+    _scheduleDateRulesListCache = null;
     _profilesEnsured = false;
     _timeSchemesEnsured = false;
     _hidePrefixMigrated = false;
@@ -534,7 +544,9 @@ class StorageService {
     return parsed.profiles;
   }
 
-  Future<void> _writeProfilesWithoutLock(List<TimetableProfile> profiles) async {
+  Future<void> _writeProfilesWithoutLock(
+    List<TimetableProfile> profiles,
+  ) async {
     if (_prefs == null) await init();
     final payload = jsonEncode(
       profiles.map((profile) => profile.toJson()).toList(),
@@ -636,6 +648,122 @@ class StorageService {
     );
     await _prefs?.setString(_timeSchemesKey, payload);
     _timeSchemesListCache = List<TimeScheme>.from(schemes);
+  }
+
+  Future<List<LocationTimeGroup>> getLocationTimeGroups() async {
+    if (_prefs == null) await init();
+    final cached = _locationTimeGroupsListCache;
+    if (cached != null) {
+      return cached;
+    }
+
+    final rawGroups = _prefs?.getString(_locationTimeGroupsKey);
+    if (rawGroups == null || rawGroups.isEmpty) {
+      _locationTimeGroupsListCache = const [];
+      return const [];
+    }
+
+    final decoded = await _readJsonListPreference(_locationTimeGroupsKey);
+    if (decoded == null) {
+      _locationTimeGroupsListCache = const [];
+      return const [];
+    }
+    try {
+      final groups = decoded
+          .map(
+            (item) => LocationTimeGroup.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .where((group) => group.id.isNotEmpty)
+          .toList();
+      _locationTimeGroupsListCache = groups;
+      return groups;
+    } catch (_) {
+      final raw = _prefs?.getString(_locationTimeGroupsKey);
+      if (raw != null) {
+        await _backupAndRemoveCorruptString(_locationTimeGroupsKey, raw);
+      }
+      _locationTimeGroupsListCache = const [];
+      return const [];
+    }
+  }
+
+  Future<void> saveLocationTimeGroups(List<LocationTimeGroup> groups) async {
+    if (_prefs == null) await init();
+    final payload = jsonEncode(groups.map((group) => group.toJson()).toList());
+    await _prefs?.setString(_locationTimeGroupsKey, payload);
+    _locationTimeGroupsListCache = List<LocationTimeGroup>.from(groups);
+  }
+
+  Future<List<ScheduleDateRule>> getScheduleDateRules() async {
+    if (_prefs == null) await init();
+    final cached = _scheduleDateRulesListCache;
+    if (cached != null) {
+      return cached;
+    }
+
+    final rawRules = _prefs?.getString(_scheduleDateRulesKey);
+    if (rawRules == null || rawRules.isEmpty) {
+      _scheduleDateRulesListCache = const [];
+      return const [];
+    }
+
+    final decoded = await _readJsonListPreference(_scheduleDateRulesKey);
+    if (decoded == null) {
+      _scheduleDateRulesListCache = const [];
+      return const [];
+    }
+    try {
+      final rules = decoded
+          .map(
+            (item) => ScheduleDateRule.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .where((rule) => rule.id.isNotEmpty)
+          .toList();
+      _scheduleDateRulesListCache = rules;
+      return rules;
+    } catch (_) {
+      final raw = _prefs?.getString(_scheduleDateRulesKey);
+      if (raw != null) {
+        await _backupAndRemoveCorruptString(_scheduleDateRulesKey, raw);
+      }
+      _scheduleDateRulesListCache = const [];
+      return const [];
+    }
+  }
+
+  Future<void> saveScheduleDateRules(List<ScheduleDateRule> rules) async {
+    if (_prefs == null) await init();
+    final payload = jsonEncode(rules.map((rule) => rule.toJson()).toList());
+    await _prefs?.setString(_scheduleDateRulesKey, payload);
+    _scheduleDateRulesListCache = List<ScheduleDateRule>.from(rules);
+  }
+
+  /// Last bulk-applied date-rule signature (ruleId|schemeId|start|end).
+  Future<String?> getScheduleDateRuleLastAppliedSignature() async {
+    if (_prefs == null) await init();
+    final value = _prefs
+        ?.getString(_scheduleDateRuleLastAppliedSignatureKey)
+        ?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return value;
+  }
+
+  Future<void> saveScheduleDateRuleLastAppliedSignature(
+    String? signature,
+  ) async {
+    if (_prefs == null) await init();
+    final trimmed = signature?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      await _prefs?.remove(_scheduleDateRuleLastAppliedSignatureKey);
+      return;
+    }
+    await _prefs?.setString(_scheduleDateRuleLastAppliedSignatureKey, trimmed);
   }
 
   // ---------------------------------------------------------------------------

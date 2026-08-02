@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/enum_localizations.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +11,8 @@ import '../providers/timetable_provider.dart';
 import '../utils/app_toast.dart';
 import '../utils/hex_color.dart';
 import '../widgets/course_template_picker_sheet.dart';
+import '../widgets/miuix_date_picker_sheet.dart';
+import '../widgets/miuix_time_picker_sheet.dart';
 import '../ui/hyperos/hyperos.dart';
 
 class AddExamScreen extends StatefulWidget {
@@ -633,8 +634,8 @@ class _AddExamScreenState extends State<AddExamScreen> {
 
     if (semesterStart == null) {
       // 没有设置开学日期，回退到标准日历选择器
-      final picked = await showDatePicker(
-        context: context,
+      final picked = await showMiuixDatePickerSheet(
+        context,
         initialDate: _selectedDate,
         firstDate: DateTime.now().subtract(const Duration(days: 365)),
         lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
@@ -744,8 +745,8 @@ class _AddExamScreenState extends State<AddExamScreen> {
                     variant: HyperosButtonVariant.secondary,
                     expand: true,
                     onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: ctx,
+                      final picked = await showMiuixDatePickerSheet(
+                        ctx,
                         initialDate: getDateForWeekAndDay(
                           selectedWeek,
                           selectedDayOfWeek ?? DateTime.now().weekday,
@@ -909,8 +910,13 @@ class _AddExamScreenState extends State<AddExamScreen> {
   }
 
   Future<void> _pickTime({required bool isStart}) async {
+    final l10n = AppLocalizations.of(context)!;
     final initial = isStart ? _startTime : _endTime;
-    final picked = await showTimePicker(context: context, initialTime: initial);
+    final picked = await showMiuixTimePickerSheet(
+      context,
+      initialTime: initial,
+      title: isStart ? l10n.selectStartTimeTitle : l10n.selectEndTimeTitle,
+    );
     if (picked != null) {
       setState(() {
         if (isStart) {
@@ -954,6 +960,17 @@ class _AddExamScreenState extends State<AddExamScreen> {
       showAppToast(
         context,
         message: l10n.examDateRequired,
+        kind: AppToastKind.warning,
+      );
+      return;
+    }
+
+    final startMinutes = _startTime.hour * 60 + _startTime.minute;
+    final endMinutes = _endTime.hour * 60 + _endTime.minute;
+    if (endMinutes <= startMinutes) {
+      showAppToast(
+        context,
+        message: l10n.examEndTimeBeforeStart,
         kind: AppToastKind.warning,
       );
       return;

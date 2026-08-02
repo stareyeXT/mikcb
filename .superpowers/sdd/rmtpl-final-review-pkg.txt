@@ -1,0 +1,1084 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index ec4dc49..54b6801 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -2052,63 +2052,46 @@ class LiveUpdateService : Service() {
+         fun buildHyperFocusDebugStatus(context: Context): Map<String, Any?> {
+             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+             val channel = notificationManager.getNotificationChannel(MainActivity.HYPERFOCUS_TEST_CHANNEL_ID)
+             val channelBlocked = channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE
+             val testPrefs = context.getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
+             val hasLastTest = testPrefs.contains("last_stage")
+             val lastStage = testPrefs.getString("last_stage", null)
+             val lastSucceeded = if (testPrefs.contains("last_succeeded")) testPrefs.getBoolean("last_succeeded", false) else null
+             val lastMessage = testPrefs.getString("last_message", null)
+             val lastAtMillis = if (testPrefs.contains("last_at_millis")) testPrefs.getLong("last_at_millis", 0L) else null
+-            val templates = loadHyperFocusTemplates(context)
+             val scheduling = LiveUpdateScheduler.buildNextTriggerDebugInfo(context)
+ 
+-            fun templateFlags(stage: String): Map<String, Boolean> = linkedMapOf(
+-                "ticker" to (templates["ticker_$stage"]?.isNotBlank() == true),
+-                "islandA" to (templates["islandA_$stage"]?.isNotBlank() == true),
+-                "islandB" to (templates["islandB_$stage"]?.isNotBlank() == true),
+-                "baseTitle" to (templates["baseTitle_$stage"]?.isNotBlank() == true),
+-                "baseContent" to (templates["baseContent_$stage"]?.isNotBlank() == true),
+-                "baseSubcontent" to (templates["baseSubcontent_$stage"]?.isNotBlank() == true),
+-                "hintTitle" to (templates["hintTitle_$stage"]?.isNotBlank() == true),
+-            )
+-
+             val schedulingSummary = linkedMapOf<String, Any?>(
+                 "schedulerReady" to (scheduling["nextTriggerAtMillis"] != null),
+                 "nextTriggerCourseName" to scheduling["nextCourseName"],
+                 "nextTriggerStage" to scheduling["nextTriggerStage"],
+                 "nextTriggerAtMillis" to scheduling["nextTriggerAtMillis"],
+             )
+ 
+             return linkedMapOf(
+                 "generatedAtMillis" to System.currentTimeMillis(),
+                 "summary" to linkedMapOf(
+                     "hasNotificationPermission" to hasNotificationPermissionCompat(context),
+                     "testChannelBlocked" to channelBlocked,
+-                    "templatesLoaded" to templates.isNotEmpty(),
+                     "schedulerReady" to schedulingSummary["schedulerReady"],
+                     "nextTriggerCourseName" to schedulingSummary["nextTriggerCourseName"],
+                     "nextTriggerStage" to schedulingSummary["nextTriggerStage"],
+                     "nextTriggerAtMillis" to schedulingSummary["nextTriggerAtMillis"],
+                     "hasLastTestResult" to hasLastTest,
+                     "lastTestStage" to lastStage,
+                     "lastTestSucceeded" to lastSucceeded,
+                     "lastTestMessage" to lastMessage,
+                     "lastTestAtMillis" to lastAtMillis,
+                 ),
+                 "environment" to buildEnvironmentSnapshot(context),
+                 "scheduling" to scheduling,
+-                "templates" to linkedMapOf(
+-                    "pre" to templateFlags("pre"),
+-                    "active" to templateFlags("active"),
+-                    "post" to templateFlags("post"),
+-                ),
+                 "test" to linkedMapOf(
+                     "lastStage" to lastStage,
+                     "lastSucceeded" to lastSucceeded,
+                     "lastMessage" to lastMessage,
+                     "lastAtMillis" to lastAtMillis,
+                 ),
+                 "recentDiagnostics" to linkedMapOf(
+                     "enabled" to UmengDiagnosticReporter.isLiveDiagnosticsEnabled(context),
+                     "tail" to UmengDiagnosticReporter.readLiveDiagnosticsTail(context),
+                 ),
+diff --git a/docs/superpowers/plans/2026-07-31-hyperfocus-remove-templates-section-plan.md b/docs/superpowers/plans/2026-07-31-hyperfocus-remove-templates-section-plan.md
+new file mode 100644
+index 0000000..80a35c2
+--- /dev/null
++++ b/docs/superpowers/plans/2026-07-31-hyperfocus-remove-templates-section-plan.md
+@@ -0,0 +1,155 @@
++# 删除超级岛测试页模板调试区段 Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** 删除超级岛"测试与诊断"页的模板调试区段及相关字段（Dart UI、Kotlin `buildHyperFocusDebugStatus`、service 响应、l10n），模板系统本身与发送渲染保留。
++
++**Architecture:** 纯删除改动，分三层：Dart UI + l10n（Task 1）、Kotlin + service（Task 2）、全量回归验证（Task 3）。
++
++**Tech Stack:** Flutter（Dart）、Kotlin、flutter gen-l10n
++
++## Global Constraints
++
++- 只删调试呈现，不删模板系统（`loadHyperFocusTemplates`、模板编辑器、设置入口 L1812、发送渲染）
++- `flutter analyze` 基线：8 个预存在 infos，不新增
++- `flutter test` 基线：+716 ~3 全绿
++- 不改变 `_debugStatus` 的其他任何字段与 UI 行为
++
++---
++
++### Task 1: Dart UI + l10n 删除
++
++**Files:**
++- Modify: `lib/screens/timetable_settings_screen.dart`
++  - 删除：`_HyperFocusTestingSection.debugTemplates` 枚举成员（L2855）；`_sections()` 中 `_HyperFocusTestingSection.debugTemplates,` 行（L3080）；`_buildSection` 中 `debugTemplates` switch 分支（L3303-3312）；`_templateSummary` 方法（L3361-3368）
++  - 删除参数链：L3029 `final templates = _debugSectionMap(_debugStatus?['templates']);`；L3058 `templates: templates,`；L3095 `required Map<String, dynamic> templates,`；L3037 `final templatesLoaded = summary['templatesLoaded'] == true;`；L3064 `templatesLoaded: templatesLoaded,`；L3101 `required bool templatesLoaded,`
++- Modify: `lib/l10n/app_zh.arb`（删 4 个 key：hfTestingDebugTemplates、hfTestingTemplateStagePre、hfTestingTemplateStageActive、hfTestingTemplateStagePost）
++- Modify: 同 4 个 key × `app_zh_TW.arb`、`app_zh_HK.arb`、`app_en.arb`、`app_ja.arb`、`app_ko.arb`
++- 生成：`flutter gen-l10n` 重新生成 `lib/l10n/app_localizations*.dart`
++
++**Interfaces:**
++- Consumes: 现有 `_buildSection` 签名（其余参数不变）
++- Produces: `_sections()` 不再包含 debugTemplates；`_buildSection` 签名去掉 `templates`/`templatesLoaded` 两个参数
++
++- [ ] **Step 1: 删除 Dart UI 代码**
++
++在 `lib/screens/timetable_settings_screen.dart` 中依次删除：
++1. `_HyperFocusTestingSection.debugTemplates,`（枚举成员，约 L2855）
++2. `_sections()` 中 `_HyperFocusTestingSection.debugTemplates,`（约 L3080）
++3. `_buildSection` 中整个 debugTemplates 分支：
++```dart
++      _HyperFocusTestingSection.debugTemplates => _buildDebugSection(
++        context: context,
++        title: l10n.hfTestingDebugTemplates,
++        entries: {
++          l10n.hfTestingTemplateStagePre: _templateSummary(templates['pre'], l10n),
++          l10n.hfTestingTemplateStageActive:
++              _templateSummary(templates['active'], l10n),
++          l10n.hfTestingTemplateStagePost: _templateSummary(templates['post'], l10n),
++        },
++      ),
++```
++4. `_templateSummary` 整个方法（约 L3361-3368）
++5. 参数链 6 处：
++   - `final templates = _debugSectionMap(_debugStatus?['templates']);`（L3029）
++   - `final templatesLoaded = summary['templatesLoaded'] == true;`（L3037）
++   - `templates: templates,`（L3058）
++   - `templatesLoaded: templatesLoaded,`（L3064）
++   - `required Map<String, dynamic> templates,`（L3095）
++   - `required bool templatesLoaded,`（L3101）
++
++注意：`_buildSection` 调用处与声明处都删；`_debugSectionMap`/`_debugValueText` 等工具方法仍被其他区段使用，不能删。
++
++- [ ] **Step 2: 删除 l10n keys 并重新生成**
++
++在 6 个 arb 文件中删除 4 个 key（各文件行号不同，按 key 名精确删除）：
++
++```json
++"hfTestingDebugTemplates": "...",
++"hfTestingTemplateStagePre": "...",
++"hfTestingTemplateStageActive": "...",
++"hfTestingTemplateStagePost": "...",
++```
++
++Run: `flutter gen-l10n`
++Expected: 成功，`lib/l10n/app_localizations*.dart` 中相关 getter 已移除
++
++- [ ] **Step 3: 运行 analyze 确认无遗漏引用**
++
++Run: `flutter analyze`
++Expected: 8 个预存在 infos 且**无** `hfTesting` 相关未定义 getter 报错（若报错说明有遗漏引用，补删）
++
++- [ ] **Step 4: 运行测试**
++
++Run: `flutter test test/widgets/hyper_focus_testing_screen_test.dart`
++Expected: 2/2 全绿（测试 mock 中的 `templatesLoaded` 多余字段无害，不影响断言）
++
++- [ ] **Step 5: Commit**
++
++```bash
++git add lib/screens/timetable_settings_screen.dart lib/l10n/
++git commit -m "refactor: drop templates debug section from hyperfocus testing screen"
++```
++
++---
++
++### Task 2: Kotlin + service 删除
++
++**Files:**
++- Modify: `android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt`
++  - 删除 `buildHyperFocusDebugStatus` summary 中 `"templatesLoaded" to templates.isNotEmpty(),`（约 L2087）
++  - 删除 `"templates" to linkedMapOf(...)` 整个块（约 L2100-2120，pre/active/post 阶段模板为空的汇总）——删除前先确认 `templates` 变量（`loadHyperFocusTemplates` 调用）是否还有其他用途：若无则连同其声明一起删，若有则保留
++- Modify: `lib/services/miui_live_activities_service.dart`
++  - 删除降级响应中的 `'templatesLoaded': false,`（约 L442）与测试辅助响应中的 `'templatesLoaded': true,`（约 L826）
++
++**Interfaces:**
++- Consumes: `buildHyperFocusDebugStatus`（其余字段不变）
++- Produces: 状态 JSON 不再含 `templates`/`templatesLoaded` 字段
++
++- [ ] **Step 1: 删除 Kotlin 字段**
++
++在 `MainActivity.kt` `buildHyperFocusDebugStatus` 中：
++1. 删除 summary 里 `"templatesLoaded" to templates.isNotEmpty(),`
++2. 删除 `"templates" to linkedMapOf(...)` 块（含 pre/active/post 三阶段）
++3. 检查 `val templates = loadHyperFocusTemplates(context)`（或类似声明）：grep 该变量在本函数内的其他使用，若仅用于上述两处则一并删除声明
++
++Run: `.\gradlew.bat assembleDebug`（workdir `android`）
++Expected: BUILD SUCCESSFUL
++
++- [ ] **Step 2: 删除 service 字段**
++
++在 `miui_live_activities_service.dart` 中删除：
++1. 降级响应（约 L442）：`'templatesLoaded': false,`
++2. 测试辅助响应（约 L826）：`'templatesLoaded': true,`
++
++Run: `flutter analyze`
++Expected: 8 个预存在 infos，无新增
++
++- [ ] **Step 3: Commit**
++
++```bash
++git add android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt lib/services/miui_live_activities_service.dart
++git commit -m "refactor: drop templates fields from hyperfocus debug status"
++```
++
++---
++
++### Task 3: 全量回归验证
++
++**Files:**
++- 无代码改动（纯验证）
++
++- [ ] **Step 1: analyze**
++
++Run: `flutter analyze`
++Expected: 8 个预存在 infos（0 error、0 warning、无新增）
++
++- [ ] **Step 2: 全量测试**
++
++Run: `flutter test`
++Expected: +716 ~3 全绿
++
++- [ ] **Step 3: 构建**
++
++Run: `.\gradlew.bat assembleDebug`（workdir `android`）
++Expected: BUILD SUCCESSFUL
+diff --git a/lib/l10n/app_en.arb b/lib/l10n/app_en.arb
+index 4bc7d83..63f3e78 100644
+--- a/lib/l10n/app_en.arb
++++ b/lib/l10n/app_en.arb
+@@ -1848,31 +1848,27 @@
+   "hfTestingPermissionGranted": "Notification permission granted",
+   "hfTestingPermissionDenied": "Notification permission denied",
+   "hfTestingChannelOk": "Test channel OK",
+   "hfTestingChannelBlocked": "Test channel blocked",
+   "hfTestingChannelMissing": "Test channel missing",
+   "hfTestingSchedulerScheduled": "Scheduler ready",
+   "hfTestingSchedulerNoData": "No schedule data",
+   "hfTestingNoScheduleHint": "No schedule snapshot synced yet. Save your timetable first.",
+   "hfTestingChannelBlockedHint": "The test notification channel is blocked; test notifications will not appear.",
+   "hfTestingDebugScheduling": "Scheduling",
+-  "hfTestingDebugTemplates": "Templates",
+   "hfTestingDebugLastTest": "Last Test",
+   "hfTestingNextCourse": "Next course",
+   "hfTestingNextTrigger": "Next trigger",
+   "hfTestingCurrentStage": "Current stage",
+   "hfTestingBeforeClassBlockedUntil": "Before-class blocked until",
+   "hfTestingSuspendedUntil": "Suspended until",
+   "hfTestingNone": "None",
+-  "hfTestingTemplateStagePre": "Before-class template",
+-  "hfTestingTemplateStageActive": "During-class template",
+-  "hfTestingTemplateStagePost": "After-class template",
+   "hfTestingLastTestStage": "Stage",
+   "hfTestingLastTestResult": "Result",
+   "hfTestingLastTestTime": "Time",
+   "hfTestingLastTestMessage": "Reason",
+   "hfTestingLastTestNever": "No test notification sent yet",
+   "hfTestingLastTestSucceeded": "Sent",
+   "hfTestingLastTestFailed": "Failed",
+   "hfTestingLastTestAt": "Last test: {time}",
+   "hfTestingEntryDetails": "Send before/during/after-class test notifications and view HyperFocus diagnostics",
+   "liveTestingIslandStatusTitle": "Island status diagnostics",
+diff --git a/lib/l10n/app_ja.arb b/lib/l10n/app_ja.arb
+index a4d0c8e..9878d22 100644
+--- a/lib/l10n/app_ja.arb
++++ b/lib/l10n/app_ja.arb
+@@ -1656,31 +1656,27 @@
+   "hfTestingPermissionGranted": "通知権限が許可されています",
+   "hfTestingPermissionDenied": "通知権限が許可されていません",
+   "hfTestingChannelOk": "テストチャンネルは正常です",
+   "hfTestingChannelBlocked": "テストチャンネルがブロックされています",
+   "hfTestingChannelMissing": "テストチャンネルが作成されていません",
+   "hfTestingSchedulerScheduled": "スケジュール準備完了",
+   "hfTestingSchedulerNoData": "課表データがありません",
+   "hfTestingNoScheduleHint": "課表スナップショットがまだ同期されていません。先に課表を保存してください",
+   "hfTestingChannelBlockedHint": "テスト通知チャンネルがシステムによりブロックされているため、テスト通知は表示されません",
+   "hfTestingDebugScheduling": "スケジュール",
+-  "hfTestingDebugTemplates": "テンプレート",
+   "hfTestingDebugLastTest": "前回のテスト",
+   "hfTestingNextCourse": "次の授業",
+   "hfTestingNextTrigger": "次回のトリガー",
+   "hfTestingCurrentStage": "現在のステージ",
+   "hfTestingBeforeClassBlockedUntil": "授業前ブロックの期限",
+   "hfTestingSuspendedUntil": "一時停止の期限",
+   "hfTestingNone": "なし",
+-  "hfTestingTemplateStagePre": "授業前テンプレート",
+-  "hfTestingTemplateStageActive": "授業中テンプレート",
+-  "hfTestingTemplateStagePost": "授業後テンプレート",
+   "hfTestingLastTestStage": "ステージ",
+   "hfTestingLastTestResult": "結果",
+   "hfTestingLastTestTime": "時間",
+   "hfTestingLastTestMessage": "理由",
+   "hfTestingLastTestNever": "テスト通知はまだ送信されていません",
+   "hfTestingLastTestSucceeded": "送信成功",
+   "hfTestingLastTestFailed": "送信失敗",
+   "hfTestingLastTestAt": "前回のテスト：{time}",
+   "hfTestingEntryDetails": "授業前/授業中/授業後のテスト通知を送信し、スーパーアイランドの診断状態を確認します",
+   "liveTestingIslandStatusTitle": "アイランドステータス診断",
+diff --git a/lib/l10n/app_ko.arb b/lib/l10n/app_ko.arb
+index c2cd766..a46aa3a 100644
+--- a/lib/l10n/app_ko.arb
++++ b/lib/l10n/app_ko.arb
+@@ -1656,31 +1656,27 @@
+   "hfTestingPermissionGranted": "알림 권한 허용됨",
+   "hfTestingPermissionDenied": "알림 권한 거부됨",
+   "hfTestingChannelOk": "테스트 채널 정상",
+   "hfTestingChannelBlocked": "테스트 채널 차단됨",
+   "hfTestingChannelMissing": "테스트 채널 생성되지 않음",
+   "hfTestingSchedulerScheduled": "일정 준비 완료",
+   "hfTestingSchedulerNoData": "시간표 데이터 없음",
+   "hfTestingNoScheduleHint": "아직 시간표 스냅샷이 동기화되지 않았습니다. 먼저 시간표를 저장하세요",
+   "hfTestingChannelBlockedHint": "테스트 알림 채널이 시스템에 의해 차단되어 테스트 알림이 표시되지 않습니다",
+   "hfTestingDebugScheduling": "일정",
+-  "hfTestingDebugTemplates": "템플릿",
+   "hfTestingDebugLastTest": "마지막 테스트",
+   "hfTestingNextCourse": "다음 수업",
+   "hfTestingNextTrigger": "다음 트리거",
+   "hfTestingCurrentStage": "현재 단계",
+   "hfTestingBeforeClassBlockedUntil": "수업 전 차단 기한",
+   "hfTestingSuspendedUntil": "일시 중지 기한",
+   "hfTestingNone": "없음",
+-  "hfTestingTemplateStagePre": "수업 전 템플릿",
+-  "hfTestingTemplateStageActive": "수업 중 템플릿",
+-  "hfTestingTemplateStagePost": "수업 후 템플릿",
+   "hfTestingLastTestStage": "단계",
+   "hfTestingLastTestResult": "결과",
+   "hfTestingLastTestTime": "시간",
+   "hfTestingLastTestMessage": "사유",
+   "hfTestingLastTestNever": "아직 테스트 알림을 보낸 적이 없습니다",
+   "hfTestingLastTestSucceeded": "전송 성공",
+   "hfTestingLastTestFailed": "전송 실패",
+   "hfTestingLastTestAt": "마지막 테스트: {time}",
+   "hfTestingEntryDetails": "수업 전/중/후 테스트 알림 전송 및 슈퍼아일랜드 진단 상태 확인",
+   "liveTestingIslandStatusTitle": "아일랜드 상태 진단",
+diff --git a/lib/l10n/app_localizations.dart b/lib/l10n/app_localizations.dart
+index e134e44..3980206 100644
+--- a/lib/l10n/app_localizations.dart
++++ b/lib/l10n/app_localizations.dart
+@@ -6236,26 +6236,20 @@ abstract class AppLocalizations {
+   /// In zh, this message translates to:
+   /// **'测试通知渠道已被系统屏蔽，测试通知不会显示'**
+   String get hfTestingChannelBlockedHint;
+ 
+   /// No description provided for @hfTestingDebugScheduling.
+   ///
+   /// In zh, this message translates to:
+   /// **'调度'**
+   String get hfTestingDebugScheduling;
+ 
+-  /// No description provided for @hfTestingDebugTemplates.
+-  ///
+-  /// In zh, this message translates to:
+-  /// **'模板'**
+-  String get hfTestingDebugTemplates;
+-
+   /// No description provided for @hfTestingDebugLastTest.
+   ///
+   /// In zh, this message translates to:
+   /// **'上次测试'**
+   String get hfTestingDebugLastTest;
+ 
+   /// No description provided for @hfTestingNextCourse.
+   ///
+   /// In zh, this message translates to:
+   /// **'下一节课'**
+@@ -6284,38 +6278,20 @@ abstract class AppLocalizations {
+   /// In zh, this message translates to:
+   /// **'挂起截止'**
+   String get hfTestingSuspendedUntil;
+ 
+   /// No description provided for @hfTestingNone.
+   ///
+   /// In zh, this message translates to:
+   /// **'无'**
+   String get hfTestingNone;
+ 
+-  /// No description provided for @hfTestingTemplateStagePre.
+-  ///
+-  /// In zh, this message translates to:
+-  /// **'课前模板'**
+-  String get hfTestingTemplateStagePre;
+-
+-  /// No description provided for @hfTestingTemplateStageActive.
+-  ///
+-  /// In zh, this message translates to:
+-  /// **'课中模板'**
+-  String get hfTestingTemplateStageActive;
+-
+-  /// No description provided for @hfTestingTemplateStagePost.
+-  ///
+-  /// In zh, this message translates to:
+-  /// **'课后模板'**
+-  String get hfTestingTemplateStagePost;
+-
+   /// No description provided for @hfTestingLastTestStage.
+   ///
+   /// In zh, this message translates to:
+   /// **'阶段'**
+   String get hfTestingLastTestStage;
+ 
+   /// No description provided for @hfTestingLastTestResult.
+   ///
+   /// In zh, this message translates to:
+   /// **'结果'**
+diff --git a/lib/l10n/app_localizations_en.dart b/lib/l10n/app_localizations_en.dart
+index c9f78be..872e56a 100644
+--- a/lib/l10n/app_localizations_en.dart
++++ b/lib/l10n/app_localizations_en.dart
+@@ -3587,23 +3587,20 @@ class AppLocalizationsEn extends AppLocalizations {
+   String get hfTestingNoScheduleHint =>
+       'No schedule snapshot synced yet. Save your timetable first.';
+ 
+   @override
+   String get hfTestingChannelBlockedHint =>
+       'The test notification channel is blocked; test notifications will not appear.';
+ 
+   @override
+   String get hfTestingDebugScheduling => 'Scheduling';
+ 
+-  @override
+-  String get hfTestingDebugTemplates => 'Templates';
+-
+   @override
+   String get hfTestingDebugLastTest => 'Last Test';
+ 
+   @override
+   String get hfTestingNextCourse => 'Next course';
+ 
+   @override
+   String get hfTestingNextTrigger => 'Next trigger';
+ 
+   @override
+@@ -3611,29 +3608,20 @@ class AppLocalizationsEn extends AppLocalizations {
+ 
+   @override
+   String get hfTestingBeforeClassBlockedUntil => 'Before-class blocked until';
+ 
+   @override
+   String get hfTestingSuspendedUntil => 'Suspended until';
+ 
+   @override
+   String get hfTestingNone => 'None';
+ 
+-  @override
+-  String get hfTestingTemplateStagePre => 'Before-class template';
+-
+-  @override
+-  String get hfTestingTemplateStageActive => 'During-class template';
+-
+-  @override
+-  String get hfTestingTemplateStagePost => 'After-class template';
+-
+   @override
+   String get hfTestingLastTestStage => 'Stage';
+ 
+   @override
+   String get hfTestingLastTestResult => 'Result';
+ 
+   @override
+   String get hfTestingLastTestTime => 'Time';
+ 
+   @override
+diff --git a/lib/l10n/app_localizations_ja.dart b/lib/l10n/app_localizations_ja.dart
+index 5f6cca8..7697ec7 100644
+--- a/lib/l10n/app_localizations_ja.dart
++++ b/lib/l10n/app_localizations_ja.dart
+@@ -3420,23 +3420,20 @@ class AppLocalizationsJa extends AppLocalizations {
+   @override
+   String get hfTestingNoScheduleHint => '課表スナップショットがまだ同期されていません。先に課表を保存してください';
+ 
+   @override
+   String get hfTestingChannelBlockedHint =>
+       'テスト通知チャンネルがシステムによりブロックされているため、テスト通知は表示されません';
+ 
+   @override
+   String get hfTestingDebugScheduling => 'スケジュール';
+ 
+-  @override
+-  String get hfTestingDebugTemplates => 'テンプレート';
+-
+   @override
+   String get hfTestingDebugLastTest => '前回のテスト';
+ 
+   @override
+   String get hfTestingNextCourse => '次の授業';
+ 
+   @override
+   String get hfTestingNextTrigger => '次回のトリガー';
+ 
+   @override
+@@ -3444,29 +3441,20 @@ class AppLocalizationsJa extends AppLocalizations {
+ 
+   @override
+   String get hfTestingBeforeClassBlockedUntil => '授業前ブロックの期限';
+ 
+   @override
+   String get hfTestingSuspendedUntil => '一時停止の期限';
+ 
+   @override
+   String get hfTestingNone => 'なし';
+ 
+-  @override
+-  String get hfTestingTemplateStagePre => '授業前テンプレート';
+-
+-  @override
+-  String get hfTestingTemplateStageActive => '授業中テンプレート';
+-
+-  @override
+-  String get hfTestingTemplateStagePost => '授業後テンプレート';
+-
+   @override
+   String get hfTestingLastTestStage => 'ステージ';
+ 
+   @override
+   String get hfTestingLastTestResult => '結果';
+ 
+   @override
+   String get hfTestingLastTestTime => '時間';
+ 
+   @override
+diff --git a/lib/l10n/app_localizations_ko.dart b/lib/l10n/app_localizations_ko.dart
+index ab04e7d..d239c6a 100644
+--- a/lib/l10n/app_localizations_ko.dart
++++ b/lib/l10n/app_localizations_ko.dart
+@@ -3440,23 +3440,20 @@ class AppLocalizationsKo extends AppLocalizations {
+   String get hfTestingNoScheduleHint =>
+       '아직 시간표 스냅샷이 동기화되지 않았습니다. 먼저 시간표를 저장하세요';
+ 
+   @override
+   String get hfTestingChannelBlockedHint =>
+       '테스트 알림 채널이 시스템에 의해 차단되어 테스트 알림이 표시되지 않습니다';
+ 
+   @override
+   String get hfTestingDebugScheduling => '일정';
+ 
+-  @override
+-  String get hfTestingDebugTemplates => '템플릿';
+-
+   @override
+   String get hfTestingDebugLastTest => '마지막 테스트';
+ 
+   @override
+   String get hfTestingNextCourse => '다음 수업';
+ 
+   @override
+   String get hfTestingNextTrigger => '다음 트리거';
+ 
+   @override
+@@ -3464,29 +3461,20 @@ class AppLocalizationsKo extends AppLocalizations {
+ 
+   @override
+   String get hfTestingBeforeClassBlockedUntil => '수업 전 차단 기한';
+ 
+   @override
+   String get hfTestingSuspendedUntil => '일시 중지 기한';
+ 
+   @override
+   String get hfTestingNone => '없음';
+ 
+-  @override
+-  String get hfTestingTemplateStagePre => '수업 전 템플릿';
+-
+-  @override
+-  String get hfTestingTemplateStageActive => '수업 중 템플릿';
+-
+-  @override
+-  String get hfTestingTemplateStagePost => '수업 후 템플릿';
+-
+   @override
+   String get hfTestingLastTestStage => '단계';
+ 
+   @override
+   String get hfTestingLastTestResult => '결과';
+ 
+   @override
+   String get hfTestingLastTestTime => '시간';
+ 
+   @override
+diff --git a/lib/l10n/app_localizations_zh.dart b/lib/l10n/app_localizations_zh.dart
+index 4904c64..4e509ea 100644
+--- a/lib/l10n/app_localizations_zh.dart
++++ b/lib/l10n/app_localizations_zh.dart
+@@ -3366,23 +3366,20 @@ class AppLocalizationsZh extends AppLocalizations {
+ 
+   @override
+   String get hfTestingNoScheduleHint => '尚未同步课表快照，请先保存课表';
+ 
+   @override
+   String get hfTestingChannelBlockedHint => '测试通知渠道已被系统屏蔽，测试通知不会显示';
+ 
+   @override
+   String get hfTestingDebugScheduling => '调度';
+ 
+-  @override
+-  String get hfTestingDebugTemplates => '模板';
+-
+   @override
+   String get hfTestingDebugLastTest => '上次测试';
+ 
+   @override
+   String get hfTestingNextCourse => '下一节课';
+ 
+   @override
+   String get hfTestingNextTrigger => '下次触发';
+ 
+   @override
+@@ -3390,29 +3387,20 @@ class AppLocalizationsZh extends AppLocalizations {
+ 
+   @override
+   String get hfTestingBeforeClassBlockedUntil => '课前屏蔽截止';
+ 
+   @override
+   String get hfTestingSuspendedUntil => '挂起截止';
+ 
+   @override
+   String get hfTestingNone => '无';
+ 
+-  @override
+-  String get hfTestingTemplateStagePre => '课前模板';
+-
+-  @override
+-  String get hfTestingTemplateStageActive => '课中模板';
+-
+-  @override
+-  String get hfTestingTemplateStagePost => '课后模板';
+-
+   @override
+   String get hfTestingLastTestStage => '阶段';
+ 
+   @override
+   String get hfTestingLastTestResult => '结果';
+ 
+   @override
+   String get hfTestingLastTestTime => '时间';
+ 
+   @override
+@@ -11466,23 +11454,20 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
+ 
+   @override
+   String get hfTestingNoScheduleHint => '未同步課表快照，請先儲存課表';
+ 
+   @override
+   String get hfTestingChannelBlockedHint => '測試通知頻道已被系統封鎖，測試通知不會顯示';
+ 
+   @override
+   String get hfTestingDebugScheduling => '排程';
+ 
+-  @override
+-  String get hfTestingDebugTemplates => '範本';
+-
+   @override
+   String get hfTestingDebugLastTest => '上次測試';
+ 
+   @override
+   String get hfTestingNextCourse => '下一節課';
+ 
+   @override
+   String get hfTestingNextTrigger => '下次觸發';
+ 
+   @override
+@@ -11490,29 +11475,20 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
+ 
+   @override
+   String get hfTestingBeforeClassBlockedUntil => '課前封鎖截止';
+ 
+   @override
+   String get hfTestingSuspendedUntil => '暫停截止';
+ 
+   @override
+   String get hfTestingNone => '無';
+ 
+-  @override
+-  String get hfTestingTemplateStagePre => '課前範本';
+-
+-  @override
+-  String get hfTestingTemplateStageActive => '課中範本';
+-
+-  @override
+-  String get hfTestingTemplateStagePost => '課後範本';
+-
+   @override
+   String get hfTestingLastTestStage => '階段';
+ 
+   @override
+   String get hfTestingLastTestResult => '結果';
+ 
+   @override
+   String get hfTestingLastTestTime => '時間';
+ 
+   @override
+@@ -19573,23 +19549,20 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
+ 
+   @override
+   String get hfTestingNoScheduleHint => '尚未同步課表快照，請先儲存課表';
+ 
+   @override
+   String get hfTestingChannelBlockedHint => '測試通知管道已遭系統封鎖，測試通知不會顯示';
+ 
+   @override
+   String get hfTestingDebugScheduling => '排程';
+ 
+-  @override
+-  String get hfTestingDebugTemplates => '範本';
+-
+   @override
+   String get hfTestingDebugLastTest => '上次測試';
+ 
+   @override
+   String get hfTestingNextCourse => '下一節課';
+ 
+   @override
+   String get hfTestingNextTrigger => '下次觸發';
+ 
+   @override
+@@ -19597,29 +19570,20 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
+ 
+   @override
+   String get hfTestingBeforeClassBlockedUntil => '課前封鎖截止';
+ 
+   @override
+   String get hfTestingSuspendedUntil => '掛起截止';
+ 
+   @override
+   String get hfTestingNone => '無';
+ 
+-  @override
+-  String get hfTestingTemplateStagePre => '課前範本';
+-
+-  @override
+-  String get hfTestingTemplateStageActive => '課中範本';
+-
+-  @override
+-  String get hfTestingTemplateStagePost => '課後範本';
+-
+   @override
+   String get hfTestingLastTestStage => '階段';
+ 
+   @override
+   String get hfTestingLastTestResult => '結果';
+ 
+   @override
+   String get hfTestingLastTestTime => '時間';
+ 
+   @override
+diff --git a/lib/l10n/app_zh.arb b/lib/l10n/app_zh.arb
+index 5b3d444..d4d444f 100644
+--- a/lib/l10n/app_zh.arb
++++ b/lib/l10n/app_zh.arb
+@@ -1848,31 +1848,27 @@
+   "hfTestingPermissionGranted": "通知权限已开启",
+   "hfTestingPermissionDenied": "通知权限未开启",
+   "hfTestingChannelOk": "测试渠道正常",
+   "hfTestingChannelBlocked": "测试渠道被屏蔽",
+   "hfTestingChannelMissing": "测试渠道未创建",
+   "hfTestingSchedulerScheduled": "调度已就绪",
+   "hfTestingSchedulerNoData": "暂无课表数据",
+   "hfTestingNoScheduleHint": "尚未同步课表快照，请先保存课表",
+   "hfTestingChannelBlockedHint": "测试通知渠道已被系统屏蔽，测试通知不会显示",
+   "hfTestingDebugScheduling": "调度",
+-  "hfTestingDebugTemplates": "模板",
+   "hfTestingDebugLastTest": "上次测试",
+   "hfTestingNextCourse": "下一节课",
+   "hfTestingNextTrigger": "下次触发",
+   "hfTestingCurrentStage": "当前阶段",
+   "hfTestingBeforeClassBlockedUntil": "课前屏蔽截止",
+   "hfTestingSuspendedUntil": "挂起截止",
+   "hfTestingNone": "无",
+-  "hfTestingTemplateStagePre": "课前模板",
+-  "hfTestingTemplateStageActive": "课中模板",
+-  "hfTestingTemplateStagePost": "课后模板",
+   "hfTestingLastTestStage": "阶段",
+   "hfTestingLastTestResult": "结果",
+   "hfTestingLastTestTime": "时间",
+   "hfTestingLastTestMessage": "原因",
+   "hfTestingLastTestNever": "尚未发送过测试通知",
+   "hfTestingLastTestSucceeded": "发送成功",
+   "hfTestingLastTestFailed": "发送失败",
+   "hfTestingLastTestAt": "上次测试：{time}",
+   "hfTestingEntryDetails": "发送课前/课中/课后测试通知、查看超级岛诊断状态",
+   "liveTestingIslandStatusTitle": "上岛状态诊断",
+diff --git a/lib/l10n/app_zh_HK.arb b/lib/l10n/app_zh_HK.arb
+index 4337712..9b5fc00 100644
+--- a/lib/l10n/app_zh_HK.arb
++++ b/lib/l10n/app_zh_HK.arb
+@@ -1655,31 +1655,27 @@
+   "hfTestingPermissionGranted": "通知權限已開啟",
+   "hfTestingPermissionDenied": "通知權限未開啟",
+   "hfTestingChannelOk": "測試頻道正常",
+   "hfTestingChannelBlocked": "測試頻道已被封鎖",
+   "hfTestingChannelMissing": "測試頻道未建立",
+   "hfTestingSchedulerScheduled": "排程已就緒",
+   "hfTestingSchedulerNoData": "暫無課表資料",
+   "hfTestingNoScheduleHint": "未同步課表快照，請先儲存課表",
+   "hfTestingChannelBlockedHint": "測試通知頻道已被系統封鎖，測試通知不會顯示",
+   "hfTestingDebugScheduling": "排程",
+-  "hfTestingDebugTemplates": "範本",
+   "hfTestingDebugLastTest": "上次測試",
+   "hfTestingNextCourse": "下一節課",
+   "hfTestingNextTrigger": "下次觸發",
+   "hfTestingCurrentStage": "目前階段",
+   "hfTestingBeforeClassBlockedUntil": "課前封鎖截止",
+   "hfTestingSuspendedUntil": "暫停截止",
+   "hfTestingNone": "無",
+-  "hfTestingTemplateStagePre": "課前範本",
+-  "hfTestingTemplateStageActive": "課中範本",
+-  "hfTestingTemplateStagePost": "課後範本",
+   "hfTestingLastTestStage": "階段",
+   "hfTestingLastTestResult": "結果",
+   "hfTestingLastTestTime": "時間",
+   "hfTestingLastTestMessage": "原因",
+   "hfTestingLastTestNever": "尚未發送過測試通知",
+   "hfTestingLastTestSucceeded": "發送成功",
+   "hfTestingLastTestFailed": "發送失敗",
+   "hfTestingLastTestAt": "上次測試：{time}",
+   "hfTestingEntryDetails": "發送課前/課中/課後測試通知、查看超級島診斷狀態",
+   "liveTestingIslandStatusTitle": "上島狀態診斷",
+diff --git a/lib/l10n/app_zh_TW.arb b/lib/l10n/app_zh_TW.arb
+index fdfe55e..598e9cf 100644
+--- a/lib/l10n/app_zh_TW.arb
++++ b/lib/l10n/app_zh_TW.arb
+@@ -1655,31 +1655,27 @@
+   "hfTestingPermissionGranted": "通知權限已開啟",
+   "hfTestingPermissionDenied": "通知權限未開啟",
+   "hfTestingChannelOk": "測試管道正常",
+   "hfTestingChannelBlocked": "測試管道已遭封鎖",
+   "hfTestingChannelMissing": "測試管道尚未建立",
+   "hfTestingSchedulerScheduled": "排程已就緒",
+   "hfTestingSchedulerNoData": "暫無課表資料",
+   "hfTestingNoScheduleHint": "尚未同步課表快照，請先儲存課表",
+   "hfTestingChannelBlockedHint": "測試通知管道已遭系統封鎖，測試通知不會顯示",
+   "hfTestingDebugScheduling": "排程",
+-  "hfTestingDebugTemplates": "範本",
+   "hfTestingDebugLastTest": "上次測試",
+   "hfTestingNextCourse": "下一節課",
+   "hfTestingNextTrigger": "下次觸發",
+   "hfTestingCurrentStage": "目前階段",
+   "hfTestingBeforeClassBlockedUntil": "課前封鎖截止",
+   "hfTestingSuspendedUntil": "掛起截止",
+   "hfTestingNone": "無",
+-  "hfTestingTemplateStagePre": "課前範本",
+-  "hfTestingTemplateStageActive": "課中範本",
+-  "hfTestingTemplateStagePost": "課後範本",
+   "hfTestingLastTestStage": "階段",
+   "hfTestingLastTestResult": "結果",
+   "hfTestingLastTestTime": "時間",
+   "hfTestingLastTestMessage": "原因",
+   "hfTestingLastTestNever": "尚未發送過測試通知",
+   "hfTestingLastTestSucceeded": "發送成功",
+   "hfTestingLastTestFailed": "發送失敗",
+   "hfTestingLastTestAt": "上次測試：{time}",
+   "hfTestingEntryDetails": "發送課前/課中/課後測試通知、查看超級島診斷狀態",
+   "liveTestingIslandStatusTitle": "上島狀態診斷",
+diff --git a/lib/screens/timetable_settings_screen.dart b/lib/screens/timetable_settings_screen.dart
+index dc8527a..e330c0f 100644
+--- a/lib/screens/timetable_settings_screen.dart
++++ b/lib/screens/timetable_settings_screen.dart
+@@ -2845,21 +2845,20 @@ class _QuickFixtureSectionCell extends StatelessWidget {
+     );
+   }
+ }
+ 
+ BuildContext? _debugL10nContext;
+ 
+ enum _HyperFocusTestingSection {
+   notification,
+   islandStatus,
+   debugScheduling,
+-  debugTemplates,
+   debugLastTest,
+   debugEnvironment,
+   debugRecentLogs,
+   rawJson,
+   localLogs,
+ }
+ 
+ class _HyperFocusTestingSettingsScreen extends StatefulWidget {
+   const _HyperFocusTestingSettingsScreen();
+ 
+@@ -3019,93 +3018,86 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+     final t = DateTime.fromMillisecondsSinceEpoch(millis);
+     return _formatTimeOfDay(t);
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     final l10n = AppLocalizations.of(context)!;
+     _debugL10nContext = context;
+     final summary = _debugSectionMap(_debugStatus?['summary']);
+     final scheduling = _debugSectionMap(_debugStatus?['scheduling']);
+-    final templates = _debugSectionMap(_debugStatus?['templates']);
+     final test = _debugSectionMap(_debugStatus?['test']);
+     final recentDiagnostics = _debugSectionMap(
+       _debugStatus?['recentDiagnostics'],
+     );
+     final hasPermission = summary['hasNotificationPermission'] == true;
+     final channelBlocked = summary['testChannelBlocked'] == true;
+     final schedulerReady = summary['schedulerReady'] == true;
+-    final templatesLoaded = summary['templatesLoaded'] == true;
+     final hasLastTest = summary['hasLastTestResult'] == true;
+     final lastTestSucceeded = summary['lastTestSucceeded'] == true;
+     final lastTestMessage = _debugValueText(summary['lastTestMessage']);
+     final lastTestStage = _debugValueText(summary['lastTestStage']);
+     final refreshedAt = _lastDebugStatusUpdatedAt;
+     final refreshedAtText = refreshedAt == null
+         ? l10n.liveTestingNotRefreshed
+         : _formatTimeOfDay(refreshedAt);
+ 
+     return HyperosSubpage(
+       onBack: () => Navigator.pop(context),
+       title: Text(l10n.hfTestingTitle),
+       child: HyperosListView(
+         itemCount: _sections().length,
+         itemBuilder: (context, index) => _buildSection(
+           context,
+           _sections()[index],
+           l10n: l10n,
+           summary: summary,
+           scheduling: scheduling,
+-          templates: templates,
+           test: test,
+           recentDiagnostics: recentDiagnostics,
+           hasPermission: hasPermission,
+           channelBlocked: channelBlocked,
+           schedulerReady: schedulerReady,
+-          templatesLoaded: templatesLoaded,
+           hasLastTest: hasLastTest,
+           lastTestSucceeded: lastTestSucceeded,
+           lastTestMessage: lastTestMessage,
+           lastTestStage: lastTestStage,
+           refreshedAtText: refreshedAtText,
+         ),
+       ),
+     );
+   }
+ 
+   List<_HyperFocusTestingSection> _sections() => [
+     _HyperFocusTestingSection.notification,
+     _HyperFocusTestingSection.islandStatus,
+     if (_debugStatus != null) ...[
+       _HyperFocusTestingSection.debugScheduling,
+-      _HyperFocusTestingSection.debugTemplates,
+       _HyperFocusTestingSection.debugLastTest,
+       _HyperFocusTestingSection.debugEnvironment,
+       _HyperFocusTestingSection.debugRecentLogs,
+       _HyperFocusTestingSection.rawJson,
+     ],
+     _HyperFocusTestingSection.localLogs,
+   ];
+ 
+   Widget _buildSection(
+     BuildContext context,
+     _HyperFocusTestingSection section, {
+     required AppLocalizations l10n,
+     required Map<String, dynamic> summary,
+     required Map<String, dynamic> scheduling,
+-    required Map<String, dynamic> templates,
+     required Map<String, dynamic> test,
+     required Map<String, dynamic> recentDiagnostics,
+     required bool hasPermission,
+     required bool channelBlocked,
+     required bool schedulerReady,
+-    required bool templatesLoaded,
+     required bool hasLastTest,
+     required bool lastTestSucceeded,
+     required String lastTestMessage,
+     required String lastTestStage,
+     required String refreshedAtText,
+   }) {
+     return switch (section) {
+       _HyperFocusTestingSection.notification => Column(
+         mainAxisSize: MainAxisSize.min,
+         children: [
+@@ -3293,30 +3285,20 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+           l10n.hfTestingCurrentStage:
+               _debugValueText(scheduling['nextTriggerStage']),
+           l10n.hfTestingBeforeClassBlockedUntil: l10n.hfTestingNone,
+           l10n.hfTestingSuspendedUntil:
+               _formatMillis(
+                 scheduling['suspendedUntilMillis'] as int?,
+                 l10n,
+               ),
+         },
+       ),
+-      _HyperFocusTestingSection.debugTemplates => _buildDebugSection(
+-        context: context,
+-        title: l10n.hfTestingDebugTemplates,
+-        entries: {
+-          l10n.hfTestingTemplateStagePre: _templateSummary(templates['pre'], l10n),
+-          l10n.hfTestingTemplateStageActive:
+-              _templateSummary(templates['active'], l10n),
+-          l10n.hfTestingTemplateStagePost: _templateSummary(templates['post'], l10n),
+-        },
+-      ),
+       _HyperFocusTestingSection.debugLastTest => _buildDebugSection(
+         context: context,
+         title: l10n.hfTestingDebugLastTest,
+         entries: {
+           if (!hasLastTest) l10n.hfTestingLastTestNever: '',
+           if (hasLastTest) l10n.hfTestingLastTestStage: lastTestStage,
+           if (hasLastTest)
+             l10n.hfTestingLastTestResult: lastTestSucceeded
+                 ? l10n.hfTestingLastTestSucceeded
+                 : l10n.hfTestingLastTestFailed,
+@@ -3351,29 +3333,20 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+         title: l10n.liveTestingRawDataTitle,
+         entries: const {},
+         trailingJson: _debugStatus == null
+             ? ''
+             : const JsonEncoder.withIndent('  ').convert(_debugStatus),
+       ),
+       _HyperFocusTestingSection.localLogs => _buildLocalLogsSection(context),
+     };
+   }
+ 
+-  String _templateSummary(dynamic stageTemplates, AppLocalizations l10n) {
+-    if (stageTemplates is! Map) return l10n.hfTestingNone;
+-    final flags = stageTemplates.entries
+-        .where((e) => e.value == true)
+-        .map((e) => e.key)
+-        .toList();
+-    return flags.isEmpty ? l10n.hfTestingNone : flags.join(' · ');
+-  }
+-
+   Widget _buildDebugSection({
+     required BuildContext context,
+     required String title,
+     required Map<String, String> entries,
+     String trailingJson = '',
+   }) {
+     return Column(
+       mainAxisSize: MainAxisSize.min,
+       children: [
+         HyperosSectionLabel(text: title),
+diff --git a/lib/services/miui_live_activities_service.dart b/lib/services/miui_live_activities_service.dart
+index f2e1b6e..2847ef7 100644
+--- a/lib/services/miui_live_activities_service.dart
++++ b/lib/services/miui_live_activities_service.dart
+@@ -432,21 +432,20 @@ class MiuiLiveActivitiesService {
+         'hyper_focus_debug_status_failed',
+         AppLogMessages.liveUpdateDebugStatusFailed,
+         error: e,
+         stackTrace: stackTrace,
+       );
+       appDebugLog('MiuiLive', '获取超级岛调试状态失败：$e');
+       return {
+         'summary': {
+           'hasNotificationPermission': false,
+           'testChannelBlocked': true,
+-          'templatesLoaded': false,
+           'schedulerReady': false,
+           'hasLastTestResult': false,
+         },
+       };
+     }
+   }
+ 
+   Map<String, dynamic> _buildData(
+     Course currentCourse,
+     Course? nextCourse, {
+@@ -816,21 +815,20 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
+     return null;
+   }
+ 
+   @override
+   Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
+     return const {
+       'generatedAtMillis': 0,
+       'summary': {
+         'hasNotificationPermission': true,
+         'testChannelBlocked': false,
+-        'templatesLoaded': true,
+         'schedulerReady': true,
+         'hasLastTestResult': false,
+       },
+       'scheduling': {
+         'nextCourseName': '高等数学',
+         'nextCourseStartAtMillis': 0,
+         'nextCourseEndAtMillis': 0,
+         'nextTriggerAtMillis': 0,
+         'nextTriggerStage': 'pre',
+         'hasActiveSelection': true,

@@ -177,22 +177,28 @@ class _HyperosPressableRowState extends State<HyperosPressableRow> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.backgroundColor ?? HyperosColors.card(context);
     final highlight =
         widget.highlightColor ?? HyperosColors.rowHighlight(context);
     final enabled = widget.onTap != null || widget.onLongPress != null;
 
     if (!enabled) {
-      return Material(color: bg, child: widget.child);
+      // Transparent shell: parent [HyperosAdaptiveCard] / [HyperosListGroup]
+      // already paints the rounded surface. An opaque child Material would
+      // square-fill the bottom corners of the last row.
+      return widget.child;
     }
 
     final cardScope = HyperosControlCardScope.maybeOf(context);
     final cardRowScope = HyperosControlCardRowScope.maybeOf(context);
     final listScope = HyperosListTileScope.maybeOf(context);
-    final isFirst =
-        listScope?.isFirst ?? cardRowScope?.isFirst ?? cardScope != null;
-    final isLast =
-        listScope?.isLast ?? cardRowScope?.isLast ?? cardScope != null;
+    // Round press fill only when this row is an explicit card/list edge.
+    // Without [HyperosListTileScope] / [HyperosControlCardRowScope], treat the
+    // row as mid-card (square highlight). Falling back to "first+last" whenever
+    // [HyperosControlCardScope] is present wrongly rounds middle mixed rows
+    // (e.g. select between inset fields). Parent [HyperosAdaptiveCard] still
+    // clips true top/bottom edges to the card radius.
+    final isFirst = listScope?.isFirst ?? cardRowScope?.isFirst ?? false;
+    final isLast = listScope?.isLast ?? cardRowScope?.isLast ?? false;
     final surfaceRadius = HyperosSurfaceRadiusScope.of(
       context,
       fallback: cardScope?.cornerRadius,
@@ -201,8 +207,11 @@ class _HyperosPressableRowState extends State<HyperosPressableRow> {
     final clipTop = _showHighlight && isFirst;
     final clipBottom = _showHighlight && isLast;
 
+    // Idle: transparent fill so list/card corner radius stays visible.
+    // Pressed: gray fill; first/last rows clip to [surfaceRadius] so the
+    // highlight follows the card arc (mid rows stay square).
     Widget highlighted = ColoredBox(
-      color: _showHighlight ? highlight : bg,
+      color: _showHighlight ? highlight : const Color(0x00000000),
       child: SizedBox(width: double.infinity, child: widget.child),
     );
 
@@ -221,7 +230,7 @@ class _HyperosPressableRowState extends State<HyperosPressableRow> {
     }
 
     return Material(
-      color: bg,
+      type: MaterialType.transparency,
       child: Listener(
         onPointerMove: _handlePointerMove,
         onPointerCancel: (_) => _resetGesture(),
@@ -239,13 +248,13 @@ class _HyperosPressableRowState extends State<HyperosPressableRow> {
   }
 }
 
-Widget _hyperosTrailingDetails(BuildContext context, String details) {
-  // Non-flex trailing value: only [Expanded] title may flex so chevron stays
-  // pinned to the row's right edge (Miuix ArrowPreference pattern).
+Widget _hyperosTrailingDetails(
+  BuildContext context,
+  String details, {
+  double maxWidth = HyperosMiuixDropdown.maxItemTextWidth,
+}) {
   return ConstrainedBox(
-    constraints: const BoxConstraints(
-      maxWidth: HyperosMiuixDropdown.maxItemTextWidth,
-    ),
+    constraints: BoxConstraints(maxWidth: maxWidth),
     child: Text(
       details,
       style: HyperosTypography.listDetail(context),
@@ -281,36 +290,66 @@ class HyperosListTile extends StatelessWidget {
     final highlightColor = HyperosColors.rowHighlight(context);
     final enabled = onTap != null || onLongPress != null;
     final primaryText = HyperosColors.primaryText(context);
+    final titleStyle = HyperosTypography.listTitle(context).copyWith(
+      color: enabled
+          ? primaryText
+          : primaryText.withValues(alpha: 0.45),
+    );
 
     final row = hyperosListRowShell(
       padding: hyperosChevronRowPadding(context),
-      child: Row(
-        children: [
-          HyperosIconBadge(
-            icon: icon,
-            accent: iconAccent ?? HyperosIconColors.blue,
-          ),
-          const SizedBox(width: HyperosTokens.rowContentGap),
-          Expanded(
-            child: Text(
-              title,
-              style: HyperosTypography.listTitle(context).copyWith(
-                color: enabled
-                    ? primaryText
-                    : primaryText.withValues(alpha: 0.45),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Measure the title so long details get only the leftover width;
+          // the title always renders fully (Miuix ArrowPreference pattern).
+          final titlePainter = TextPainter(
+            text: TextSpan(text: title, style: titleStyle),
+            maxLines: 1,
+            textDirection: TextDirection.ltr,
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout();
+          final fixedWidth = HyperosTokens.iconBadgeSize +
+              HyperosTokens.rowContentGap +
+              6 +
+              HyperosTokens.detailChevronGap +
+              HyperosTokens.chevronWidth;
+          final detailsMaxWidth = (constraints.maxWidth -
+                  fixedWidth -
+                  titlePainter.width)
+              .clamp(48.0, HyperosMiuixDropdown.maxItemTextWidth);
+          return Row(
+            children: [
+              HyperosIconBadge(
+                icon: icon,
+                accent: iconAccent ?? HyperosIconColors.blue,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (details != null) ...[
-            const SizedBox(width: 6),
-            _hyperosTrailingDetails(context, details!),
-            SizedBox(width: HyperosTokens.detailChevronGap),
-          ] else
-            SizedBox(width: HyperosTokens.titleChevronGap),
-          Opacity(opacity: enabled ? 1 : 0.45, child: const HyperosChevron()),
-        ],
+              const SizedBox(width: HyperosTokens.rowContentGap),
+              Expanded(
+                child: Text(
+                  title,
+                  style: titleStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (details != null) ...[
+                const SizedBox(width: 6),
+                _hyperosTrailingDetails(
+                  context,
+                  details!,
+                  maxWidth: detailsMaxWidth,
+                ),
+                if (enabled) SizedBox(width: HyperosTokens.detailChevronGap),
+              ] else if (enabled)
+                SizedBox(width: HyperosTokens.titleChevronGap),
+              if (enabled)
+                Opacity(
+                  opacity: 1,
+                  child: const HyperosChevron(),
+                ),
+            ],
+          );
+        },
       ),
     );
 
@@ -400,7 +439,11 @@ class HyperosSwitchTile extends StatelessWidget {
             ),
           ),
           SizedBox(width: HyperosMiuixBasicComponent.startEndSpacer),
-          HyperosSwitch(value: value, onChanged: onChanged),
+          // Keep the row as the single toggle target. Without this guard the
+          // row and switch can compete for one tap on some touch surfaces.
+          AbsorbPointer(
+            child: HyperosSwitch(value: value, onChanged: onChanged),
+          ),
         ],
       ),
     );

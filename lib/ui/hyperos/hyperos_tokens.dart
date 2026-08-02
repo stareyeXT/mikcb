@@ -58,6 +58,7 @@ abstract final class HyperosTokens {
 
   static const sectionGap = HyperosMiuixSpec.settingsSectionGap;
   static const listPadding = HyperosMiuixSpec.settingsListPadding;
+  static const settingsContentMaxWidth = 720.0;
   static const rowContentGap = HyperosMiuixSpec.settingsIconGap;
   static const listRowMinHeight = HyperosMiuixSpec.settingsRowMinHeight;
   static const listRowTwoLineMinHeight =

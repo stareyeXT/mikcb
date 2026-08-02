@@ -1,15 +1,25 @@
 import '../../models/course.dart';
 import '../../models/timetable_settings.dart';
 
+/// Stable label key for the "most recent class ended" break milestone.
+const String milestoneRecentEndLabelKey = '最近下课';
+
+/// Stable label key for the "next class starts" break milestone.
+const String milestoneNextStartLabelKey = '下节上课';
+
 class LiveActivityCourseSelection {
   final Course currentCourse;
   final Course? nextCourse;
   final LiveActivityStage stage;
+  final DateTime? currentStartAt;
+  final DateTime? currentEndAt;
 
   const LiveActivityCourseSelection({
     required this.currentCourse,
     required this.nextCourse,
     required this.stage,
+    this.currentStartAt,
+    this.currentEndAt,
   });
 }
 
@@ -139,12 +149,12 @@ class LiveActivityLogic {
 
       milestones.add({
         'offsetMillis': breakStartOffsetMillis,
-        'label': '最近下课',
+        'label': milestoneRecentEndLabelKey,
         'timeText': currentSection.endTime,
       });
       milestones.add({
         'offsetMillis': breakEndOffsetMillis,
-        'label': '下节上课',
+        'label': milestoneNextStartLabelKey,
         'timeText': nextSection.startTime,
       });
     }

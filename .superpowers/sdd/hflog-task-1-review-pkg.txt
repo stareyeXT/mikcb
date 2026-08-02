@@ -1,0 +1,159 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/DiagnosticLogMessages.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/DiagnosticLogMessages.kt
+index b726b61..aef230f 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/DiagnosticLogMessages.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/DiagnosticLogMessages.kt
+@@ -63,11 +63,17 @@ object DiagnosticLogMessages {
+     const val LOG_ENABLE_DND_DIRECT_FAILED = "直接启用勿扰模式失败"
+     const val LOG_ENABLE_DND_FAILED = "启用勿扰模式失败"
+     const val LOG_RESTORE_SILENT_MODE_FAILED = "恢复课前静音前铃声模式失败"
+     const val LOG_RESTORE_DND_FAILED = "恢复课前免打扰前状态失败"
+     const val LOG_OPEN_SETTINGS_INTENT_FAILED = "打开设置 Intent 失败"
+     const val LOG_OPEN_FALLBACK_SETTINGS_FAILED = "打开备用设置失败"
+     const val LOG_BUILD_MIUI_FOCUS_PARAM_FAILED = "构建 miui.focus.param 失败"
+     const val LOG_BUILD_ROUNDED_LAUNCHER_ICON_FAILED = "构建圆角启动图标失败"
+     const val LOG_FGS_START_BLOCKED = "前台服务启动被阻止，回退为仅调度"
+     const val LOG_LIVE_UPDATE_REFRESH_WORKER_FAILED = "超级岛刷新 Worker 失败"
++
++    // 超级岛测试通知发送诊断
++    const val SEND_TEST_FOCUS_STARTED = "收到超级岛测试通知发送请求"
++    const val SEND_TEST_FOCUS_PERMISSION_BLOCKED = "超级岛测试发送被拦截：系统通知权限未开启"
++    const val SEND_TEST_FOCUS_CHANNEL_BLOCKED = "超级岛测试发送被拦截：测试通知渠道已被关闭"
++    const val SEND_TEST_FOCUS_SUBMITTED = "超级岛测试通知已提交并检查系统接收结果"
+ }
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index b18a3cb..ec4dc49 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -1139,20 +1139,26 @@ class MainActivity : FlutterActivity() {
+             val startTime = args?.get("startTime") ?: "08:00"
+             val endTime = args?.get("endTime") ?: "09:40"
+             val location = args?.get("location") ?: "教科A-101"
+             val teacher = args?.get("teacher") ?: ""
+             val stage = args?.get("stage") ?: "pre"
+             Log.d("HyperFocusApi", "sendTestFocus stage=$stage")
+ 
+             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+             if (!notificationManager.areNotificationsEnabled()) {
+                 Log.e("HyperFocusApi", "notifications disabled")
++                UmengDiagnosticReporter.record(
++                    context = applicationContext,
++                    category = "send_test_focus_permission_blocked",
++                    message = DiagnosticLogMessages.SEND_TEST_FOCUS_PERMISSION_BLOCKED,
++                    extras = mapOf("stage" to stage)
++                )
+                 return "系统通知权限未开启，请先在设置中开启通知权限"
+             }
+ 
+             val now = System.currentTimeMillis()
+             val templateStage = when (stage) {
+                 "active", "beforeEnd" -> "active"
+                 "post" -> "post"
+                 else -> "pre"
+             }
+             val classStartAt: Long
+@@ -1173,20 +1179,39 @@ class MainActivity : FlutterActivity() {
+                     hintText = "已下课"
+                 }
+                 else -> {
+                     classStartAt = now + 5 * 60_000L
+                     classEndAt = classStartAt + 100 * 60_000L
+                     timerTarget = classStartAt
+                     hintText = "距离上课还有 5 分钟"
+                 }
+             }
+ 
++            UmengDiagnosticReporter.record(
++                context = applicationContext,
++                category = "send_test_focus_started",
++                message = DiagnosticLogMessages.SEND_TEST_FOCUS_STARTED,
++                extras = mapOf(
++                    "stage" to stage,
++                    "courseName" to courseName,
++                    "shortName" to shortName,
++                    "startTime" to startTime,
++                    "endTime" to endTime,
++                    "location" to location,
++                    "templateStage" to templateStage,
++                    "classStartAt" to classStartAt,
++                    "classEndAt" to classEndAt,
++                    "timerTarget" to timerTarget,
++                    "now" to now,
++                )
++            )
++
+             val templates = loadHyperFocusTemplates(this)
+ 
+             val countdownText = formatCountdownForTemplate(kotlin.math.max(0L, timerTarget - now))
+             val elapsedText = formatElapsedForTemplate(kotlin.math.max(0L, now - timerTarget))
+ 
+             val r = { tpl: String ->
+                 resolveTemplate(
+                     tpl = tpl,
+                     courseName = courseName,
+                     shortName = shortName,
+@@ -1303,20 +1328,29 @@ class MainActivity : FlutterActivity() {
+ 
+             extras.putString("miui.bigIsland.effect.src", "outer_glow")
+             extras.putString("miui.effect.src", "outer_glow")
+ 
+             notificationManager.createNotificationChannel(
+                 NotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
+             )
+             val channel = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                 Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
++                UmengDiagnosticReporter.record(
++                    context = applicationContext,
++                    category = "send_test_focus_channel_blocked",
++                    message = DiagnosticLogMessages.SEND_TEST_FOCUS_CHANNEL_BLOCKED,
++                    extras = mapOf(
++                        "stage" to stage,
++                        "channelImportance" to (channel?.importance ?: -1),
++                    )
++                )
+                 return "测试通知渠道已被关闭，请在系统通知设置中恢复该渠道"
+             }
+ 
+             val notification = Notification.Builder(this, HYPERFOCUS_TEST_CHANNEL_ID)
+                 .setContentTitle(baseTitleText.ifBlank { courseName })
+                 .setContentText(baseContentText.ifBlank { "查看课表" })
+                 .setSmallIcon(R.mipmap.ic_launcher)
+                 .setOngoing(true)
+                 .setAutoCancel(false)
+                 .addExtras(extras)
+@@ -1324,21 +1358,34 @@ class MainActivity : FlutterActivity() {
+ 
+             notificationManager.notify(10001, notification)
+             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+             val activeIds = notificationManager.activeNotifications.map { it.id }
+             val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
+             Log.d(
+                 "HyperFocusApi",
+                 "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
+             )
+-            if (!activeIds.contains(10001)) {
++            val activeContainsTest = activeIds.contains(10001)
++            UmengDiagnosticReporter.record(
++                context = applicationContext,
++                category = "send_test_focus_submitted",
++                message = DiagnosticLogMessages.SEND_TEST_FOCUS_SUBMITTED,
++                extras = mapOf(
++                    "stage" to stage,
++                    "activeIds" to activeIds,
++                    "activeContainsTest" to activeContainsTest,
++                    "testChannelImportance" to (testChannelState?.importance ?: -1),
++                    "liveChannelImportance" to (liveChannelState?.importance ?: -1),
++                )
++            )
++            if (!activeContainsTest) {
+                 return "已提交但系统未显示（activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}）"
+             }
+             null
+         } catch (e: Exception) {
+             Log.e("HyperFocusApi", "sendTestFocus failed", e)
+             UmengDiagnosticReporter.report(
+                 context = applicationContext,
+                 category = "send_test_focus_failed",
+                 message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_START_FAILED,
+                 throwable = e,

@@ -12,12 +12,16 @@ Future<void> showTimeSchemePickerSheet(
   BuildContext context, {
   required String? currentValue,
   required ValueChanged<String?> onSelected,
+
+  /// When the entry is in auto mode, describes which scheme is currently used.
+  String? autoResolvedSubtitle,
 }) {
   return showHyperosSheet<void>(
     context: context,
     builder: (sheetContext) => _TimeSchemePickerSheetBody(
       hostContext: context,
       currentValue: currentValue,
+      autoResolvedSubtitle: autoResolvedSubtitle,
       onSelected: (value) {
         onSelected(value);
         Navigator.of(sheetContext).pop();
@@ -31,11 +35,13 @@ class _TimeSchemePickerSheetBody extends StatefulWidget {
     required this.hostContext,
     required this.currentValue,
     required this.onSelected,
+    this.autoResolvedSubtitle,
   });
 
   final BuildContext hostContext;
   final String? currentValue;
   final ValueChanged<String?> onSelected;
+  final String? autoResolvedSubtitle;
 
   @override
   State<_TimeSchemePickerSheetBody> createState() =>
@@ -44,22 +50,13 @@ class _TimeSchemePickerSheetBody extends StatefulWidget {
 
 class _TimeSchemePickerSheetBodyState
     extends State<_TimeSchemePickerSheetBody> {
-  Future<void> _openManagement({
-    String? initialEditSchemeId,
-    bool openCreateOnOpen = false,
-    bool popSheetFirst = false,
-  }) async {
-    if (popSheetFirst && mounted) {
-      Navigator.of(context).pop();
-    }
-
+  Future<void> _openManagement({String? initialEditSchemeId}) async {
     await Navigator.push<void>(
       widget.hostContext,
       HyperosPageRoute<void>(
         settings: const RouteSettings(name: '/settings/time-schemes'),
         builder: (_) => TimeSchemeManagementScreen(
           initialEditSchemeId: initialEditSchemeId,
-          openCreateOnOpen: openCreateOnOpen,
         ),
       ),
     );
@@ -77,8 +74,6 @@ class _TimeSchemePickerSheetBodyState
     final l10n = AppLocalizations.of(context)!;
     final provider = context.watch<TimetableProvider>();
     final schemes = provider.timeSchemes;
-    final followLabel =
-        provider.activeTimeScheme?.name ?? l10n.timetableAppName;
     final maxListHeight = MediaQuery.sizeOf(context).height * 0.38;
 
     return HyperosSheet(
@@ -93,7 +88,12 @@ class _TimeSchemePickerSheetBodyState
               child: HyperosChoiceGroup(
                 children: [
                   HyperosChoiceTile(
-                    title: l10n.followCurrentTimetableWithName(followLabel),
+                    title: l10n.followLocationAutoTimeScheme,
+                    subtitle: Text(
+                      widget.autoResolvedSubtitle?.trim().isNotEmpty == true
+                          ? widget.autoResolvedSubtitle!
+                          : l10n.followLocationAutoTimeSchemeDescription,
+                    ),
                     selected: widget.currentValue == null,
                     highlightSelectedText: true,
                     onTap: () => widget.onSelected(null),
@@ -123,31 +123,6 @@ class _TimeSchemePickerSheetBodyState
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: HyperosButton(
-                  label: l10n.manageTimeSchemesAction,
-                  variant: HyperosButtonVariant.secondary,
-                  expand: true,
-                  onPressed: () => _openManagement(popSheetFirst: true),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: HyperosButton(
-                  label: l10n.createTimeSchemeTitle,
-                  variant: HyperosButtonVariant.secondary,
-                  expand: true,
-                  onPressed: () => _openManagement(
-                    popSheetFirst: true,
-                    openCreateOnOpen: true,
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),

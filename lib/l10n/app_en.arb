@@ -87,7 +87,27 @@
   "coupleTimetableLegendTogether": "Together",
   "coupleTimetableLegendFree": "Shared free",
   "coupleTimetableSharedFreeTitle": "Shared free time today",
+  "coupleTimetableSharedFreeTitleOtherDay": "Shared free time this day",
   "coupleTimetableNoSharedFree": "No shared free time today",
+  "coupleTimetableNoSharedFreeOtherDay": "No shared free time this day",
+  "coupleTimetableSharedFreeMeta": "{count} slots",
+  "@coupleTimetableSharedFreeMeta": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "coupleTimetableSharedFreeMoreCount": "{count} more slots",
+  "@coupleTimetableSharedFreeMoreCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "coupleTimetableSharedFreeUnavailable": "Shared free time unavailable",
+  "coupleTimetableSharedFreeStaleHint": "Partner schedule may be outdated",
   "coupleTimetablePartnerReadOnlyBadge": "Partner timetable (read-only)",
   "coupleTimetableNotBoundMessage": "Import a partner timetable before opening the overlay view",
   "coupleTimetableShareText": "Here is my timetable. Import it in Qingyu Timetable > Couple Timetable to view together.",
@@ -151,6 +171,10 @@
   "coupleWebdavLoginSheetTitle": "Connect Nutstore (couple timetable)",
   "coupleWebdavLoginSheetSubtitle": "Use an app-specific password. Your partner must upload their timetable to the agreed path first, or upload from their device on the same account",
   "coupleWebdavConfirmConnect": "Connect and pull",
+  "coupleWebdavMySlotLabel": "This device slot",
+  "coupleWebdavMySlotHint": "Both devices must pick different slots: one chooses 1, the other 2, or neither can read the partner timetable",
+  "coupleWebdavSlotOne": "Slot 1",
+  "coupleWebdavSlotTwo": "Slot 2",
   "coupleWebdavTestSuccess": "Nutstore connection successful",
   "coupleWebdavTestFailed": "Connection failed. Check account, app password, and network.",
   "coupleWebdavPullImported": "Partner timetable imported from Nutstore",
@@ -376,21 +400,21 @@
   "unifiedCourseCardColorTitle": "Use Unified Course Card Color",
   "unifiedCourseCardColorSubtitle": "If disabled, each course keeps its own color",
   "importRandomCourseColorTitle": "Random course colors",
-  "importRandomCourseColorSubtitle": "When on, assign preset colors by course name and teacher instead of one default blue",
+  "importRandomCourseColorSubtitle": "Assign preset colors by course name and teacher",
   "courseImportTitle": "Import Courses",
   "chooseImportMethodTitle": "Choose Import Method",
   "chooseImportMethodSubtitle": "Supports traditional .ics calendar import, AI image import, and warehouse-based academic system import",
   "importMethodIcsTitle": ".ics Calendar Import",
-  "importMethodIcsSubtitle": "Best for calendar files exported from apps like WakeUp",
+  "importMethodIcsSubtitle": "Calendar files from other timetable apps",
   "importMethodIcsFooter": "Pick an .ics file directly. You can append or replace existing courses.",
   "importMethodAiTitle": "Image Import",
-  "importMethodAiSubtitle": "Best for direct timetable screenshots, including multiple continuous screenshots",
+  "importMethodAiSubtitle": "Import from timetable screenshots",
   "importMethodAiFooter": "Copy the prompt, send screenshots to the AI expert mode, paste the JSON result back, then choose semester start date.",
   "importMethodWarehouseTitle": "Academic System Import",
-  "importMethodWarehouseSubtitle": "Read schools and adapters from qingyu_warehouse and import through the web login flow",
+  "importMethodWarehouseSubtitle": "Sign in to your school system",
   "importMethodWarehouseFooter": "Choose a school and adapter, then open the academic system page and run the import.",
   "importMethodSpreadsheetTitle": "Spreadsheet Import",
-  "importMethodSpreadsheetSubtitle": "Fill in the mikcb template in Excel/WPS and import without exporting .ics first",
+  "importMethodSpreadsheetSubtitle": "Import from an Excel or CSV template",
   "importMethodSpreadsheetFooter": "Supports .csv and .xlsx. Download the template, fill it in, then pick a file.",
   "importMethodHtmlTitle": "Import from URL",
   "importMethodHtmlSubtitle": "Enter a timetable page URL and read course info from the HTML.",
@@ -602,6 +626,42 @@
   },
   "keepAtLeastOneProfile": "Keep at least one timetable",
   "dataTransferTitle": "Backup & Migration",
+  "qrTransferSectionTitle": "QR Face-to-Face Transfer",
+  "qrTransferSectionSubtitle": "Bring two phones close and scan to transfer timetables and settings without any network",
+  "qrTransferSendCurrent": "Send Current Timetable",
+  "qrTransferSendAll": "Send All Data",
+  "qrTransferScanReceive": "Scan to Receive",
+  "qrTransferFrameProgress": "{sent} frames sent, about {total} needed",
+  "@qrTransferFrameProgress": {
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "qrTransferSendHint": "Ask the other party to open \"Scan to Receive\" and keep the camera pointed at this screen until done",
+  "qrTransferStop": "Stop Sending",
+  "qrTransferScanTitle": "Scan to Receive",
+  "qrTransferScanHint": "Point the camera at the other phone's screen and hold steady until progress completes",
+  "qrTransferReceiveProgress": "{received} frames received · {decoded}/{total} decoded",
+  "@qrTransferReceiveProgress": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "decoded": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "qrTransferReceiveComplete": "Data received, importing…",
+  "qrTransferSessionMismatch": "Detected a different transfer; make sure you are pointing at one stream only",
   "fullExportTitle": "Export",
   "fullExportSubtitle": "Export the current timetable, or export all timetables, time schemes, and the current selection",
   "exportCurrentTimetable": "Export Current Timetable",
@@ -884,7 +944,7 @@
       }
     }
   },
-  "followCurrentTimetableDescription": "By default this course follows the timetable’s main time scheme, which suits most courses",
+  "followCurrentTimetableDescription": "Without a manual override, auto-match by location keywords; otherwise follow the timetable main scheme",
   "overrideTimeSchemeDescription": "This course will use the selected scheme separately instead of following the timetable’s main schedule",
   "weekdayLabel": "Weekday",
   "startSectionLabel": "Start Section",
@@ -1002,7 +1062,7 @@
   "aboutOpenSourceLicensesLoadFailed": "Failed to load licenses. Please try again later.",
   "aboutOpenSourceLicensesEmpty": "No matching packages",
   "aboutAppLogsTitle": "App logs",
-  "aboutAppLogsSubtitle": "Open the dedicated page for full app logs across error / warn / info / debug / verbose levels",
+  "aboutAppLogsSubtitle": "View all-level runtime logs",
   "appLogsShareText": "These are the app logs exported from Qingyu Timetable. They include local runtime records across the whole app for troubleshooting updates, imports, notifications, screens, and crashes.",
   "appLogsShareSubject": "Qingyu Timetable - App logs",
   "appLogsRecordingEnabled": "App log recording is on",
@@ -1674,14 +1734,14 @@
   "homeTitleStyleLabel": "Title style",
   "themeSeedSectionTitle": "App theme color",
   "themeSeedSectionSubtitle": "Affects the top bar, accent color, and global primary tone",
-  "frostedSheetSectionTitle": "Sheet frosted glass",
+  "frostedSheetSectionTitle": "Frosted Glass",
   "frostedSheetSectionSubtitle": "Adjust home popup blur and milky frosted brightness. Further right = brighter white glass",
-  "frostedBlurEnabledTitle": "Gaussian blur",
+  "frostedBlurEnabledTitle": "Enable Blur",
   "frostedBlurEnabledSubtitle": "When off, sheets and home frosted areas keep tint only, without backdrop blur",
-  "frostedSheetPreviewOpenAction": "Open sheet preview",
-  "frostedSheetPreviewDemoTitle": "Sheet preview",
-  "frostedSheetPreviewDemoSubtitle": "Same frosted glass as the home top-right menu",
-  "frostedSheetBlurLabel": "Blur strength",
+  "frostedSheetPreviewOpenAction": "Open Preview Panel",
+  "frostedSheetPreviewDemoTitle": "Preview",
+  "frostedSheetPreviewDemoSubtitle": "Live preview of frosted glass effect",
+  "frostedSheetBlurLabel": "Blur Intensity",
   "frostedSheetTintLabel": "Frost brightness",
   "timetableBackgroundColorSectionTitle": "Timetable background color",
   "timetableBackgroundColorSectionSubtitle": "Used in solid-color mode for the selected display regions; can pair with a background image",
@@ -2320,7 +2380,7 @@
   "aboutParticipateWarehouseSubtitle": "If you know packet capture, web debugging, JavaScript, or are willing to maintain your school's academic system long-term, you are welcome to submit new school adapters and fixes to qingyu_warehouse",
   "importFileReadFailed": "Unable to read the selected file",
   "importReplaceExistingTitle": "Import courses",
-  "importReplaceExistingMessage": "When importing {name}, replace existing courses?",
+  "importReplaceExistingMessage": "When importing {name}, replace existing courses? This also clears independent agenda items on the current timetable (such as study sessions or meetings).",
   "@importReplaceExistingMessage": {
     "placeholders": {
       "name": {
@@ -2408,7 +2468,7 @@
   "aiPasteJsonFirst": "Please paste the JSON returned by AI first",
   "aiParseFailedIncompleteJson": "Parsing failed. Please make sure you pasted the complete JSON.",
   "importAiResultTitle": "Import AI parsing result",
-  "importAiReplaceMessage": "Replace the existing courses with the current AI parsing result?",
+  "importAiReplaceMessage": "Replace the existing courses with the current AI parsing result? This also clears independent agenda items on the current timetable (such as study sessions or meetings).",
   "importConfirmSemesterMappingSubtitleAi": "Please choose the semester start date from your school calendar, then confirm which calendar week corresponds to Week 1 in the timetable. If there are no classes in the first week, this usually needs to be changed to Week 2.",
   "aiWarningExtraSuffix": ", plus {count} recognition warnings",
   "@aiWarningExtraSuffix": {
@@ -2452,6 +2512,11 @@
   "goFeedbackAction": "Go to feedback",
   "warehouseFeedbackMissingSchoolTitle": "Missing school? Go to feedback",
   "warehouseCustomDebugTitle": "Custom debug",
+  "warehouseImportExecutionLogTitle": "Import execution log",
+  "warehouseImportExecutionLogMenuLabel": "Import execution log",
+  "warehouseImportExecutionLogShareText": "This is the academic-system import execution log exported from Qingyu Timetable. It includes script injection, bridge messages, timeouts, and import results for troubleshooting.",
+  "warehouseImportExecutionLogShareSubject": "Qingyu Timetable - Import execution log",
+  "warehouseImportExecutionLogEmpty": "No import execution records yet. Open the academic-system page, run the import script, then check again.",
   "warehouseRootLoadFailedTitle": "Unable to read the adapter repository right now",
   "searchSchoolHint": "Search school name, initials, or code",
   "clearSearchTooltip": "Clear",
@@ -2564,6 +2629,10 @@
   "quickImportFinishedTitle": "Import complete",
   "quickImportDismissAction": "Done",
   "quickImportRetryAction": "Retry",
+  "homePullQuickImportTitle": "Pull to quick-import",
+  "homePullQuickImportSubtitle": "Pull down on the home timetable to run warehouse quick import in the background",
+  "homePullQuickImportFetchingCourses": "Fetching new courses…",
+  "homePullQuickImportNeedsManualAction": "Manual action needed. Open the warehouse import page to continue",
   "quickImportPlaybackStepProgress": "Step {current} / {total}",
   "@quickImportPlaybackStepProgress": {
     "placeholders": {
@@ -3189,6 +3258,7 @@
   "examDateLabel": "Exam Date",
   "examDateHint": "Select date",
   "examDateRequired": "Please select exam date",
+  "examEndTimeBeforeStart": "End time cannot be earlier than start time",
   "examStartTimeLabel": "Start Time",
   "examEndTimeLabel": "End Time",
   "examLocationLabel": "Exam Room",
@@ -3318,6 +3388,33 @@
   "courseActionRescheduleSecondary": "Reschedule",
   "courseActionSuspendSecondary": "Suspend",
   "courseActionDeleteSecondary": "Delete",
+  "courseNoteSheetTitle": "Course Notes",
+  "courseNoteAction": "Notes",
+  "courseNoteSaveAction": "Save",
+  "courseNoteTabWholeCourse": "Course description",
+  "courseNoteTabThisSession": "This class",
+  "courseNoteWholeCourseLabel": "Course description",
+  "courseNoteWholeCourseHint": "Shared across same-name courses (e.g. syllabus notes or classroom tips).",
+  "courseNoteWholeCoursePlaceholder": "e.g. This teacher often takes attendance, classroom is in the new building…",
+  "courseNoteSessionLabel": "This-class note",
+  "courseNoteSessionHint": "Applies only to week {week} for this class — good for homework or what to bring.",
+  "@courseNoteSessionHint": {
+    "placeholders": {
+      "week": {
+        "type": "int"
+      }
+    }
+  },
+  "courseNoteSessionPlaceholder": "e.g. Chapter 3 exercises due, bring a laptop…",
+  "courseNoteHasHomeworkTitle": "Has homework",
+  "courseNoteHasHomeworkSubtitle": "When on, week-view cards show a homework badge",
+  "courseNoteHomeworkMarked": "Homework this class",
+  "courseNoteTileSubtitleEmpty": "Note homework, what to bring, or class reminders",
+  "courseNoteTileSubtitleWhole": "Course description set",
+  "courseNoteTileSubtitleSession": "This-class note set",
+  "courseNoteTileSubtitleBoth": "Course description and this-class notes set",
+  "courseNoteReadOnlyNotice": "Partner courses are view-only for notes.",
+  "courseNoteDoneEditingAction": "Done",
   "courseActionSheetNotice": "You are viewing Week {week}. If an exam or conflict comes up, you can quickly reschedule or suspend below.",
   "@courseActionSheetNotice": {
     "placeholders": {
@@ -4667,6 +4764,7 @@
   "macroReplayStepWaitManual": "Waiting for user action",
   "macroReplayStepExecuteScript": "Running import script…",
   "macroReplayStepDelay": "Waiting…",
+  "macroReplayAcceleratedFallbackTip": "Quick path failed; retrying with the full recorded steps…",
   "macroReplayNoSteps": "No recorded steps",
   "macroReplayUserCancelled": "Cancelled by user",
   "macroReplayStepFailed": "Step {current}/{total} failed: {error}",
@@ -4828,11 +4926,20 @@
   "courseImportScriptFailed": "Script execution failed",
   "courseImportRecordingStatus": "Recording… tap Stop to finish",
   "courseImportRecordingStartedTip": "Recording started. Continue through the academic portal as usual",
+  "courseImportAutoRecordingStartedTip": "Recording your steps in the background. You can save them as quick import after a successful import",
   "courseImportRecordingEmptyStatus": "No actions recorded",
   "courseImportRecordingEmptyTip": "No actions recorded",
   "courseImportSaveRecordingTitle": "Save recording",
   "courseImportSaveRecordingMessage": "Recorded {count} steps. Save as quick import?",
   "@courseImportSaveRecordingMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "courseImportSaveAutoRecordingMessage": "Import succeeded. Recorded {count} steps. Save this path for next quick import?",
+  "@courseImportSaveAutoRecordingMessage": {
     "placeholders": {
       "count": {
         "type": "int"
@@ -5239,5 +5346,334 @@
         "type": "int"
       }
     }
-  }
+  },
+  "locationTimeMatchEntryTitle": "Location-based schedule",
+  "locationTimeMatchEntrySubtitle": "Auto-select time schemes by classroom keywords",
+  "locationTimeMatchTitle": "Location-based schedule",
+  "locationTimeMatchSubtitle": "Match time schemes by location keywords. Rematching updates clocks for matched courses only; unmatched courses stay unchanged.",
+  "locationTimeMatchWeekAxisNote": "Note: the week-view time axis still shows the timetable default scheme. Card/live times use the matched scheme.",
+  "locationTimeMatchPreviewLabel": "Try a location",
+  "locationTimeMatchPreviewHint": "e.g. A1062 or A主201",
+  "locationTimeMatchPreviewNoMatch": "No group matched; the default timetable scheme will be used",
+  "locationTimeMatchPreviewResult": "Matches: {group} · {scheme} (keyword {keyword})",
+  "@locationTimeMatchPreviewResult": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "scheme": {
+        "type": "String"
+      },
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchApplyActive": "Rematch current timetable",
+  "locationTimeMatchApplyTitle": "Rematch current timetable?",
+  "locationTimeMatchApplyMessage": "{count} courses currently match a location rule. Courses whose sections fit will return to automatic routing and update their clocks; any manual scheme on those courses will be cleared. Unmatched courses will remain unchanged.",
+  "@locationTimeMatchApplyMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyConfirm": "Rematch",
+  "locationTimeMatchApplyUpdated": "Rematched {matched} courses, updated {updated} clocks",
+  "@locationTimeMatchApplyUpdated": {
+    "placeholders": {
+      "matched": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyAlreadyAligned": "Rematched {matched} courses; clocks already correct",
+  "@locationTimeMatchApplyAlreadyAligned": {
+    "placeholders": {
+      "matched": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyNoneMatched": "No courses matched the place rules",
+  "locationTimeMatchApplyOverflowResult": "{count} courses cannot map into the scheme (too few sections); apply rejected",
+  "@locationTimeMatchApplyOverflowResult": {
+    "placeholders": {
+      "matched": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchApplyOverflowHint": "Examples: {names}",
+  "@locationTimeMatchApplyOverflowHint": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchEmpty": "No place groups yet",
+  "locationTimeMatchCreateGroup": "New place group",
+  "locationTimeMatchEditGroup": "Edit place group",
+  "locationTimeMatchUnknownScheme": "Unknown time scheme",
+  "locationTimeMatchNoKeywords": "No keywords",
+  "locationTimeMatchBoundScheme": "Time scheme: {name}",
+  "@locationTimeMatchBoundScheme": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchKeywordsLine": "Keywords: {keywords}",
+  "@locationTimeMatchKeywordsLine": {
+    "placeholders": {
+      "keywords": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchDeleteTitle": "Delete place group?",
+  "locationTimeMatchDeleteMessage": "Delete \"{name}\"? Automatically matched courses will return to the timetable default; manually selected schemes will stay unchanged.",
+  "@locationTimeMatchDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchDeleted": "Place group deleted",
+  "locationTimeMatchGroupNameLabel": "Group name",
+  "locationTimeMatchGroupNameHint": "e.g. Main building",
+  "locationTimeMatchBoundSchemeLabel": "Bound time scheme",
+  "locationTimeMatchNeedTimeScheme": "Create at least one time scheme first",
+  "locationTimeMatchEnabledLabel": "Enable this group",
+  "locationTimeMatchKeywordsSection": "Location keywords",
+  "locationTimeMatchKeywordsHelp": "Pick buildings from your timetable locations, or type keywords (A主, A1, A6). Prefer prefix match; longer keywords win.",
+  "locationTimeMatchSelectedKeywords": "Selected keywords",
+  "locationTimeMatchNoSelectedKeywords": "No keywords yet",
+  "locationTimeMatchPickFromLocations": "Pick from timetable locations",
+  "locationTimeMatchBuildingSuggestions": "Buildings found in timetable",
+  "locationTimeMatchNoBuildingSuggestions": "No recognizable building locations yet",
+  "locationTimeMatchAddBuilding": "Add",
+  "locationTimeMatchAddAllBuildings": "Add all uncovered buildings",
+  "locationTimeMatchBuildingRoomCount": "{count} rooms",
+  "@locationTimeMatchBuildingRoomCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "locationTimeMatchBuildingGateTags": "Tags: {tags}",
+  "@locationTimeMatchBuildingGateTags": {
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchKeywordExtracted": "Extracted keyword {keyword}",
+  "@locationTimeMatchKeywordExtracted": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchKeywordAlreadyExists": "Keyword already added",
+  "locationTimeMatchKeywordUsedByGroup": "Keyword already used by \"{group}\"",
+  "@locationTimeMatchKeywordUsedByGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeMatchAddKeyword": "Add keyword manually",
+  "locationTimeMatchKeywordLabel": "Keyword",
+  "locationTimeMatchKeywordHint": "A1 / A主",
+  "locationTimeMatchModeLabel": "Match mode",
+  "locationTimeMatchModePrefix": "Prefix",
+  "locationTimeMatchModeContains": "Contains",
+  "locationTimeMatchModeExact": "Exact",
+  "locationTimeMatchKeywordTooShort": "Keyword is very short and may mis-match",
+  "locationTimeMatchNameRequired": "Enter a group name",
+  "locationTimeMatchKeywordRequired": "Add at least one keyword",
+  "locationTimeMatchSaved": "Place group saved",
+  "locationTimeMatchSaveFailed": "Save failed",
+  "followLocationAutoTimeScheme": "Follow timetable / location auto",
+  "followLocationAutoTimeSchemeDescription": "Without a manual override, match a time scheme by location keywords; otherwise use the timetable default",
+  "locationTimeMatchedSchemeHint": "Auto · {scheme}",
+  "@locationTimeMatchedSchemeHint": {
+    "placeholders": {
+      "scheme": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeAutoResolvedByGroup": "Place group \"{group}\" → {scheme}",
+  "@locationTimeAutoResolvedByGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "scheme": {
+        "type": "String"
+      }
+    }
+  },
+  "locationTimeAutoResolvedByTimetable": "Timetable default → {scheme}",
+  "@locationTimeAutoResolvedByTimetable": {
+    "placeholders": {
+      "scheme": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleSectionTitle": "Date-based schedule",
+  "scheduleDateRuleSectionSubtitle": "On the start date, apply the selected scheme as the default for all timetables. Max 2 non-overlapping rules; location-based schedule takes priority.",
+  "scheduleDateRuleAdd": "Add date rule",
+  "scheduleDateRuleEdit": "Edit date rule",
+  "scheduleDateRuleEmpty": "No date rules",
+  "scheduleDateRuleNameLabel": "Rule name",
+  "scheduleDateRuleNameHint": "e.g. Summer / Winter",
+  "scheduleDateRuleStartDate": "Start date",
+  "scheduleDateRuleEndDate": "End date",
+  "scheduleDateRuleBoundScheme": "Time scheme",
+  "scheduleDateRuleEnabled": "Enabled",
+  "scheduleDateRuleActiveToday": "In range today",
+  "scheduleDateRuleRangeSummary": "{start} ~ {end}",
+  "@scheduleDateRuleRangeSummary": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleMaxReached": "At most 2 date rules",
+  "scheduleDateRuleNeedScheme": "Create a time scheme first",
+  "scheduleDateRuleNameRequired": "Enter a rule name",
+  "scheduleDateRuleSaved": "Date rule saved",
+  "scheduleDateRuleSavedAndApplied": "Date rule saved; every timetable's default schedule has been updated today",
+  "scheduleDateRuleSavedForFuture": "Date rule saved; every timetable's default schedule will update on the start date",
+  "scheduleDateRuleSavedButApplyFailed": "Date rule saved, but today's auto-apply failed (check scheme section count)",
+  "scheduleDateRuleDeleted": "Date rule deleted",
+  "scheduleDateRuleDeleteTitle": "Delete date rule?",
+  "scheduleDateRuleDeleteMessage": "Delete “{name}”? Already-applied schedules are not rolled back automatically; adjust them manually if needed.",
+  "@scheduleDateRuleDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleSaveFailed": "Save failed: {reason}",
+  "@scheduleDateRuleSaveFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleDateRuleErrorMax": "Limit of 2 rules reached",
+  "scheduleDateRuleErrorOverlap": "Date range overlaps another rule",
+  "scheduleDateRuleErrorInvalidDate": "Invalid date",
+  "scheduleDateRuleErrorEndBeforeStart": "End date cannot be before start date",
+  "scheduleDateRuleErrorSchemeRequired": "Pick a time scheme",
+  "scheduleDateRuleErrorNameRequired": "Enter a name",
+  "scheduleDateRuleNote": "Location match takes priority over date rules.",
+  "frostedGlassModeLabel": "Glass Mode",
+  "frostedGlassModeFrosted": "Classic Frosted",
+  "frostedGlassModeLiquid": "Liquid Glass",
+  "frostedGlassModeGaussian": "Gaussian Blur",
+  "frostedGlassModeTranslucent": "Translucent",
+  "frostedLiquidGlassHint": "Liquid glass requires a high-performance device",
+  "advancedMaterialTitle": "Advanced Material",
+  "advancedMaterialEntrySubtitle": "Liquid glass parameter tuning",
+  "liquidGlassPresetLabel": "Liquid Glass Preset",
+  "liquidGlassPresetClear": "Clear",
+  "liquidGlassPresetLight": "Light Mist",
+  "liquidGlassPresetStandard": "Standard",
+  "liquidGlassPresetDense": "Dense",
+  "liquidGlassPresetCustom": "Custom",
+  "courseCardSettingsTitle": "Course Card",
+  "courseCardSectionFields": "Display Fields",
+  "courseCardSectionLayout": "Layout",
+  "courseCardSurfaceStyleLabel": "Card Appearance",
+  "courseCardSurfaceStyleSubtitle": "Choose the visual style for course cards",
+  "courseCardSurfaceStyleSolid": "Solid",
+  "courseCardSurfaceStyleTranslucent": "Translucent",
+  "courseCardSurfaceStyleLiquidGlass": "Liquid Glass",
+  "courseCardSurfaceStyleGaussian": "Gaussian Blur",
+  "courseCardSectionColor": "Color",
+  "liveSelfCheckTitle": "Self-Check",
+  "collapsibleLargeTitle": "Collapsible Large Title",
+  "liquidGlassCustomExpandedTitle": "Custom Parameters",
+  "liquidGlassThicknessLabel": "Thickness",
+  "liquidGlassBlurLabel": "Blur Intensity",
+  "liquidGlassTintLabel": "Tint Intensity",
+  "liquidGlassLightIntensityLabel": "Light Intensity",
+  "liquidGlassAmbientStrengthLabel": "Ambient Light Strength",
+  "liquidGlassRefractiveIndexLabel": "Refractive Index",
+  "liquidGlassSaturationLabel": "Saturation",
+  "liquidGlassChromaticAberrationLabel": "Chromatic Aberration",
+  "liquidGlassLightAngleLabel": "Light Angle",
+  "liquidGlassVisibilityLabel": "Visibility",
+  "liquidGlassResetAction": "Reset to Default",
+  "diagnosticsEntryTitle": "Diagnostics",
+  "memoryStatsEntryTitle": "Memory Stats",
+  "generalSettingsTitle": "General",
+  "settingsResetDefaultsTitle": "Reset to Defaults",
+  "settingsResetDefaultsConfirmTitle": "Confirm Reset",
+  "settingsResetDefaultsConfirmBody": "All settings will be restored to factory defaults.",
+  "settingsResetDoneMessage": "Settings have been reset",
+  "timetablePageSettingsTitle": "Timetable Page",
+  "timetablePageSectionDensity": "Density",
+  "timetablePageSectionBackToWeek": "Back to Current Week",
+  "timetablePageSectionBackground": "Background",
+  "largeTitleContentGap": "16.0",
+  "selectTimeTitle": "Select Time",
+  "liveSelfCheckSubtitle": "Run Self-Check",
+  "frostedSheetPreviewShowTitle": "Show Preview",
+  "frostedSheetPreviewShowSubtitle": "Show frosted glass preview at the top",
+  "aboutSupportUpdatesSectionTitle": "Support & Updates",
+  "aboutProductSectionTitle": "Product",
+  "aboutCommunitySectionTitle": "Community",
+  "selectStartTimeTitle": "Select Start Time",
+  "selectEndTimeTitle": "Select End Time",
+  "weekdayInkContrastTitle": "Text Contrast Enhancement",
+  "weekdayInkContrastBodyDark": "Enhance course text contrast in dark mode",
+  "weekdayInkContrastBodyLight": "Enhance course text contrast in light mode",
+  "keepCurrentColorAction": "Keep Current Color",
+  "settingsTimetableSectionTitle": "Timetable",
+  "liveIslandLabelEntryEnabled": "Enabled",
+  "liveIslandLabelEntryDisabled": "Disabled",
+  "settingsDisplayAppearanceSectionTitle": "Display & Appearance",
+  "settingsReminderDesktopSectionTitle": "Reminders & Desktop",
+  "settingsAppSectionTitle": "App",
+  "settingsDataShareSectionTitle": "Data & Sharing",
+  "coupleTimetableEntryUnboundLabel": "Unbound",
+  "settingsAboutSectionTitle": "About",
+  "diagnosticsEntrySubtitle": "View runtime diagnostics logs",
+  "settingsSemesterScreenTitle": "Semester Settings",
+  "syncCurrentWeekNeedsStartDate": "Please set the semester start date first",
+  "liveNotificationPermissionMissing": "Notification permission missing",
+  "developerSectionTitle": "Developer Options",
+  "liveTestingFixtureEntryTitle": "Live Test Fixture",
+  "hyperosShowcaseEntryTitle": "HyperOS Component Showcase",
+  "hyperosShowcaseEntrySubtitle": "HyperOS component preview",
+  "miuixShowcaseEntryTitle": "Miuix Component Showcase",
+  "miuixShowcaseEntrySubtitle": "Miuix component preview",
+  "debugUiOverlayToggleTitle": "Debug UI Overlay"
 }

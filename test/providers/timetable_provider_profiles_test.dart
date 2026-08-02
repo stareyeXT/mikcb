@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:university_timetable/models/course.dart';
 import 'package:university_timetable/models/holiday_entry.dart';
+import 'package:university_timetable/models/location_time_group.dart';
 import 'package:university_timetable/models/timetable_settings.dart';
 import 'package:university_timetable/providers/timetable/live_activity_logic.dart';
 import 'package:university_timetable/providers/timetable_provider.dart';
@@ -311,6 +312,65 @@ void main() {
     );
   });
 
+  test('suspended week is not treated as course conflict', () async {
+    final provider = TimetableProvider(
+      autoInitialize: false,
+      enableLiveActivitySync: false,
+    );
+    await provider.initialize();
+
+    await provider.addCourse(
+      Course(
+        id: 'course-a',
+        name: '线性代数',
+        teacher: '张老师',
+        location: 'A101',
+        dayOfWeek: 2,
+        startSection: 1,
+        endSection: 2,
+        startTime: '08:00',
+        endTime: '09:40',
+        startWeek: 1,
+        endWeek: 16,
+        suspendedWeeks: [1],
+      ),
+    );
+    await provider.addCourse(
+      Course(
+        id: 'course-b',
+        name: '大学物理',
+        teacher: '李老师',
+        location: 'B202',
+        dayOfWeek: 2,
+        startSection: 1,
+        endSection: 2,
+        startTime: '08:00',
+        endTime: '09:40',
+        startWeek: 1,
+        endWeek: 16,
+      ),
+    );
+
+    // Week 1: A is suspended → no actual overlap week → no conflict map entry.
+    expect(
+      provider.courseConflictMapForWeek(1).containsKey('course-a'),
+      isFalse,
+    );
+    expect(
+      provider.courseConflictMapForWeek(1).containsKey('course-b'),
+      isFalse,
+    );
+    // Week 2: both active and same slot → conflict.
+    expect(
+      provider.courseConflictMapForWeek(2).containsKey('course-a'),
+      isTrue,
+    );
+    expect(
+      provider.courseConflictMapForWeek(2).containsKey('course-b'),
+      isTrue,
+    );
+  });
+
   test(
     'same slot on different non-overlapping weeks is not conflict',
     () async {
@@ -557,6 +617,151 @@ void main() {
       greaterThanOrEqualTo(0),
     );
   });
+
+  test(
+    'apply location time rules returns matched courses to automatic routing',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      final locationScheme = await provider.createTimeScheme(
+        name: '教学楼A作息',
+        sections: [
+          const SectionTime(startTime: '08:30', endTime: '09:15'),
+          const SectionTime(startTime: '09:25', endTime: '10:10'),
+          ...provider.settings.sections.skip(2),
+        ],
+      );
+      await provider.createLocationTimeGroup(
+        name: 'A楼',
+        timeSchemeId: locationScheme.id,
+        keywords: const [
+          LocationKeyword(
+            pattern: '测试教室',
+            mode: LocationKeywordMatchMode.contains,
+          ),
+        ],
+      );
+
+      await provider.addCourse(
+        Course(
+          id: 'loc-apply-course',
+          name: '测试 第1节',
+          teacher: '测试教师',
+          location: '测试教室 01',
+          dayOfWeek: 1,
+          startSection: 1,
+          endSection: 1,
+          startTime: '08:00',
+          endTime: '08:45',
+        ),
+      );
+
+      expect(provider.courses.single.timeSchemeIdOverride, isNull);
+
+      final manualScheme = await provider.createTimeScheme(
+        name: '手动模板',
+        sections: [
+          const SectionTime(startTime: '07:30', endTime: '08:15'),
+          const SectionTime(startTime: '08:25', endTime: '09:10'),
+          ...provider.settings.sections.skip(2),
+        ],
+      );
+      await provider.updateCourse(
+        provider.courses.single.copyWith(timeSchemeIdOverride: manualScheme.id),
+      );
+      expect(provider.courses.single.timeSchemeIdOverride, manualScheme.id);
+
+      final stats = await provider.applyLocationTimeRulesToActiveProfile();
+
+      expect(stats.matchedCount, 1);
+      expect(stats.updatedCount, 1);
+      expect(provider.courses.single.timeSchemeIdOverride, isNull);
+      expect(provider.courses.single.startTime, '08:30');
+      expect(provider.courses.single.endTime, '09:15');
+
+      // A later rematch follows the updated location rule without creating a
+      // permanent course-level override.
+      final otherScheme = await provider.createTimeScheme(
+        name: '教学楼A作息-改',
+        sections: [
+          const SectionTime(startTime: '08:40', endTime: '09:25'),
+          const SectionTime(startTime: '09:35', endTime: '10:20'),
+          ...provider.settings.sections.skip(2),
+        ],
+      );
+      final group = provider.locationTimeGroups.single;
+      await provider.updateLocationTimeGroup(
+        group.copyWith(timeSchemeId: otherScheme.id),
+      );
+
+      final statsAgain = await provider.applyLocationTimeRulesToActiveProfile();
+      expect(statsAgain.matchedCount, 1);
+      expect(statsAgain.updatedCount, 0);
+      expect(provider.courses.single.timeSchemeIdOverride, isNull);
+      expect(provider.courses.single.startTime, '08:40');
+      expect(provider.courses.single.endTime, '09:25');
+    },
+  );
+
+  test(
+    'apply location rules rejects overflow without pinning or clock rewrite',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      final shortScheme = await provider.createTimeScheme(
+        name: '仅4节模板',
+        sections: [
+          for (var index = 0; index < 4; index++)
+            SectionTime(
+              startTime: '${(8 + index).toString().padLeft(2, '0')}:00',
+              endTime: '${(8 + index).toString().padLeft(2, '0')}:45',
+            ),
+        ],
+      );
+      await provider.createLocationTimeGroup(
+        name: '测试楼',
+        timeSchemeId: shortScheme.id,
+        keywords: const [
+          LocationKeyword(
+            pattern: '测试教室',
+            mode: LocationKeywordMatchMode.contains,
+          ),
+        ],
+      );
+
+      await provider.addCourse(
+        Course(
+          id: 'overflow-course',
+          name: '测试 第8节',
+          teacher: '测试教师',
+          location: '测试教室 08',
+          dayOfWeek: 1,
+          startSection: 8,
+          endSection: 8,
+          startTime: '15:00',
+          endTime: '15:45',
+        ),
+      );
+
+      final stats = await provider.applyLocationTimeRulesToActiveProfile();
+
+      // Location may hit the group, but apply is fully rejected → not matched.
+      expect(stats.matchedCount, 0);
+      expect(stats.sectionOverflowCount, 1);
+      expect(stats.updatedCount, 0);
+      expect(provider.courses.single.timeSchemeIdOverride, isNull);
+      expect(provider.courses.single.startTime, '15:00');
+      expect(provider.courses.single.endTime, '15:45');
+    },
+  );
 
   test(
     'deleting time scheme referenced by course override is rejected',
@@ -1026,6 +1231,178 @@ void main() {
       'B202',
     });
   });
+
+  test(
+    'adding same-name course inherits shared description from existing entry',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      await provider.addCourse(
+        Course(
+          id: 'course-range',
+          name: '高等数学',
+          teacher: '张老师',
+          location: 'A101',
+          dayOfWeek: 1,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+          startWeek: 1,
+          endWeek: 20,
+          description: '带计算器',
+        ),
+      );
+
+      // New single-week schedule entry for the same course name.
+      await provider.addCourse(
+        Course(
+          id: 'course-single-week',
+          name: '高等数学',
+          teacher: '张老师',
+          location: 'B202',
+          dayOfWeek: 3,
+          startSection: 3,
+          endSection: 4,
+          startTime: '10:00',
+          endTime: '11:40',
+          startWeek: 8,
+          endWeek: 8,
+        ),
+      );
+
+      final sameNameCourses = provider.courses
+          .where((course) => course.name == '高等数学')
+          .toList();
+      expect(sameNameCourses, hasLength(2));
+      expect(sameNameCourses.map((course) => course.description).toSet(), {
+        '带计算器',
+      });
+
+      final singleWeek = sameNameCourses.singleWhere(
+        (course) => course.id == 'course-single-week',
+      );
+      expect(singleWeek.description, '带计算器');
+      expect(singleWeek.location, 'B202');
+    },
+  );
+
+  test(
+    'adding same-name course promotes legacy per-entry note into description',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      // Legacy data: intro only lived on [Course.note], not description.
+      await provider.addCourse(
+        Course(
+          id: 'course-legacy',
+          name: '线性代数',
+          teacher: '李老师',
+          location: 'C101',
+          dayOfWeek: 2,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+          note: '旧版整节课备注',
+        ),
+      );
+
+      final legacy = provider.courses.singleWhere(
+        (course) => course.id == 'course-legacy',
+      );
+      // Normalize promotes note into shared description on write.
+      expect(legacy.description, '旧版整节课备注');
+
+      await provider.addCourse(
+        Course(
+          id: 'course-new-slot',
+          name: '线性代数',
+          teacher: '李老师',
+          location: 'D303',
+          dayOfWeek: 4,
+          startSection: 5,
+          endSection: 6,
+          startTime: '14:00',
+          endTime: '15:40',
+          startWeek: 5,
+          endWeek: 5,
+        ),
+      );
+
+      final sameNameCourses = provider.courses
+          .where((course) => course.name == '线性代数')
+          .toList();
+      expect(sameNameCourses, hasLength(2));
+      expect(sameNameCourses.map((course) => course.description).toSet(), {
+        '旧版整节课备注',
+      });
+    },
+  );
+
+  test(
+    'updating description on one course syncs to all same-name schedule entries',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      await provider.addCourse(
+        Course(
+          id: 'course-a',
+          name: '大学英语',
+          teacher: '王老师',
+          location: 'A101',
+          dayOfWeek: 1,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+          description: '旧简介',
+        ),
+      );
+      await provider.addCourse(
+        Course(
+          id: 'course-b',
+          name: '大学英语',
+          teacher: '王老师',
+          location: 'B202',
+          dayOfWeek: 3,
+          startSection: 3,
+          endSection: 4,
+          startTime: '10:00',
+          endTime: '11:40',
+          startWeek: 10,
+          endWeek: 10,
+        ),
+      );
+
+      final originalA = provider.courses.singleWhere(
+        (course) => course.id == 'course-a',
+      );
+      await provider.updateCourse(
+        originalA.copyWith(description: '新课程简介', note: null),
+      );
+
+      final sameNameCourses = provider.courses
+          .where((course) => course.name == '大学英语')
+          .toList();
+      expect(sameNameCourses, hasLength(2));
+      expect(sameNameCourses.map((course) => course.description).toSet(), {
+        '新课程简介',
+      });
+    },
+  );
 
   test(
     'clearing short name falls back to course name for live island payload',
@@ -1538,6 +1915,57 @@ void main() {
   );
 
   test(
+    'home widget has no courses after semesterWeekCount even when UI week clamps',
+    () async {
+      final provider = TimetableProvider(
+        autoInitialize: false,
+        enableLiveActivitySync: false,
+      );
+      await provider.initialize();
+
+      await provider.updateTimetableSettings(
+        provider.settings.copyWith(
+          semesterWeekCount: 16,
+          semesterStartDate: DateTime(2026, 2, 23),
+        ),
+      );
+      await provider.addCourse(
+        Course(
+          id: '16week-course',
+          name: '高等数学',
+          teacher: '张老师',
+          location: 'A101',
+          dayOfWeek: 1,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+          startWeek: 1,
+          endWeek: 16,
+        ),
+      );
+
+      // Week 16 Monday — still teaching.
+      final week16Snapshot = provider.buildHomeWidgetSnapshot(
+        now: DateTime(2026, 6, 8, 8, 30),
+      );
+      expect(week16Snapshot, isNotNull);
+      expect(week16Snapshot!.currentWeek, 16);
+      expect(week16Snapshot.todayCourses, isNotEmpty);
+
+      // Week 17 Monday — past semesterWeekCount; UI would clamp to 16, but
+      // widget must not revive week-16 courses.
+      final week17Snapshot = provider.buildHomeWidgetSnapshot(
+        now: DateTime(2026, 6, 15, 8, 30),
+      );
+      expect(week17Snapshot, isNotNull);
+      expect(week17Snapshot!.currentWeek, 17);
+      expect(week17Snapshot.todayCourses, isEmpty);
+      expect(week17Snapshot.state, HomeWidgetSnapshotState.noCourse);
+    },
+  );
+
+  test(
     'live activity stage transition stops when selection null and stage tracked',
     () async {
       final liveService = TestMiuiLiveActivitiesService();
@@ -1999,4 +2427,54 @@ void main() {
       isNull,
     );
   });
+
+  test(
+    'test live activity selection carries today resolved timestamps',
+    () async {
+      final provider = await _createLiveActivityTestProvider();
+      await provider.addCourse(
+        _liveMondayCourse(id: 'timestamp-monday', name: '周一课'),
+      );
+
+      final insideWindow = DateTime(2026, 3, 23, 7, 45);
+      final selection =
+          provider.getTestLiveActivityCourseSelection(now: insideWindow);
+
+      expect(selection, isNotNull);
+      expect(selection?.currentCourse.id, 'timestamp-monday');
+      expect(selection?.currentStartAt, DateTime(2026, 3, 23, 8, 0));
+      expect(selection?.currentEndAt, DateTime(2026, 3, 23, 9, 40));
+    },
+  );
+
+  test(
+    'test live activity selection carries future-day resolved timestamps',
+    () async {
+      final provider = await _createLiveActivityTestProvider();
+      await provider.addCourse(
+        Course(
+          id: 'timestamp-friday',
+          name: '周五课',
+          teacher: '王老师',
+          location: 'A101',
+          dayOfWeek: 5,
+          startSection: 1,
+          endSection: 2,
+          startTime: '08:00',
+          endTime: '09:40',
+          startWeek: 1,
+          endWeek: 20,
+        ),
+      );
+
+      final saturdayNow = DateTime(2026, 3, 28, 11, 0);
+      final selection =
+          provider.getTestLiveActivityCourseSelection(now: saturdayNow);
+
+      expect(selection, isNotNull);
+      expect(selection?.currentCourse.id, 'timestamp-friday');
+      expect(selection?.currentStartAt, DateTime(2026, 4, 3, 8, 0));
+      expect(selection?.currentEndAt, DateTime(2026, 4, 3, 9, 40));
+    },
+  );
 }

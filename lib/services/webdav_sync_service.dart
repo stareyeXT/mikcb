@@ -147,6 +147,7 @@ class WebdavSyncService {
     CloudBackupSource backupSource = CloudBackupSource.auto,
     bool writeHistory = true,
     bool updateSyncTimestamps = true,
+
     /// Auto upload must not silently overwrite a drifted remote.
     /// Manual keep-local / force paths pass [force].
     WebdavUploadConflictPolicy conflictPolicy =
@@ -222,6 +223,12 @@ class WebdavSyncService {
         }
       }
 
+      // Write snapshot before meta so a meta-only success cannot advertise a
+      // hash whose body never landed. Meta is the publish pointer; if meta
+      // fails after snapshot, the next upload retries with the same content.
+      final metaBytes = Uint8List.fromList(
+        utf8.encode(_snapshotService.buildMetaJson(meta)),
+      );
       await _clientService.putBytes(
         client: client,
         remotePath: config.snapshotRemotePath,
@@ -231,9 +238,7 @@ class WebdavSyncService {
       await _clientService.putBytes(
         client: client,
         remotePath: config.metaRemotePath,
-        bytes: Uint8List.fromList(
-          utf8.encode(_snapshotService.buildMetaJson(meta)),
-        ),
+        bytes: metaBytes,
       );
       wroteMeta = true;
 
@@ -510,10 +515,13 @@ class WebdavSyncService {
         localContentSha256: localSnapshot.contentSha256,
         remoteContentSha256: remoteMeta.contentSha256,
       )) {
-        final localChangedSinceUpload =
-            config.lastUploadedLocalHash != null &&
-            localSnapshot.contentSha256 != config.lastUploadedLocalHash;
-        if (!allowConflictPrompt && localChangedSinceUpload) {
+        if (!allowConflictPrompt &&
+            webdavBackgroundPullShouldCancel(
+              lastUploadedLocalHash: config.lastUploadedLocalHash,
+              lastAppliedRemoteHash: config.lastAppliedRemoteHash,
+              localContentSha256: localSnapshot.contentSha256,
+              localHasUserData: localSnapshot.hasUserAuthoredData,
+            )) {
           return const WebdavSyncResult(
             kind: WebdavSyncResultKind.cancelled,
             message: 'local_changes_pending_sync',
@@ -551,6 +559,20 @@ class WebdavSyncService {
       }
 
       final content = utf8.decode(bytes);
+      final parsed = _snapshotService.parseSnapshotJson(content);
+      final snapshotHash = parsed.contentSha256.trim();
+      final metaHash = remoteMeta.contentSha256.trim();
+      if (snapshotHash.isNotEmpty &&
+          metaHash.isNotEmpty &&
+          snapshotHash != metaHash) {
+        return const WebdavSyncResult(
+          kind: WebdavSyncResultKind.failed,
+          message: 'sync_snapshot_meta_mismatch',
+        );
+      }
+      final appliedContentHash = snapshotHash.isNotEmpty
+          ? snapshotHash
+          : metaHash;
       final error = await _snapshotService.applySnapshotJson(
         provider: provider,
         content: content,
@@ -565,8 +587,8 @@ class WebdavSyncService {
       await _configStore.save(
         config.copyWith(
           lastSyncedAt: DateTime.now(),
-          lastAppliedRemoteHash: remoteMeta.contentSha256,
-          lastUploadedLocalHash: remoteMeta.contentSha256,
+          lastAppliedRemoteHash: appliedContentHash,
+          lastUploadedLocalHash: appliedContentHash,
         ),
       );
       return const WebdavSyncResult(kind: WebdavSyncResultKind.downloaded);

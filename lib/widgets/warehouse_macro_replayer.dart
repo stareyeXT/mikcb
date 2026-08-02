@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:university_timetable/l10n/service_message_localizer.dart';
 
 import '../models/warehouse_macro_models.dart';
+import 'warehouse_macro_recorder.dart';
 
 /// 回放步骤的当前状态
 enum ReplayStepStatus { pending, running, succeeded, failed, pausedForInput }
@@ -45,9 +46,7 @@ class ReplayProgress {
         );
       case ReplayStepStatus.pausedForInput:
         return l10n.macroReplayStatusPaused(
-          pauseReason != null
-              ? localizeServiceMessage(l10n, pauseReason!)
-              : '',
+          pauseReason != null ? localizeServiceMessage(l10n, pauseReason!) : '',
         );
       case ReplayStepStatus.pending:
       case ReplayStepStatus.succeeded:
@@ -125,16 +124,61 @@ class WarehouseMacroReplayer {
   /// 执行整个宏录制
   Future<void> execute(WarehouseMacroRecord macro) async {
     _isCancelled = false;
-    final steps = macro.steps;
-    if (steps.isEmpty) {
+    // 旧宏可能含逐字 fillField；加载时压缩，避免「已填满又重输」。
+    final fullSteps = compactMacroFillSteps(macro.steps);
+    if (fullSteps.isEmpty) {
       _callbacks.onComplete(false, 'macro_no_steps');
       return;
     }
 
+    final acceleratedSteps = buildAcceleratedMacroSteps(
+      fullSteps,
+      scriptPageUrl: macro.scriptPageUrl,
+      importUrl: macro.importUrl,
+    );
+    final useAcceleratedPath = acceleratedSteps.length < fullSteps.length;
+    debugPrint(
+      'WarehouseMacroReplayer: full=${fullSteps.length} '
+      'accelerated=${acceleratedSteps.length} '
+      'useAccelerated=$useAcceleratedPath '
+      'scriptPageUrl=${macro.scriptPageUrl} '
+      'importUrl=${macro.importUrl}',
+    );
+
+    if (useAcceleratedPath) {
+      final acceleratedSucceeded = await _runSteps(
+        acceleratedSteps,
+        // Do not notify host failure yet — full path may still succeed.
+        reportFailureToHost: false,
+      );
+      if (acceleratedSucceeded || _isCancelled) {
+        return;
+      }
+      // Navigate/DOM shortcut failed — fall back to the full click path.
+      _callbacks.onShowTip(_l10n.macroReplayAcceleratedFallbackTip);
+      // Reload the entry URL so the full click path starts from a clean page.
+      final entryUrl = sanitizeWarehouseScriptPageUrl(macro.importUrl);
+      if (entryUrl != null) {
+        try {
+          await _executeNavigate(MacroStep.navigate(entryUrl));
+        } catch (_) {
+          // Full path will report its own failures if reload also fails.
+        }
+      }
+    }
+
+    await _runSteps(fullSteps, reportFailureToHost: true);
+  }
+
+  /// Runs [steps] sequentially. Returns true when every step succeeded.
+  Future<bool> _runSteps(
+    List<MacroStep> steps, {
+    required bool reportFailureToHost,
+  }) async {
     for (var i = 0; i < steps.length; i++) {
       if (_isCancelled) {
         _callbacks.onComplete(false, 'macro_user_cancelled');
-        return;
+        return false;
       }
 
       final step = steps[i];
@@ -168,24 +212,25 @@ class WarehouseMacroReplayer {
             errorMessage: detail,
           ),
         );
-        _callbacks.onComplete(
-          false,
-          encodeServiceMessage(
-            'macro_step_failed',
-            {
+        if (reportFailureToHost) {
+          _callbacks.onComplete(
+            false,
+            encodeServiceMessage('macro_step_failed', {
               'stepIndex': i + 1,
               'totalSteps': steps.length,
               'detail': detail,
-            },
-          ),
-        );
-        return;
+            }),
+          );
+        }
+        return false;
       }
     }
 
     if (!_isCancelled) {
       _callbacks.onComplete(true, null);
+      return true;
     }
+    return false;
   }
 
   /// 执行单步操作
@@ -280,6 +325,15 @@ class WarehouseMacroReplayer {
     el = document.querySelector('input[name="${selector.split('"').join('\\"')}"]');
   }
   if (!el) return JSON.stringify({found: false, selector: ${jsonEncode(selector)}});
+  // 已有正确值则跳过改写，避免覆盖浏览器/记住登录的自动填充后再逐字重输。
+  if (String(el.value || '') === $escapedValue) {
+    return JSON.stringify({
+      found: true,
+      skipped: true,
+      tag: el.tagName,
+      type: el.type || ''
+    });
+  }
   el.focus();
   el.value = $escapedValue;
   el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -447,14 +501,11 @@ document.querySelector(${jsonEncode(selector)}) !== null
     }
 
     throw Exception(
-      encodeServiceMessage(
-        'macro_poll_timeout',
-        {
-          'stepLabel': stepLabel,
-          'timeoutSeconds': timeout.inSeconds,
-          'lastError': lastError.isNotEmpty ? ': $lastError' : '',
-        },
-      ),
+      encodeServiceMessage('macro_poll_timeout', {
+        'stepLabel': stepLabel,
+        'timeoutSeconds': timeout.inSeconds,
+        'lastError': lastError.isNotEmpty ? ': $lastError' : '',
+      }),
     );
   }
 }

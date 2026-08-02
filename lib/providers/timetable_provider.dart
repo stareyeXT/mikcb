@@ -10,6 +10,8 @@ import '../l10n/service_message_localizer.dart';
 import '../models/course.dart';
 import '../models/exam.dart';
 import '../models/holiday_entry.dart';
+import '../models/location_time_group.dart';
+import '../models/schedule_date_rule.dart';
 import '../models/schedule_item.dart';
 import '../models/time_scheme.dart';
 import '../models/partner_timetable_binding.dart';
@@ -17,6 +19,7 @@ import '../models/timetable_profile.dart';
 import '../models/timetable_settings.dart';
 import '../providers/timetable/couple_timetable_logic.dart';
 import '../ui/hyperos_motion_bridge.dart';
+import '../ui/hyperos/hyperos_overscroll.dart';
 import '../services/app_analytics.dart';
 import '../logging/app_debug_log.dart';
 import '../logging/app_log_messages.dart';
@@ -34,10 +37,19 @@ import '../services/ics_import_service.dart';
 import '../services/html_import_service.dart';
 import '../services/miui_live_activities_service.dart';
 import '../utils/home_page_background.dart';
+import 'timetable/location_time_match_logic.dart';
+import 'timetable/schedule_date_rule_logic.dart';
 import 'timetable/time_scheme_logic.dart';
 import 'timetable/import_export_logic.dart';
 import 'timetable/live_activity_logic.dart';
 
+export 'timetable/location_time_match_logic.dart'
+    show LocationTimeMatchResult, LocationTimeMatchLogic;
+export 'timetable/schedule_date_rule_logic.dart'
+    show
+        ScheduleDateRuleLogic,
+        ScheduleDateRuleApplyOutcome,
+        ScheduleDateRuleApplyResult;
 export 'timetable/time_scheme_logic.dart' show TimeSchemeCourseUsageReference;
 export 'timetable/live_activity_logic.dart'
     show LiveActivityCourseSelection, LiveActivityStage;
@@ -56,11 +68,39 @@ part 'timetable/time_scheme_repository.dart';
 part 'timetable/import_export_service.dart';
 part 'timetable/live_activity_controller.dart';
 
+bool _isLiveTestingFixture(Course course) => course.id.startsWith('live_test_');
+
 class CourseConflict {
   final Course course;
   final Course otherCourse;
 
   const CourseConflict({required this.course, required this.otherCourse});
+}
+
+/// Stats returned after applying location-time rules to the active profile.
+class LocationTimeApplyStats {
+  final int unlockedCount;
+  final int matchedCount;
+  final int updatedCount;
+
+  /// Matched, but start/end clocks already equaled the target scheme.
+  final int alreadySameClockCount;
+
+  /// Location hit a group, but course section range cannot map into that
+  /// scheme — synchronization is rejected (no mode or clock rewrite).
+  final int sectionOverflowCount;
+
+  /// First few course names rejected for section overflow (for toast).
+  final List<String> sectionOverflowCourseNames;
+
+  const LocationTimeApplyStats({
+    required this.unlockedCount,
+    required this.matchedCount,
+    required this.updatedCount,
+    this.alreadySameClockCount = 0,
+    this.sectionOverflowCount = 0,
+    this.sectionOverflowCourseNames = const [],
+  });
 }
 
 /// Groups courses that share the same name (i.e. the same subject with
@@ -108,6 +148,19 @@ String _weekdayShortLabel(AppLocalizations l10n, int dayOfWeek) {
   };
 }
 
+class ScheduleDateRuleSaveResult {
+  final ScheduleDateRule rule;
+  final ScheduleDateRuleApplyResult applyResult;
+
+  const ScheduleDateRuleSaveResult({
+    required this.rule,
+    required this.applyResult,
+  });
+
+  bool get didApply => applyResult.didApply;
+  bool get failedWhileDue => applyResult.failedWhileDue;
+}
+
 class TimetableProvider with ChangeNotifier {
   static const Duration _liveEndReminderWindow = Duration(minutes: 10);
 
@@ -130,6 +183,8 @@ class TimetableProvider with ChangeNotifier {
   int _currentWeek = 1;
   int _currentDateWeek = 1;
   List<TimeScheme> _timeSchemes = [];
+  List<LocationTimeGroup> _locationTimeGroups = [];
+  List<ScheduleDateRule> _scheduleDateRules = [];
   List<TimetableProfile> _profiles = [];
   String? _activeProfileId;
   int _currentDayOfWeek = DateTime.now().weekday;
@@ -186,7 +241,7 @@ class TimetableProvider with ChangeNotifier {
     _undoThemeConfig = ThemeConfig.fromSettings(_settings);
     _undoThemeName = themeName;
     _undoTimer?.cancel();
-    _undoTimer = Timer(const Duration(seconds: 8), () {
+    _undoTimer = Timer(const Duration(seconds: 2), () {
       _undoThemeConfig = null;
       _undoThemeName = null;
       notifyListeners();
@@ -205,61 +260,77 @@ class TimetableProvider with ChangeNotifier {
   }
 
   /// 批量更新设置（用于主题导入）
-  Future<void> updateSettings(TimetableSettings newSettings) async {
-    _settings = _normalizeSettingsWithTimeScheme(newSettings);
-    _writeEpoch++;
-    final epoch = _writeEpoch;
-    await _persistActiveProfileState();
-    if (_writeEpoch == epoch) {
-      notifyListeners();
-    }
+  Future<void> updateSettings(TimetableSettings newSettings) {
+    return _runMutation(() async {
+      _settings = _normalizeSettingsWithTimeScheme(newSettings);
+      hyperosSetEdgeHapticsEnabled(_settings.enableHaptics);
+      _writeEpoch++;
+      final epoch = _writeEpoch;
+      await _persistActiveProfileState();
+      if (_writeEpoch == epoch) {
+        notifyListeners();
+      }
+    });
   }
 
   /// 保存主题
-  Future<void> saveTheme(String name, Map<String, dynamic> themeData) async {
-    final theme = SavedTheme(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: name,
-      config: ThemeConfig.fromJson(themeData),
-      createdAt: DateTime.now(),
-    );
-    final updatedThemes = [..._settings.savedThemes, theme];
-    _settings = _settings.copyWith(savedThemes: updatedThemes);
-    await _persistActiveProfileState();
-    notifyListeners();
+  Future<void> saveTheme(String name, Map<String, dynamic> themeData) {
+    return _runMutation(() async {
+      final theme = SavedTheme(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: name,
+        config: ThemeConfig.fromJson(themeData),
+        createdAt: DateTime.now(),
+      );
+      final updatedThemes = [..._settings.savedThemes, theme];
+      _settings = _settings.copyWith(savedThemes: updatedThemes);
+      await _persistActiveProfileState();
+      notifyListeners();
+    });
   }
 
   /// 删除主题
-  Future<void> deleteTheme(String themeId) async {
-    final updatedThemes = _settings.savedThemes
-        .where((t) => t.id != themeId)
-        .toList();
-    _settings = _settings.copyWith(savedThemes: updatedThemes);
-    await _persistActiveProfileState();
-    notifyListeners();
+  Future<void> deleteTheme(String themeId) {
+    return _runMutation(() async {
+      final updatedThemes = _settings.savedThemes
+          .where((theme) => theme.id != themeId)
+          .toList();
+      _settings = _settings.copyWith(savedThemes: updatedThemes);
+      await _persistActiveProfileState();
+      notifyListeners();
+    });
   }
 
   /// 重命名主题
-  Future<void> renameTheme(String themeId, String newName) async {
-    final updatedThemes = _settings.savedThemes.map((t) {
-      if (t.id == themeId) {
-        return SavedTheme(
-          id: t.id,
-          name: newName,
-          config: t.config,
-          createdAt: t.createdAt,
-        );
-      }
-      return t;
-    }).toList();
-    _settings = _settings.copyWith(savedThemes: updatedThemes);
-    await _persistActiveProfileState();
-    notifyListeners();
+  Future<void> renameTheme(String themeId, String newName) {
+    return _runMutation(() async {
+      final updatedThemes = _settings.savedThemes.map((theme) {
+        if (theme.id == themeId) {
+          return SavedTheme(
+            id: theme.id,
+            name: newName,
+            config: theme.config,
+            createdAt: theme.createdAt,
+          );
+        }
+        return theme;
+      }).toList();
+      _settings = _settings.copyWith(savedThemes: updatedThemes);
+      await _persistActiveProfileState();
+      notifyListeners();
+    });
   }
 
   int get currentWeek => _currentWeek;
   int get currentDateWeek => _currentDateWeek;
   List<TimeScheme> get timeSchemes => List.unmodifiable(_timeSchemes);
+  List<LocationTimeGroup> get locationTimeGroups =>
+      List.unmodifiable(_locationTimeGroups);
+  List<ScheduleDateRule> get scheduleDateRules =>
+      List.unmodifiable(_scheduleDateRules);
+
+  /// Last successful bulk-apply signature for seasonal date rules.
+  String? _scheduleDateRuleLastAppliedSignature;
   List<TimetableProfile> get profiles => List.unmodifiable(_profiles);
   String? get activeProfileId => _activeProfileId;
   Map<String, List<Course>> get courseConflictMap => _buildCourseConflictMap();
@@ -518,13 +589,20 @@ class TimetableProvider with ChangeNotifier {
     // re-entrant wait deadlocks under Future.wait.
     final profiles = await _storageService.getProfiles();
     final timeSchemes = await _storageService.getTimeSchemes();
+    final locationTimeGroups = await _storageService.getLocationTimeGroups();
+    final scheduleDateRules = await _storageService.getScheduleDateRules();
     final activeProfileId = await _storageService.getActiveProfileId();
     final partnerBinding = await _storageService.getPartnerTimetableBinding();
+    final lastAppliedSignature = await _storageService
+        .getScheduleDateRuleLastAppliedSignature();
 
     _profiles = profiles;
     _timeSchemes = timeSchemes;
+    _locationTimeGroups = locationTimeGroups;
+    _scheduleDateRules = scheduleDateRules;
     _activeProfileId = activeProfileId;
     _partnerBinding = partnerBinding;
+    _scheduleDateRuleLastAppliedSignature = lastAppliedSignature;
 
     if (_activeProfileId != null) {
       _htmlImportBaseUrl = await _storageService.getHtmlImportBaseUrl(
@@ -572,6 +650,9 @@ class TimetableProvider with ChangeNotifier {
 
     // --- 首帧已可渲染，立即通知 ---
     notifyListeners();
+
+    // Seasonal bulk-apply may rewrite default scheme/clocks after first paint.
+    unawaited(applyDueScheduleDateRules());
 
     // Holiday must finish before the first live/widget push so cold start on a
     // holiday day does not briefly publish courses (empty holidayData ⇒ false).
@@ -681,6 +762,7 @@ class TimetableProvider with ChangeNotifier {
 
   void _applyProfileState(TimetableProfile profile) {
     _settings = _normalizeSettingsWithTimeScheme(profile.settings);
+    hyperosSetEdgeHapticsEnabled(_settings.enableHaptics);
     _courses = _syncCoursesWithEffectiveTimeSchemes(
       List<Course>.from(profile.courses),
       settings: _settings,
@@ -741,20 +823,60 @@ class TimetableProvider with ChangeNotifier {
   Course _syncCourseWithEffectiveTimeScheme(
     Course course, {
     TimetableSettings? settings,
+    DateTime? onDate,
+    bool debugTrace = false,
+    String debugTag = 'LocationTimeApply',
   }) {
-    final sections = _resolveSectionsForCourse(course, settings: settings);
+    final resolvedScheme = debugTrace
+        ? resolveCourseTimeScheme(course, settings: settings, onDate: onDate)
+        : null;
+    final sections = _resolveSectionsForCourse(
+      course,
+      settings: settings,
+      onDate: onDate,
+    );
     final startIndex = course.startSection - 1;
     final endIndex = course.endSection - 1;
     if (sections == null || startIndex < 0 || endIndex >= sections.length) {
+      if (debugTrace) {
+        appDebugLog(
+          debugTag,
+          '跳过改写(节次越界/无sections): course=${course.name} '
+          'loc=${course.location} sections=${course.startSection}-${course.endSection} '
+          'scheme=${resolvedScheme?.name ?? "null"} '
+          'schemeSectionCount=${resolvedScheme?.sections.length ?? sections?.length ?? 0} '
+          'override=${course.timeSchemeIdOverride ?? "null"} '
+          'currentClock=${course.startTime}-${course.endTime}',
+        );
+      }
       return course.copyWith(timeSchemeIdOverride: course.timeSchemeIdOverride);
     }
 
     final startTime = sections[startIndex].startTime;
     final endTime = sections[endIndex].endTime;
     if (course.startTime == startTime && course.endTime == endTime) {
+      if (debugTrace) {
+        appDebugLog(
+          debugTag,
+          '钟点已相同(不改写): course=${course.name} '
+          'loc=${course.location} sections=${course.startSection}-${course.endSection} '
+          'scheme=${resolvedScheme?.name ?? "null"}(${resolvedScheme?.id ?? "-"}) '
+          'clock=$startTime-$endTime override=${course.timeSchemeIdOverride ?? "null"}',
+        );
+      }
       return course;
     }
 
+    if (debugTrace) {
+      appDebugLog(
+        debugTag,
+        '改写钟点: course=${course.name} loc=${course.location} '
+        'sections=${course.startSection}-${course.endSection} '
+        'scheme=${resolvedScheme?.name ?? "null"}(${resolvedScheme?.id ?? "-"}) '
+        '${course.startTime}-${course.endTime} -> $startTime-$endTime '
+        'override=${course.timeSchemeIdOverride ?? "null"}',
+      );
+    }
     return course.copyWith(
       startTime: startTime,
       endTime: endTime,
@@ -762,21 +884,52 @@ class TimetableProvider with ChangeNotifier {
     );
   }
 
+  /// Resolves the effective time scheme for a course.
+  ///
+  /// Priority: manual override → location group → date rule for [onDate] →
+  /// active profile scheme.
+  ///
+  /// **Persist / list resync must not pass [onDate].** Date rules are day-
+  /// scoped; baking "today" into [Course.startTime]/[Course.endTime] corrupts
+  /// the whole timetable. Pass [onDate] only for runtime preview (live island,
+  /// day view, validation that intentionally cares about a calendar day).
   TimeScheme? resolveCourseTimeScheme(
     Course course, {
     TimetableSettings? settings,
+    DateTime? onDate,
   }) => TimeSchemeLogic.resolveCourseTimeScheme(
     _timeSchemes,
     _settings,
     course,
     settingsOverride: settings,
+    locationTimeGroups: _locationTimeGroups,
+    scheduleDateRules: _scheduleDateRules,
+    onDate: onDate,
   );
+
+  /// Preview location → place-group routing without writing course times.
+  LocationTimeMatchResult? matchLocationTime(String? location) =>
+      LocationTimeMatchLogic.match(location, _locationTimeGroups);
+
+  /// Preview which date rule applies on [date] (null = none).
+  ScheduleDateRule? matchScheduleDateRule(DateTime date) =>
+      ScheduleDateRuleLogic.match(date, _scheduleDateRules);
+
+  /// Signature of the last date-rule bulk apply, used to explain save results
+  /// without exposing the provider's mutable internal state.
+  String? get scheduleDateRuleLastAppliedSignature =>
+      _scheduleDateRuleLastAppliedSignature;
 
   List<SectionTime>? _resolveSectionsForCourse(
     Course course, {
     TimetableSettings? settings,
+    DateTime? onDate,
   }) {
-    final scheme = resolveCourseTimeScheme(course, settings: settings);
+    final scheme = resolveCourseTimeScheme(
+      course,
+      settings: settings,
+      onDate: onDate,
+    );
     if (scheme != null) {
       return scheme.sections;
     }
@@ -791,6 +944,8 @@ class TimetableProvider with ChangeNotifier {
     _profiles,
     schemeId,
     profilesOverride: profiles,
+    schemes: _timeSchemes,
+    locationTimeGroups: _locationTimeGroups,
   );
 
   int maxUsedSectionForTimeScheme(
@@ -800,6 +955,8 @@ class TimetableProvider with ChangeNotifier {
     _profiles,
     schemeId,
     profilesOverride: profiles,
+    schemes: _timeSchemes,
+    locationTimeGroups: _locationTimeGroups,
   );
 
   TimeSchemeCourseUsageReference? maxSectionUsageForTimeScheme(
@@ -809,18 +966,26 @@ class TimetableProvider with ChangeNotifier {
     _profiles,
     schemeId,
     profilesOverride: profiles,
+    schemes: _timeSchemes,
+    locationTimeGroups: _locationTimeGroups,
   );
 
   String? validateCourseTimeSchemeOverride({
     String? timeSchemeId,
     required int startSection,
     required int endSection,
+    String? location,
   }) => TimeSchemeLogic.validateCourseTimeSchemeOverride(
     schemes: _timeSchemes,
     settings: _settings,
     timeSchemeId: timeSchemeId,
     startSection: startSection,
     endSection: endSection,
+    location: location,
+    locationTimeGroups: _locationTimeGroups,
+    scheduleDateRules: _scheduleDateRules,
+    // No onDate: save/sync validation matches persisted clocks (override /
+    // location / active), not today's date-rule scheme.
   );
 
   Future<void> _persistActiveProfileState({
@@ -843,6 +1008,751 @@ class TimetableProvider with ChangeNotifier {
   Future<void> _persistTimeSchemes() async {
     await _storageService.saveTimeSchemes(_timeSchemes);
     notifyUserDataChangedForSync();
+  }
+
+  Future<void> _persistLocationTimeGroups() async {
+    await _storageService.saveLocationTimeGroups(_locationTimeGroups);
+    notifyUserDataChangedForSync();
+  }
+
+  /// Re-sync course clock times for every profile after location rules change.
+  Future<void> _resyncAllProfilesWithLocationRules({bool notify = true}) async {
+    for (var index = 0; index < _profiles.length; index++) {
+      final profile = _profiles[index];
+      final syncedCourses = _syncCoursesWithEffectiveTimeSchemes(
+        List<Course>.from(profile.courses),
+        settings: profile.settings,
+      );
+      _profiles[index] = profile.copyWith(courses: syncedCourses);
+    }
+
+    final activeIndex = _profiles.indexWhere(
+      (profile) => profile.id == _activeProfileId,
+    );
+    if (activeIndex != -1) {
+      _courses = List<Course>.from(_profiles[activeIndex].courses);
+      _settings = _profiles[activeIndex].settings;
+    }
+
+    await _storageService.saveProfiles(_profiles);
+    notifyUserDataChangedForSync();
+    _currentLiveCourseId = null;
+    if (notify) {
+      _notifyStateChanged();
+    }
+    await _updateLiveActivity();
+  }
+
+  Future<LocationTimeGroup> createLocationTimeGroup({
+    required String name,
+    required String timeSchemeId,
+    List<LocationKeyword> keywords = const [],
+    bool enabled = true,
+    int priority = 0,
+  }) async {
+    await initialize();
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('location_time_group_name_required');
+    }
+    if (_getTimeSchemeById(timeSchemeId) == null) {
+      throw ArgumentError('time_scheme_not_found');
+    }
+
+    final group = LocationTimeGroup(
+      id: const Uuid().v4(),
+      name: trimmedName,
+      timeSchemeId: timeSchemeId,
+      enabled: enabled,
+      priority: priority,
+      keywords: List<LocationKeyword>.from(keywords),
+    );
+    _locationTimeGroups = [..._locationTimeGroups, group];
+    await _persistLocationTimeGroups();
+    await _resyncAllProfilesWithLocationRules();
+    return group;
+  }
+
+  Future<LocationTimeGroup?> updateLocationTimeGroup(
+    LocationTimeGroup group,
+  ) async {
+    await initialize();
+    final index = _locationTimeGroups.indexWhere((item) => item.id == group.id);
+    if (index == -1) {
+      return null;
+    }
+    final trimmedName = group.name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('location_time_group_name_required');
+    }
+    if (_getTimeSchemeById(group.timeSchemeId) == null) {
+      throw ArgumentError('time_scheme_not_found');
+    }
+
+    final updated = group.copyWith(
+      name: trimmedName,
+      keywords: List<LocationKeyword>.from(group.keywords),
+    );
+    final next = List<LocationTimeGroup>.from(_locationTimeGroups);
+    next[index] = updated;
+    _locationTimeGroups = next;
+    await _persistLocationTimeGroups();
+    await _resyncAllProfilesWithLocationRules();
+    return updated;
+  }
+
+  Future<bool> deleteLocationTimeGroup(String groupId) async {
+    await initialize();
+    final beforeCount = _locationTimeGroups.length;
+    _locationTimeGroups = _locationTimeGroups
+        .where((group) => group.id != groupId)
+        .toList();
+    if (_locationTimeGroups.length == beforeCount) {
+      return false;
+    }
+    await _persistLocationTimeGroups();
+    await _resyncAllProfilesWithLocationRules();
+    return true;
+  }
+
+  Future<void> replaceLocationTimeGroups(
+    List<LocationTimeGroup> groups, {
+    bool resync = true,
+  }) async {
+    await initialize();
+    _locationTimeGroups = List<LocationTimeGroup>.from(groups);
+    await _persistLocationTimeGroups();
+    if (resync) {
+      await _resyncAllProfilesWithLocationRules();
+    } else {
+      _notifyStateChanged();
+    }
+  }
+
+  Future<void> _persistScheduleDateRules() async {
+    await _storageService.saveScheduleDateRules(_scheduleDateRules);
+    notifyUserDataChangedForSync();
+  }
+
+  /// Create a date-range rule that switches the default time scheme.
+  ///
+  /// Product cap: [ScheduleDateRuleLogic.maxRulesPerDevice] rules total.
+  Future<ScheduleDateRuleSaveResult> createScheduleDateRule({
+    required String name,
+    required String timeSchemeId,
+    required String startDate,
+    required String endDate,
+    bool enabled = true,
+  }) {
+    return _runMutation(() async {
+      await initialize();
+      if (_scheduleDateRules.length >=
+          ScheduleDateRuleLogic.maxRulesPerDevice) {
+        throw ArgumentError('schedule_date_rule_max_exceeded');
+      }
+      if (_getTimeSchemeById(timeSchemeId) == null) {
+        throw ArgumentError('time_scheme_not_found');
+      }
+
+      final rule = ScheduleDateRule(
+        id: const Uuid().v4(),
+        name: name.trim(),
+        timeSchemeId: timeSchemeId,
+        startDate: startDate.trim(),
+        endDate: endDate.trim(),
+        enabled: enabled,
+      );
+      final next = [..._scheduleDateRules, rule];
+      final validationError = ScheduleDateRuleLogic.validateRules(next);
+      if (validationError != null) {
+        throw ArgumentError(validationError);
+      }
+
+      _scheduleDateRules = next;
+      await _persistScheduleDateRules();
+      // Nested under the same mutation gate (re-entrant).
+      final applyResult = await applyDueScheduleDateRulesDetailed();
+      if (!applyResult.didApply) {
+        _notifyStateChanged();
+      }
+      return ScheduleDateRuleSaveResult(rule: rule, applyResult: applyResult);
+    });
+  }
+
+  Future<ScheduleDateRuleSaveResult?> updateScheduleDateRule(
+    ScheduleDateRule rule,
+  ) {
+    return _runMutation(() async {
+      await initialize();
+      final index = _scheduleDateRules.indexWhere((item) => item.id == rule.id);
+      if (index == -1) {
+        return null;
+      }
+      if (_getTimeSchemeById(rule.timeSchemeId) == null) {
+        throw ArgumentError('time_scheme_not_found');
+      }
+
+      final updated = rule.copyWith(
+        name: rule.name.trim(),
+        startDate: rule.startDate.trim(),
+        endDate: rule.endDate.trim(),
+      );
+      final next = List<ScheduleDateRule>.from(_scheduleDateRules);
+      next[index] = updated;
+      final validationError = ScheduleDateRuleLogic.validateRules(next);
+      if (validationError != null) {
+        throw ArgumentError(validationError);
+      }
+
+      _scheduleDateRules = next;
+      await _persistScheduleDateRules();
+      final applyResult = await applyDueScheduleDateRulesDetailed();
+      if (!applyResult.didApply) {
+        _notifyStateChanged();
+      }
+      return ScheduleDateRuleSaveResult(
+        rule: updated,
+        applyResult: applyResult,
+      );
+    });
+  }
+
+  Future<bool> deleteScheduleDateRule(String ruleId) {
+    return _runMutation(() async {
+      await initialize();
+      final beforeCount = _scheduleDateRules.length;
+      _scheduleDateRules = _scheduleDateRules
+          .where((rule) => rule.id != ruleId)
+          .toList();
+      if (_scheduleDateRules.length == beforeCount) {
+        return false;
+      }
+      await _persistScheduleDateRules();
+      _notifyStateChanged();
+      return true;
+    });
+  }
+
+  Future<void> replaceScheduleDateRules(
+    List<ScheduleDateRule> rules, {
+    bool resync = true,
+  }) {
+    return _runMutation(() async {
+      await initialize();
+      final next = List<ScheduleDateRule>.from(rules);
+      if (next.length > ScheduleDateRuleLogic.maxRulesPerDevice) {
+        throw ArgumentError('schedule_date_rule_max_exceeded');
+      }
+      final validationError = ScheduleDateRuleLogic.validateRules(next);
+      if (validationError != null) {
+        throw ArgumentError(validationError);
+      }
+      _scheduleDateRules = next;
+      await _persistScheduleDateRules();
+      if (resync) {
+        final didApply = await applyDueScheduleDateRules();
+        if (!didApply) {
+          _notifyStateChanged();
+        }
+      } else {
+        _notifyStateChanged();
+      }
+    });
+  }
+
+  /// One-shot bulk apply of the seasonal date rule that matches [now].
+  ///
+  /// Product rules:
+  /// 1. Same as tapping「应用时间模板」on the matched scheme (all profiles get
+  ///    that default; unlocked clocks rewrite).
+  /// 2. Runs on the first open at/after the rule start while still in range.
+  /// 3. Does not re-run daily once applied, so manual course edits stick.
+  Future<bool> applyDueScheduleDateRules({DateTime? now}) {
+    return _runMutation(() => _applyDueScheduleDateRules(now: now));
+  }
+
+  /// Variant that returns structured outcome instead of plain bool, so callers
+  /// (e.g. date-rule editor) can show specific failure feedback (B3).
+  Future<ScheduleDateRuleApplyResult> applyDueScheduleDateRulesDetailed({
+    DateTime? now,
+  }) {
+    return _runMutation(() => _applyDueScheduleDateRulesDetailed(now: now));
+  }
+
+  /// Bool facade kept for existing callers; always delegates to the detailed
+  /// path so failure logging and apply side effects cannot drift.
+  Future<bool> _applyDueScheduleDateRules({DateTime? now}) async {
+    final applyResult = await _applyDueScheduleDateRulesDetailed(now: now);
+    return applyResult.didApply;
+  }
+
+  /// Single implementation of seasonal bulk-apply. Returns structured outcome
+  /// for UI toasts; [applyDueScheduleDateRules] maps [didApply] to bool.
+  Future<ScheduleDateRuleApplyResult> _applyDueScheduleDateRulesDetailed({
+    DateTime? now,
+  }) async {
+    await initialize();
+    final reference = now ?? DateTime.now();
+    final matched = ScheduleDateRuleLogic.match(reference, _scheduleDateRules);
+    if (!ScheduleDateRuleLogic.shouldBulkApply(
+      matchedRule: matched,
+      lastAppliedSignature: _scheduleDateRuleLastAppliedSignature,
+    )) {
+      return const ScheduleDateRuleApplyResult(
+        outcome: ScheduleDateRuleApplyOutcome.notDue,
+      );
+    }
+
+    final rule = matched!;
+    final scheme = _getTimeSchemeById(rule.timeSchemeId);
+    if (scheme == null) {
+      appDebugLog(
+        'ScheduleDateRule',
+        '跳过批量套用: 模板不存在 rule=${rule.name} schemeId=${rule.timeSchemeId}',
+      );
+      await AppLogService.instance.warn(
+        'schedule_date_rule',
+        '日期规则批量套用失败：时间模板不存在',
+        extras: {
+          'ruleId': rule.id,
+          'ruleName': rule.name,
+          'schemeId': rule.timeSchemeId,
+        },
+      );
+      return const ScheduleDateRuleApplyResult(
+        outcome: ScheduleDateRuleApplyOutcome.schemeMissing,
+      );
+    }
+
+    // Validate every profile before rewriting clocks; active-only checks can
+    // leave inactive profiles pointing at a scheme that cannot represent them.
+    var requiredMaxSection = 0;
+    for (final profile in _profiles) {
+      for (final course in profile.courses) {
+        if (course.endSection > requiredMaxSection) {
+          requiredMaxSection = course.endSection;
+        }
+      }
+    }
+    for (final course in _courses) {
+      if (course.endSection > requiredMaxSection) {
+        requiredMaxSection = course.endSection;
+      }
+    }
+    if (requiredMaxSection > scheme.sections.length) {
+      appDebugLog(
+        'ScheduleDateRule',
+        '跳过批量套用: 节次超出模板 rule=${rule.name} need=$requiredMaxSection '
+            'has=${scheme.sections.length}',
+      );
+      await AppLogService.instance.warn(
+        'schedule_date_rule',
+        '日期规则批量套用失败：节次超出模板',
+        extras: {
+          'ruleId': rule.id,
+          'ruleName': rule.name,
+          'schemeId': scheme.id,
+          'requiredMaxSection': requiredMaxSection,
+          'schemeSections': scheme.sections.length,
+        },
+      );
+      return ScheduleDateRuleApplyResult(
+        outcome: ScheduleDateRuleApplyOutcome.sectionOverflow,
+        requiredMaxSection: requiredMaxSection,
+        schemeSectionCount: scheme.sections.length,
+      );
+    }
+
+    final signature = ScheduleDateRuleLogic.appliedSignature(rule);
+    appDebugLog(
+      'ScheduleDateRule',
+      '批量套用作息: rule=${rule.name} scheme=${scheme.name} '
+          'range=${rule.startDate}~${rule.endDate} signature=$signature',
+    );
+
+    for (var index = 0; index < _profiles.length; index++) {
+      final profile = _profiles[index];
+      final nextSettings = profile.settings.copyWith(
+        activeTimeSchemeId: scheme.id,
+        sections: List<SectionTime>.from(scheme.sections),
+      );
+      final syncedCourses = _syncCoursesWithEffectiveTimeSchemes(
+        List<Course>.from(profile.courses),
+        settings: nextSettings,
+      );
+      _profiles[index] = profile.copyWith(
+        settings: nextSettings,
+        courses: syncedCourses,
+      );
+    }
+
+    final activeIndex = _profiles.indexWhere(
+      (profile) => profile.id == _activeProfileId,
+    );
+    if (activeIndex != -1) {
+      _courses = List<Course>.from(_profiles[activeIndex].courses);
+      _settings = _profiles[activeIndex].settings;
+    } else {
+      _settings = _settings.copyWith(
+        activeTimeSchemeId: scheme.id,
+        sections: List<SectionTime>.from(scheme.sections),
+      );
+      _courses = _syncCoursesWithEffectiveTimeSchemes(
+        List<Course>.from(_courses),
+        settings: _settings,
+      );
+    }
+
+    await _storageService.saveProfiles(_profiles);
+    _scheduleDateRuleLastAppliedSignature = signature;
+    await _storageService.saveScheduleDateRuleLastAppliedSignature(signature);
+    notifyUserDataChangedForSync();
+    _currentLiveCourseId = null;
+    _notifyStateChanged();
+    await _updateLiveActivity();
+
+    unawaited(
+      AppLogService.instance.info(
+        'schedule_date_rule',
+        '已按日期规则批量套用作息',
+        extras: {
+          'ruleId': rule.id,
+          'ruleName': rule.name,
+          'schemeId': scheme.id,
+          'schemeName': scheme.name,
+          'startDate': rule.startDate,
+          'endDate': rule.endDate,
+          'signature': signature,
+        },
+      ),
+    );
+    return const ScheduleDateRuleApplyResult(
+      outcome: ScheduleDateRuleApplyOutcome.applied,
+    );
+  }
+
+  /// Apply location routing to unlocked courses on the active profile.
+  ///
+  /// Returns match/update counts for toast feedback.
+  Future<LocationTimeApplyStats> applyLocationTimeRulesToActiveProfile() async {
+    await initialize();
+    const debugTag = 'LocationTimeApply';
+    var unlockedCount = 0;
+    var matchedCount = 0;
+    var updatedCount = 0;
+    var alreadySameClockCount = 0;
+    var sectionOverflowCount = 0;
+    final sectionOverflowCourseNames = <String>[];
+    var noMatchCount = 0;
+    var matchMissingSchemeCount = 0;
+    var autoReleasedCount = 0;
+    var clockRewriteCount = 0;
+    final changeSamples = <String>[];
+
+    void audit(String message, {Map<String, Object?> extras = const {}}) {
+      appDebugLog(debugTag, message);
+      unawaited(
+        AppLogService.instance.info(
+          'location_time_apply',
+          message,
+          extras: extras,
+        ),
+      );
+    }
+
+    final activeScheme = activeTimeScheme;
+    audit(
+      '===== 开始应用到当前课表 ===== '
+      'profile=${activeProfile?.name ?? "null"}(${_activeProfileId ?? "-"}) '
+      'courses=${_courses.length} '
+      'locationGroups=${_locationTimeGroups.length} '
+      'activeScheme=${activeScheme?.name ?? "null"}(${activeScheme?.id ?? "-"}) '
+      'activeSections=${activeScheme?.sections.length ?? _settings.sections.length} '
+      'manualOverridesBefore=${_courses.where((c) => c.timeSchemeIdOverride != null).length}',
+      extras: {
+        'profileId': _activeProfileId,
+        'courseCount': _courses.length,
+        'groupCount': _locationTimeGroups.length,
+        'activeSchemeId': activeScheme?.id,
+        'manualOverridesBefore': _courses
+            .where((course) => course.timeSchemeIdOverride != null)
+            .length,
+      },
+    );
+    for (final group in _locationTimeGroups) {
+      final scheme = _getTimeSchemeById(group.timeSchemeId);
+      final keywords = group.keywords
+          .map((keyword) => '${keyword.pattern}(${keyword.mode.name})')
+          .join('|');
+      audit(
+        '地点组: id=${group.id} name=${group.name} enabled=${group.enabled} '
+        'priority=${group.priority} scheme=${scheme?.name ?? "MISSING"}(${group.timeSchemeId}) '
+        'schemeSections=${scheme?.sections.length ?? 0} keywords=[$keywords]',
+        extras: {
+          'groupId': group.id,
+          'groupName': group.name,
+          'enabled': group.enabled,
+          'schemeId': group.timeSchemeId,
+          'schemeName': scheme?.name,
+          'schemeSections': scheme?.sections.length ?? 0,
+          'keywords': keywords,
+        },
+      );
+      if (scheme != null && scheme.sections.isNotEmpty) {
+        final first = scheme.sections.first;
+        final last = scheme.sections.last;
+        audit(
+          '  模板首末节: ${first.startTime}-${first.endTime} ... '
+          '${last.startTime}-${last.endTime}',
+        );
+      }
+    }
+    if (activeScheme != null && activeScheme.sections.isNotEmpty) {
+      final first = activeScheme.sections.first;
+      final last = activeScheme.sections.last;
+      audit(
+        '主课表模板首末节: ${first.startTime}-${first.endTime} ... '
+        '${last.startTime}-${last.endTime}',
+      );
+    }
+
+    final synced = <Course>[];
+    for (final course in _courses) {
+      unlockedCount += 1;
+      final beforeOverride = course.timeSchemeIdOverride;
+      final beforeClock = '${course.startTime}-${course.endTime}';
+      final match = matchLocationTime(course.location);
+      final matchedScheme = match == null
+          ? null
+          : _getTimeSchemeById(match.timeSchemeId);
+
+      Course courseToSync = course;
+
+      if (match == null) {
+        noMatchCount += 1;
+        if (changeSamples.length < 40) {
+          audit(
+            '未命中地点: course=${course.name} id=${course.id} loc=${course.location} '
+            'sections=${course.startSection}-${course.endSection} '
+            'override=${beforeOverride ?? "null"} clock=$beforeClock',
+            extras: {
+              'action': 'no_match',
+              'courseId': course.id,
+              'courseName': course.name,
+              'location': course.location,
+              'beforeOverride': beforeOverride,
+              'beforeClock': beforeClock,
+            },
+          );
+        }
+        synced.add(course);
+        continue;
+      }
+
+      if (matchedScheme == null) {
+        matchMissingSchemeCount += 1;
+        audit(
+          '命中但模板不存在: course=${course.name} id=${course.id} loc=${course.location} '
+          'group=${match.groupName} schemeId=${match.timeSchemeId} '
+          'keyword=${match.matchedKeyword.pattern}/${match.matchedKeyword.mode.name}',
+          extras: {
+            'action': 'match_missing_scheme',
+            'courseId': course.id,
+            'courseName': course.name,
+            'location': course.location,
+            'groupName': match.groupName,
+            'schemeId': match.timeSchemeId,
+            'beforeOverride': beforeOverride,
+          },
+        );
+        synced.add(course);
+        continue;
+      }
+
+      final startIndex = course.startSection - 1;
+      final endIndex = course.endSection - 1;
+      final sectionCount = matchedScheme.sections.length;
+      // HARD RULE: only fully seat-mapable courses may be synchronized.
+      // Applying a short scheme to a later section would produce nonsense
+      // clocks, so leave the course untouched and report it.
+      if (startIndex < 0 || endIndex < startIndex || endIndex >= sectionCount) {
+        sectionOverflowCount += 1;
+        if (sectionOverflowCourseNames.length < 5) {
+          sectionOverflowCourseNames.add(course.name);
+        }
+        audit(
+          '拒绝套用(节次无法对号入座): course=${course.name} id=${course.id} '
+          'loc=${course.location} need=${course.startSection}-${course.endSection} '
+          'scheme=${matchedScheme.name} has=$sectionCount '
+          'beforeOverride=${beforeOverride ?? "null"} clock=$beforeClock '
+          '→ 不写 override、不改钟点',
+          extras: {
+            'action': 'overflow_reject_no_sync',
+            'courseId': course.id,
+            'courseName': course.name,
+            'location': course.location,
+            'startSection': course.startSection,
+            'endSection': course.endSection,
+            'schemeId': matchedScheme.id,
+            'schemeName': matchedScheme.name,
+            'schemeSections': sectionCount,
+            'beforeOverride': beforeOverride,
+            'beforeClock': beforeClock,
+          },
+        );
+        // Leave course completely unchanged.
+        synced.add(course);
+        if (changeSamples.length < 30) {
+          changeSamples.add(
+            '${course.name}|${course.id}|REJECT overflow '
+            'need=${course.startSection}-${course.endSection} schemeHas=$sectionCount',
+          );
+        }
+        continue;
+      }
+
+      // Only fully seat-mapped courses count as matched/synchronized.
+      matchedCount += 1;
+      // Return the course to automatic mode, then resolve it through the
+      // current location rule. This keeps future rule edits automatic instead
+      // of turning a rematch into another permanent manual override.
+      courseToSync = course.copyWith(timeSchemeIdOverride: null);
+      if (beforeOverride != null) {
+        autoReleasedCount += 1;
+      }
+
+      final expectedStart = matchedScheme.sections[startIndex].startTime;
+      final expectedEnd = matchedScheme.sections[endIndex].endTime;
+      final sameClock =
+          course.startTime == expectedStart && course.endTime == expectedEnd;
+      if (sameClock) {
+        alreadySameClockCount += 1;
+      }
+
+      final next = _syncCourseWithEffectiveTimeScheme(
+        courseToSync,
+        settings: _settings,
+        debugTrace: true,
+        debugTag: debugTag,
+      );
+      synced.add(next);
+
+      final clockChanged =
+          next.startTime != course.startTime || next.endTime != course.endTime;
+      final overrideChanged =
+          next.timeSchemeIdOverride != course.timeSchemeIdOverride;
+      if (clockChanged || overrideChanged) {
+        updatedCount += 1;
+        if (clockChanged) {
+          clockRewriteCount += 1;
+        }
+        if (changeSamples.length < 30) {
+          changeSamples.add(
+            '${course.name}|${course.id}|'
+            'override ${beforeOverride ?? "null"}->${next.timeSchemeIdOverride ?? "null"}|'
+            'clock $beforeClock->${next.startTime}-${next.endTime}',
+          );
+        }
+      }
+      audit(
+        '${sameClock ? "SAME" : "DIFF"} course=${course.name} id=${course.id} '
+        'loc=${course.location} group=${match.groupName} '
+        'scheme=${matchedScheme.name} '
+        'beforeOverride=${beforeOverride ?? "null"} '
+        'afterOverride=${next.timeSchemeIdOverride ?? "null"} '
+        'beforeClock=$beforeClock afterClock=${next.startTime}-${next.endTime} '
+        'clockChanged=$clockChanged overrideChanged=$overrideChanged',
+        extras: {
+          'action': sameClock
+              ? 'auto_match_same_clock'
+              : 'auto_match_and_rewrite_clock',
+          'courseId': course.id,
+          'courseName': course.name,
+          'location': course.location,
+          'groupName': match.groupName,
+          'schemeId': matchedScheme.id,
+          'schemeName': matchedScheme.name,
+          'beforeOverride': beforeOverride,
+          'afterOverride': next.timeSchemeIdOverride,
+          'beforeClock': beforeClock,
+          'afterClock': '${next.startTime}-${next.endTime}',
+          'expectedClock': '$expectedStart-$expectedEnd',
+          'sameClock': sameClock,
+          'clockChanged': clockChanged,
+          'overrideChanged': overrideChanged,
+        },
+      );
+    }
+
+    if (updatedCount > 0) {
+      _courses = synced;
+      await _persistActiveProfileState();
+      _currentLiveCourseId = null;
+      _notifyStateChanged();
+      await _updateLiveActivity();
+    }
+
+    final overridesAfter = _courses
+        .where((course) => course.timeSchemeIdOverride != null)
+        .length;
+    final profileOverrides =
+        activeProfile?.courses
+            .where((course) => course.timeSchemeIdOverride != null)
+            .length ??
+        -1;
+    audit(
+      '===== 应用结束 ===== unlocked=$unlockedCount matched=$matchedCount '
+      'updated=$updatedCount sameClock=$alreadySameClockCount '
+      'overflow=$sectionOverflowCount noMatch=$noMatchCount '
+      'missingScheme=$matchMissingSchemeCount '
+      'autoReleased=$autoReleasedCount clockRewrite=$clockRewriteCount '
+      'overridesInMemoryAfter=$overridesAfter overridesInActiveProfile=$profileOverrides '
+      'didPersist=${updatedCount > 0} '
+      'overflowNames=${sectionOverflowCourseNames.join(",")} '
+      'samples=${changeSamples.take(12).join(" || ")}',
+      extras: {
+        'unlocked': unlockedCount,
+        'matched': matchedCount,
+        'updated': updatedCount,
+        'sameClock': alreadySameClockCount,
+        'overflow': sectionOverflowCount,
+        'noMatch': noMatchCount,
+        'missingScheme': matchMissingSchemeCount,
+        'autoReleased': autoReleasedCount,
+        'clockRewrite': clockRewriteCount,
+        'overridesInMemoryAfter': overridesAfter,
+        'overridesInActiveProfile': profileOverrides,
+        'didPersist': updatedCount > 0,
+        'changeSamples': changeSamples,
+        'overflowNames': sectionOverflowCourseNames,
+      },
+    );
+    if (matchedCount > 0 && updatedCount == 0) {
+      audit(
+        '结论: 地点规则已命中，但课程未改写（钟点已相同且未绑定 override，或全部节次越界）。'
+        'sameClock=$alreadySameClockCount overflow=$sectionOverflowCount。'
+        '请对比地点组绑定模板 vs 主课表模板各节起止时间是否完全一致。',
+      );
+    }
+    if (overridesAfter != profileOverrides && profileOverrides >= 0) {
+      audit(
+        '严重异常: 内存课表与 activeProfile 的模板覆盖数量不一致。持久化/合并失败。',
+        extras: {
+          'fatal': true,
+          'overridesInMemoryAfter': overridesAfter,
+          'overridesInActiveProfile': profileOverrides,
+        },
+      );
+    }
+
+    return LocationTimeApplyStats(
+      unlockedCount: unlockedCount,
+      matchedCount: matchedCount,
+      updatedCount: updatedCount,
+      alreadySameClockCount: alreadySameClockCount,
+      sectionOverflowCount: sectionOverflowCount,
+      sectionOverflowCourseNames: sectionOverflowCourseNames,
+    );
   }
 
   String _sectionSignature(List<SectionTime> sections) {
@@ -1091,13 +2001,34 @@ class TimetableProvider with ChangeNotifier {
         return;
       }
 
-      await _persistActiveProfileState();
+      // Capture the outgoing profile in memory, then switch immediately. The
+      // single save below contains both the outgoing snapshot and the newly
+      // active profile, so there is no need to block the UI on two full writes.
+      _mergeActiveProfileIntoProfilesList();
+      final previousProfileId = _activeProfileId;
       _activeProfileId = profileId;
       _applyProfileState(targetProfile);
-      await _persistActiveProfileState(touchLastUsedAt: true);
       _currentLiveCourseId = null;
       _lastLiveSnapshotSignature = null;
       notifyListeners();
+
+      try {
+        await _persistActiveProfileState(touchLastUsedAt: true);
+      } catch (_) {
+        // Persist failed: roll memory back so UI does not diverge from disk.
+        if (previousProfileId != null) {
+          _activeProfileId = previousProfileId;
+          final previousProfile = _getProfileById(previousProfileId);
+          if (previousProfile != null) {
+            _applyProfileState(previousProfile);
+          }
+        }
+        _currentLiveCourseId = null;
+        _lastLiveSnapshotSignature = null;
+        notifyListeners();
+        rethrow;
+      }
+
       await _liveActivitiesService.stopLiveUpdate();
       _lastLiveActivityStageKey = null;
       await _syncLiveScheduleSnapshot();
@@ -1181,9 +2112,10 @@ class TimetableProvider with ChangeNotifier {
       if (validationMessage != null) {
         throw ArgumentError(validationMessage);
       }
-      final normalizedCourse = _syncCourseWithEffectiveTimeScheme(
-        _normalizeCourse(course),
-      );
+      final normalized = _normalizeCourse(course);
+      final normalizedCourse = _isLiveTestingFixture(normalized)
+          ? normalized
+          : _syncCourseWithEffectiveTimeScheme(normalized);
       final existingSharedCourse = _courses.cast<Course?>().firstWhere(
         (item) =>
             item != null &&
@@ -1226,9 +2158,10 @@ class TimetableProvider with ChangeNotifier {
         if (validationMessage != null) {
           throw ArgumentError(validationMessage);
         }
-        final normalizedCourse = _syncCourseWithEffectiveTimeScheme(
-          _normalizeCourse(course),
-        );
+        final normalized = _normalizeCourse(course);
+        final normalizedCourse = _isLiveTestingFixture(normalized)
+            ? normalized
+            : _syncCourseWithEffectiveTimeScheme(normalized);
         final originalCourse = _courses[index];
         final previousKey = _sharedCourseKeyFromName(
           previousSharedName ?? originalCourse.name,
@@ -1252,6 +2185,7 @@ class TimetableProvider with ChangeNotifier {
         await _persistActiveProfileState();
         _currentLiveCourseId = null;
         notifyListeners();
+        unawaited(_syncExamReminders());
         _analytics.logEventLater(
           name: 'course_updated',
           parameters: {
@@ -1329,6 +2263,7 @@ class TimetableProvider with ChangeNotifier {
       await _persistActiveProfileState();
       _currentLiveCourseId = null;
       notifyListeners();
+      unawaited(_syncExamReminders());
       _analytics.logEventLater(
         name: 'course_group_updated',
         parameters: {
@@ -1552,12 +2487,12 @@ class TimetableProvider with ChangeNotifier {
 
   List<Exam> getExamsForCourse(String courseId) {
     return _exams.where((exam) => exam.courseId == courseId).toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      ..sort(Exam.compareByStart);
   }
 
   List<Exam> getUpcomingExams({int? limit}) {
     final upcoming = _exams.where((exam) => !exam.isExpired).toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      ..sort(Exam.compareByStart);
     if (limit != null && upcoming.length > limit) {
       return upcoming.sublist(0, limit);
     }
@@ -1581,55 +2516,62 @@ class TimetableProvider with ChangeNotifier {
     });
   }
 
-  Future<void> addExam(Exam exam) async {
-    await initialize();
-    if (getCourseForExam(exam) == null) {
-      throw ArgumentError('linked_course_not_found');
-    }
-    _exams.add(exam);
-    await _persistActiveProfileState();
-    notifyListeners();
-    unawaited(_syncExamReminders());
-    // Native widgets re-read profiles; force a snapshot push so exam line
-    // appears without waiting for the next course-boundary refresh.
-    _lastHomeWidgetSnapshotSignature = null;
-    unawaited(_syncHomeWidgetSnapshot());
-    _analytics.logEventLater(
-      name: 'exam_created',
-      parameters: {
-        'has_location': exam.location?.isNotEmpty == true ? 1 : 0,
-        'has_seat': exam.seatNumber?.isNotEmpty == true ? 1 : 0,
-      },
-    );
+  Future<void> addExam(Exam exam) {
+    return _runMutation(() async {
+      await initialize();
+      if (getCourseForExam(exam) == null) {
+        throw ArgumentError('linked_course_not_found');
+      }
+      _exams.add(exam);
+      await _persistActiveProfileState();
+      notifyListeners();
+      unawaited(_syncExamReminders());
+      // Native widgets re-read profiles; force a snapshot push so exam line
+      // appears without waiting for the next course-boundary refresh.
+      _lastHomeWidgetSnapshotSignature = null;
+      unawaited(_syncHomeWidgetSnapshot());
+      _analytics.logEventLater(
+        name: 'exam_created',
+        parameters: {
+          'has_location': exam.location?.isNotEmpty == true ? 1 : 0,
+          'has_seat': exam.seatNumber?.isNotEmpty == true ? 1 : 0,
+        },
+      );
+    });
   }
 
-  Future<void> updateExam(Exam exam) async {
-    await initialize();
-    final index = _exams.indexWhere((e) => e.id == exam.id);
-    if (index == -1) return;
-    _exams[index] = exam;
-    await _persistActiveProfileState();
-    notifyListeners();
-    unawaited(_syncExamReminders());
-    _lastHomeWidgetSnapshotSignature = null;
-    unawaited(_syncHomeWidgetSnapshot());
-    _analytics.logEventLater(
-      name: 'exam_updated',
-      parameters: {'exam_id': exam.id},
-    );
+  Future<void> updateExam(Exam exam) {
+    return _runMutation(() async {
+      await initialize();
+      final index = _exams.indexWhere((e) => e.id == exam.id);
+      if (index == -1) return;
+      _exams[index] = exam;
+      await _persistActiveProfileState();
+      notifyListeners();
+      unawaited(_syncExamReminders());
+      _lastHomeWidgetSnapshotSignature = null;
+      unawaited(_syncHomeWidgetSnapshot());
+      _analytics.logEventLater(
+        name: 'exam_updated',
+        parameters: {'exam_id': exam.id},
+      );
+    });
   }
 
-  Future<void> deleteExam(String examId) async {
-    _exams.removeWhere((e) => e.id == examId);
-    await _persistActiveProfileState();
-    notifyListeners();
-    unawaited(_syncExamReminders());
-    _lastHomeWidgetSnapshotSignature = null;
-    unawaited(_syncHomeWidgetSnapshot());
-    _analytics.logEventLater(
-      name: 'exam_deleted',
-      parameters: {'remaining_exam_count': _exams.length},
-    );
+  Future<void> deleteExam(String examId) {
+    return _runMutation(() async {
+      await initialize();
+      _exams.removeWhere((e) => e.id == examId);
+      await _persistActiveProfileState();
+      notifyListeners();
+      unawaited(_syncExamReminders());
+      _lastHomeWidgetSnapshotSignature = null;
+      unawaited(_syncHomeWidgetSnapshot());
+      _analytics.logEventLater(
+        name: 'exam_deleted',
+        parameters: {'remaining_exam_count': _exams.length},
+      );
+    });
   }
 
   /// Reconcile native exam-reminder alarms with the active profile exam list.
@@ -1784,6 +2726,7 @@ class TimetableProvider with ChangeNotifier {
             isOddWeek: false,
             isEvenWeek: false,
             customWeeks: remainingWeeks,
+            sessionNotes: originalCourse.sessionNotesExcludingWeek(sourceWeek),
           ),
         ),
       );
@@ -1874,6 +2817,10 @@ class TimetableProvider with ChangeNotifier {
           isEvenWeek: false,
           customWeeks: [targetWeek],
           timeSchemeIdOverride: normalizedTimeSchemeId,
+          sessionNotes: originalCourse.sessionNotesForSingleWeek(
+            sourceWeek: sourceWeek,
+            targetWeek: targetWeek,
+          ),
         ),
       ),
     );
@@ -1889,6 +2836,7 @@ class TimetableProvider with ChangeNotifier {
             isOddWeek: false,
             isEvenWeek: false,
             customWeeks: remainingWeeks,
+            sessionNotes: originalCourse.sessionNotesExcludingWeek(sourceWeek),
           ),
         ),
       );
@@ -1929,6 +2877,28 @@ class TimetableProvider with ChangeNotifier {
     return true;
   }
 
+  /// Persists home view mode / last viewed day without the full settings
+  /// pipeline: no notifyListeners (the home State owns this UI state locally),
+  /// no live-activity / native pref sync — nothing there reads these fields.
+  ///
+  /// Routing this through [updateTimetableSettings] made every day-view page
+  /// switch broadcast a whole-app rebuild plus platform-channel work while the
+  /// pager was still animating.
+  Future<void> persistHomeViewState({
+    required TimetableHomeViewMode mode,
+    required int dayOfWeek,
+  }) async {
+    if (_settings.timetableHomeViewMode == mode &&
+        _settings.timetableLastViewedDayOfWeek == dayOfWeek) {
+      return;
+    }
+    _settings = _settings.copyWith(
+      timetableHomeViewMode: mode,
+      timetableLastViewedDayOfWeek: dayOfWeek,
+    );
+    await _persistActiveProfileState();
+  }
+
   Future<String?> updateTimetableSettings(TimetableSettings settings) async {
     final sectionConfigChanged =
         settings.sectionCount != _settings.sectionCount ||
@@ -1944,6 +2914,7 @@ class TimetableProvider with ChangeNotifier {
 
     final previousBackdropPath = resolveHomePageBackdropImagePath(_settings);
     _settings = _normalizeSettingsWithTimeScheme(settings);
+    hyperosSetEdgeHapticsEnabled(_settings.enableHaptics);
     _currentDateWeek = _resolveCurrentDateWeek();
     await _persistActiveProfileState();
     unawaited(_syncNativeRuntimePreferences());
@@ -1992,12 +2963,14 @@ class TimetableProvider with ChangeNotifier {
     required bool replaceExisting,
     DateTime? semesterStart,
     required String source,
+    bool preserveLocalColors = true,
   }) => _timetableImportParsedCourses(
     this,
     importedCourses,
     replaceExisting: replaceExisting,
     semesterStart: semesterStart,
     source: source,
+    preserveLocalColors: preserveLocalColors,
   );
 
   Future<String?> importAppDataBackup(String content) =>
@@ -2115,6 +3088,8 @@ class TimetableProvider with ChangeNotifier {
     final normalizedStart = _startOfWeek(semesterStart);
     final week = (normalizedNow.difference(normalizedStart).inDays ~/ 7) + 1;
     final targetWeek = week < 1 ? 1 : week;
+    // Stay within the user-configured semester length. Do not auto-expand
+    // semesterWeekCount when the calendar has moved past the last teaching week.
     _currentDateWeek = targetWeek > _settings.semesterWeekCount
         ? _settings.semesterWeekCount
         : targetWeek;
@@ -2137,8 +3112,12 @@ class TimetableProvider with ChangeNotifier {
         _settings.semesterStartDate != null && targetWeek != _currentDateWeek;
     final didChangeDay = targetDayOfWeek != _currentDayOfWeek;
 
+    // Seasonal bulk-apply must run even when week/day labels did not change
+    // (e.g. cold start after midnight, or rule starts mid-session).
+    final didApplySeasonal = await applyDueScheduleDateRules(now: reference);
+
     if (!didChangeWeek && !didChangeDay) {
-      return false;
+      return didApplySeasonal;
     }
 
     if (didChangeWeek) {
@@ -2148,9 +3127,15 @@ class TimetableProvider with ChangeNotifier {
       _currentDayOfWeek = targetDayOfWeek;
     }
 
-    _currentLiveCourseId = null;
-    notifyListeners();
-    await _updateLiveActivity();
+    // applyDueScheduleDateRules already notified if it mutated; still refresh
+    // week/day surfaces when only temporal labels changed.
+    if (!didApplySeasonal) {
+      _currentLiveCourseId = null;
+      notifyListeners();
+      await _updateLiveActivity();
+    } else {
+      notifyListeners();
+    }
     return true;
   }
 
@@ -2185,33 +3170,50 @@ class TimetableProvider with ChangeNotifier {
       return false;
     }
 
-    final overlapStartWeek = left.startWeek > right.startWeek
-        ? left.startWeek
-        : right.startWeek;
-    final overlapEndWeek = left.endWeek < right.endWeek
-        ? left.endWeek
-        : right.endWeek;
-    if (overlapStartWeek > overlapEndWeek) {
-      return false;
-    }
-
+    // Use isInWeek (respects customWeeks), not startWeek/endWeek envelope alone.
+    // Warehouse imports often leave default 1–16 while customWeeks sits outside.
     if (week != null) {
-      if (week < overlapStartWeek || week > overlapEndWeek) {
-        return false;
-      }
-      return left.isInWeek(week) && right.isInWeek(week);
+      // Prefer isActiveInWeek so suspended weeks do not false-positive conflicts.
+      return left.isActiveInWeek(week) && right.isActiveInWeek(week);
     }
 
-    for (var week = overlapStartWeek; week <= overlapEndWeek; week++) {
-      if (left.isInWeek(week) && right.isInWeek(week)) {
+    final candidateWeeks = <int>{
+      ..._courseWeekCandidates(left),
+      ..._courseWeekCandidates(right),
+    };
+    for (final candidateWeek in candidateWeeks) {
+      if (left.isActiveInWeek(candidateWeek) &&
+          right.isActiveInWeek(candidateWeek)) {
         return true;
       }
     }
-
     return false;
   }
 
+  Set<int> _courseWeekCandidates(Course course) {
+    final custom = course.normalizedCustomWeeks;
+    if (custom != null && custom.isNotEmpty) {
+      return custom.toSet();
+    }
+    final weeks = <int>{};
+    final start = course.startWeek < 1 ? 1 : course.startWeek;
+    final end = course.endWeek < start ? start : course.endWeek;
+    for (var week = start; week <= end; week++) {
+      weeks.add(week);
+    }
+    return weeks;
+  }
+
   Course _normalizeCourse(Course course) {
+    final trimmedDescription = course.description?.trim();
+    final trimmedNote = course.note?.trim();
+    final resolvedDescription =
+        (trimmedDescription != null && trimmedDescription.isNotEmpty)
+        ? trimmedDescription
+        // Promote legacy per-entry note into the shared course description.
+        : ((trimmedNote != null && trimmedNote.isNotEmpty)
+              ? trimmedNote
+              : null);
     return course.copyWith(
       name: course.name.trim(),
       shortName: course.shortName?.trim().isEmpty == true
@@ -2219,10 +3221,10 @@ class TimetableProvider with ChangeNotifier {
           : course.shortName?.trim(),
       teacher: course.teacher.trim(),
       location: course.location.trim(),
-      description: course.description?.trim().isEmpty == true
-          ? null
-          : course.description?.trim(),
-      note: course.note?.trim().isEmpty == true ? null : course.note?.trim(),
+      description: resolvedDescription,
+      note: (trimmedNote != null && trimmedNote.isNotEmpty)
+          ? trimmedNote
+          : null,
     );
   }
 
@@ -2270,13 +3272,25 @@ class TimetableProvider with ChangeNotifier {
   }
 
   Course _applySharedCourseFields(Course target, Course source) {
+    final sharedDescription = () {
+      final description = source.description?.trim();
+      if (description != null && description.isNotEmpty) {
+        return description;
+      }
+      final legacyNote = source.note?.trim();
+      if (legacyNote != null && legacyNote.isNotEmpty) {
+        return legacyNote;
+      }
+      return null;
+    }();
     return target.copyWith(
       name: source.name,
       shortName: source.shortName,
       teacher: source.teacher,
       color: source.color,
+      textColor: source.textColor,
       courseNature: source.courseNature,
-      description: source.description,
+      description: sharedDescription,
     );
   }
 
@@ -2354,7 +3368,13 @@ class TimetableProvider with ChangeNotifier {
   }
 
   List<Course> getTodayCourses() {
-    return getCoursesForDay(_currentDayOfWeek, week: _currentDateWeek);
+    // After the term ends, UI currentDateWeek is clamped to semesterWeekCount.
+    // "Today's courses" must use the real calendar week so finished courses do
+    // not keep appearing every weekday that matches the last teaching week.
+    final targetWeek = _settings.semesterStartDate == null
+        ? _currentDateWeek
+        : _calculateCalendarWeekForDate(DateTime.now());
+    return getCoursesForDay(_currentDayOfWeek, week: targetWeek);
   }
 
   Course? getCurrentCourse() {
@@ -2520,6 +3540,11 @@ class TimetableProvider with ChangeNotifier {
 
   void suspendLiveActivitySyncFor(Duration duration) {
     _liveActivitySuspendedUntil = DateTime.now().add(duration);
+  }
+
+  /// Clears a temporary live-sync pause (e.g. leftover from older test helpers).
+  void clearLiveActivitySyncSuspend() {
+    _liveActivitySuspendedUntil = null;
   }
 
   Future<void> refreshLiveActivityNow({bool forceSnapshotSync = false}) =>

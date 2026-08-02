@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:university_timetable/ui/hyperos/frosted/frosted_appearance.dart';
+import 'package:university_timetable/models/liquid_glass_tuning.dart';
 
 enum AppUpdateDownloadSource { original, mirror }
 
@@ -417,6 +419,32 @@ extension LiveBeforeClassQuickActionX on LiveBeforeClassQuickAction {
     return LiveBeforeClassQuickAction.values.firstWhere(
       (item) => item.value == value,
       orElse: () => LiveBeforeClassQuickAction.none,
+    );
+  }
+}
+
+/// Visual surface style for course cards.
+enum CourseCardSurfaceStyle {
+  /// Solid opaque card with gradient wash (default).
+  solid,
+
+  /// Semi-transparent milky card.
+  translucent,
+
+  /// Liquid-glass refraction shader (high-end devices only).
+  liquidGlass,
+
+  /// Gaussian blur backdrop over the page background.
+  gaussian,
+}
+
+extension CourseCardSurfaceStyleX on CourseCardSurfaceStyle {
+  String get value => name;
+
+  static CourseCardSurfaceStyle fromValue(String? value) {
+    return CourseCardSurfaceStyle.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => CourseCardSurfaceStyle.solid,
     );
   }
 }
@@ -1021,10 +1049,16 @@ class TimetableSettings {
   final BackToCurrentWeekButtonStyle timetableBackToCurrentWeekButtonStyle;
   final double timetableFloatingBackToCurrentWeekButtonOpacity;
   final int timetableLastViewedDayOfWeek;
+
+  /// Whether couple-timetable overlay (header heart) was last left on.
+  final bool coupleTimetableOverlayEnabled;
   final SectionTimeDisplayMode timetableSectionTimeDisplayMode;
   final bool timetableHideWeekends;
   final bool enableHaptics;
   final double pageTransitionSpeed;
+
+  /// When true, home-page pull-down runs warehouse quick import in the background.
+  final bool homePullQuickImportEnabled;
   final bool liveShowCourseName;
   final bool liveShowLocation;
   final bool liveShowCountdown;
@@ -1118,11 +1152,26 @@ class TimetableSettings {
   final String weekdayBarAccentColorDark;
   final String timeAxisFontColorLight;
   final String timeAxisFontColorDark;
+
+  /// Convenience getter that maps frosted-glass fields to a [FrostedAppearance].
+  FrostedAppearance get frostedAppearance => FrostedAppearance(
+    sheetBlurSigma: frostedSheetBlurSigma,
+    sheetTintAlpha: frostedSheetTintAlpha,
+    sheetBarrierAlpha: frostedSheetBarrierAlpha,
+    blurEnabled: frostedBlurEnabled,
+    glassMode: frostedGlassMode,
+    liquidGlassTuning: liquidGlassTuning,
+  );
+
   final bool linkCourseCardColors; // 标题和详情颜色是否关联
   final double frostedSheetBlurSigma;
   final double frostedSheetTintAlpha;
   final double frostedSheetBarrierAlpha;
   final bool frostedBlurEnabled;
+  final FrostedGlassMode frostedGlassMode;
+  final CourseCardSurfaceStyle courseCardSurfaceStyle;
+  final LiquidGlassPreset liquidGlassPreset;
+  final LiquidGlassTuning? liquidGlassTuning;
   final bool homePageHeaderBlurEnabled;
   final bool homePageWeekdayBarBlurEnabled;
   final bool homePageTimeColumnBlurEnabled;
@@ -1175,10 +1224,12 @@ class TimetableSettings {
         BackToCurrentWeekButtonStyle.floating,
     this.timetableFloatingBackToCurrentWeekButtonOpacity = 0.96,
     this.timetableLastViewedDayOfWeek = 1,
+    this.coupleTimetableOverlayEnabled = false,
     this.timetableSectionTimeDisplayMode = SectionTimeDisplayMode.startAndEnd,
     this.timetableHideWeekends = false,
     this.enableHaptics = true,
     this.pageTransitionSpeed = defaultPageTransitionSpeed,
+    this.homePullQuickImportEnabled = false,
     this.liveShowCourseName = true,
     this.liveShowLocation = true,
     this.liveShowCountdown = true,
@@ -1283,6 +1334,10 @@ class TimetableSettings {
     this.frostedSheetTintAlpha = defaultFrostedSheetTintAlpha,
     this.frostedSheetBarrierAlpha = defaultFrostedSheetBarrierAlpha,
     this.frostedBlurEnabled = defaultFrostedBlurEnabled,
+    this.frostedGlassMode = FrostedGlassMode.frosted,
+    this.courseCardSurfaceStyle = CourseCardSurfaceStyle.solid,
+    this.liquidGlassPreset = LiquidGlassPreset.standard,
+    this.liquidGlassTuning,
     this.homePageHeaderBlurEnabled = false,
     this.homePageWeekdayBarBlurEnabled = false,
     this.homePageTimeColumnBlurEnabled = false,
@@ -1346,10 +1401,12 @@ class TimetableSettings {
           BackToCurrentWeekButtonStyle.floating,
       timetableFloatingBackToCurrentWeekButtonOpacity: 0.96,
       timetableLastViewedDayOfWeek: 1,
+      coupleTimetableOverlayEnabled: false,
       timetableSectionTimeDisplayMode: SectionTimeDisplayMode.startAndEnd,
       timetableHideWeekends: false,
       enableHaptics: true,
       pageTransitionSpeed: defaultPageTransitionSpeed,
+      homePullQuickImportEnabled: false,
       liveShowCourseName: true,
       liveShowLocation: true,
       liveShowCountdown: true,
@@ -1481,10 +1538,12 @@ class TimetableSettings {
       'timetableFloatingBackToCurrentWeekButtonOpacity':
           timetableFloatingBackToCurrentWeekButtonOpacity,
       'timetableLastViewedDayOfWeek': timetableLastViewedDayOfWeek,
+      'coupleTimetableOverlayEnabled': coupleTimetableOverlayEnabled,
       'timetableSectionTimeDisplayMode': timetableSectionTimeDisplayMode.value,
       'timetableHideWeekends': timetableHideWeekends,
       'enableHaptics': enableHaptics,
       'pageTransitionSpeed': pageTransitionSpeed,
+      'homePullQuickImportEnabled': homePullQuickImportEnabled,
       'liveShowCourseName': liveShowCourseName,
       'liveShowLocation': liveShowLocation,
       'liveShowCountdown': liveShowCountdown,
@@ -1600,6 +1659,11 @@ class TimetableSettings {
       'frostedSheetTintAlpha': frostedSheetTintAlpha,
       'frostedSheetBarrierAlpha': frostedSheetBarrierAlpha,
       'frostedBlurEnabled': frostedBlurEnabled,
+      'frostedGlassMode': frostedGlassMode.value,
+      'courseCardSurfaceStyle': courseCardSurfaceStyle.value,
+      'liquidGlassPreset': liquidGlassPreset.value,
+      if (liquidGlassTuning != null)
+        'liquidGlassTuning': liquidGlassTuning!.toJson(),
       'homePageHeaderBlurEnabled': homePageHeaderBlurEnabled,
       'homePageWeekdayBarBlurEnabled': homePageWeekdayBarBlurEnabled,
       'homePageTimeColumnBlurEnabled': homePageTimeColumnBlurEnabled,
@@ -1723,6 +1787,8 @@ class TimetableSettings {
             1,
             7,
           ),
+      coupleTimetableOverlayEnabled:
+          json['coupleTimetableOverlayEnabled'] as bool? ?? false,
       timetableSectionTimeDisplayMode: SectionTimeDisplayModeX.fromValue(
         json['timetableSectionTimeDisplayMode'] as String?,
       ),
@@ -1732,6 +1798,8 @@ class TimetableSettings {
           ((json['pageTransitionSpeed'] as num?)?.toDouble() ??
                   defaultPageTransitionSpeed)
               .clamp(minPageTransitionSpeed, maxPageTransitionSpeed),
+      homePullQuickImportEnabled:
+          json['homePullQuickImportEnabled'] as bool? ?? false,
       liveShowCourseName: json['liveShowCourseName'] as bool? ?? true,
       liveShowLocation: json['liveShowLocation'] as bool? ?? true,
       liveShowCountdown: json['liveShowCountdown'] as bool? ?? true,
@@ -1883,10 +1951,14 @@ class TimetableSettings {
         json['superIslandEngine'] as String?,
       ),
       hfTemplatesJson: json['hfTemplatesJson'] as String? ?? '',
-      hfIslandTimeoutPre: (json['hfIslandTimeoutPre'] as num?)?.toInt() ?? 300,
+      hfIslandTimeoutPre:
+          ((json['hfIslandTimeoutPre'] as num?)?.toInt() ?? 300).clamp(60, 3600),
       hfIslandTimeoutActive:
-          (json['hfIslandTimeoutActive'] as num?)?.toInt() ?? 600,
-      hfIslandTimeoutPost: (json['hfIslandTimeoutPost'] as num?)?.toInt() ?? 600,
+          ((json['hfIslandTimeoutActive'] as num?)?.toInt() ?? 600)
+              .clamp(60, 3600),
+      hfIslandTimeoutPost:
+          ((json['hfIslandTimeoutPost'] as num?)?.toInt() ?? 600)
+              .clamp(60, 3600),
       hfIconAEnabled: json['hfIconAEnabled'] as bool? ?? true,
       hfStatusTextColor: json['hfStatusTextColor'] as String? ?? '#FFFFFFFF',
       hfOutEffectStatusEnabled:
@@ -1971,6 +2043,20 @@ class TimetableSettings {
           defaultFrostedSheetBarrierAlpha,
       frostedBlurEnabled:
           json['frostedBlurEnabled'] as bool? ?? defaultFrostedBlurEnabled,
+      frostedGlassMode: FrostedGlassModeX.fromValue(
+        json['frostedGlassMode'] as String?,
+      ),
+      courseCardSurfaceStyle: CourseCardSurfaceStyleX.fromValue(
+        json['courseCardSurfaceStyle'] as String?,
+      ),
+      liquidGlassPreset: LiquidGlassPresetX.fromValue(
+        json['liquidGlassPreset'] as String?,
+      ),
+      liquidGlassTuning: json['liquidGlassTuning'] != null
+          ? LiquidGlassTuning.fromJson(
+              json['liquidGlassTuning'] as Map<String, dynamic>,
+            )
+          : null,
       homePageHeaderBlurEnabled:
           json['homePageHeaderBlurEnabled'] as bool? ?? false,
       homePageWeekdayBarBlurEnabled:
@@ -2044,10 +2130,12 @@ class TimetableSettings {
     BackToCurrentWeekButtonStyle? timetableBackToCurrentWeekButtonStyle,
     double? timetableFloatingBackToCurrentWeekButtonOpacity,
     int? timetableLastViewedDayOfWeek,
+    bool? coupleTimetableOverlayEnabled,
     SectionTimeDisplayMode? timetableSectionTimeDisplayMode,
     bool? timetableHideWeekends,
     bool? enableHaptics,
     double? pageTransitionSpeed,
+    bool? homePullQuickImportEnabled,
     bool? liveShowCourseName,
     bool? liveShowLocation,
     bool? liveShowCountdown,
@@ -2152,6 +2240,10 @@ class TimetableSettings {
     double? frostedSheetTintAlpha,
     double? frostedSheetBarrierAlpha,
     bool? frostedBlurEnabled,
+    FrostedGlassMode? frostedGlassMode,
+    CourseCardSurfaceStyle? courseCardSurfaceStyle,
+    LiquidGlassPreset? liquidGlassPreset,
+    LiquidGlassTuning? liquidGlassTuning,
     bool? homePageHeaderBlurEnabled,
     bool? homePageWeekdayBarBlurEnabled,
     bool? homePageTimeColumnBlurEnabled,
@@ -2234,6 +2326,8 @@ class TimetableSettings {
       timetableLastViewedDayOfWeek:
           (timetableLastViewedDayOfWeek ?? this.timetableLastViewedDayOfWeek)
               .clamp(1, 7),
+      coupleTimetableOverlayEnabled:
+          coupleTimetableOverlayEnabled ?? this.coupleTimetableOverlayEnabled,
       timetableSectionTimeDisplayMode:
           timetableSectionTimeDisplayMode ??
           this.timetableSectionTimeDisplayMode,
@@ -2242,6 +2336,8 @@ class TimetableSettings {
       enableHaptics: enableHaptics ?? this.enableHaptics,
       pageTransitionSpeed: (pageTransitionSpeed ?? this.pageTransitionSpeed)
           .clamp(minPageTransitionSpeed, maxPageTransitionSpeed),
+      homePullQuickImportEnabled:
+          homePullQuickImportEnabled ?? this.homePullQuickImportEnabled,
       liveShowCourseName: liveShowCourseName ?? this.liveShowCourseName,
       liveShowLocation: liveShowLocation ?? this.liveShowLocation,
       liveShowCountdown: liveShowCountdown ?? this.liveShowCountdown,
@@ -2445,6 +2541,11 @@ class TimetableSettings {
       frostedSheetBarrierAlpha:
           frostedSheetBarrierAlpha ?? this.frostedSheetBarrierAlpha,
       frostedBlurEnabled: frostedBlurEnabled ?? this.frostedBlurEnabled,
+      frostedGlassMode: frostedGlassMode ?? this.frostedGlassMode,
+      courseCardSurfaceStyle:
+          courseCardSurfaceStyle ?? this.courseCardSurfaceStyle,
+      liquidGlassPreset: liquidGlassPreset ?? this.liquidGlassPreset,
+      liquidGlassTuning: liquidGlassTuning ?? this.liquidGlassTuning,
       homePageHeaderBlurEnabled:
           homePageHeaderBlurEnabled ?? this.homePageHeaderBlurEnabled,
       homePageWeekdayBarBlurEnabled:

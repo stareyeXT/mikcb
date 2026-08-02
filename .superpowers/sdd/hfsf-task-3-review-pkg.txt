@@ -1,0 +1,125 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index 7149c07..acc00f9 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -1154,42 +1154,52 @@ class MainActivity : FlutterActivity() {
+                 )
+                 return "系统通知权限未开启，请先在设置中开启通知权限"
+             }
+ 
+             val now = System.currentTimeMillis()
+             val templateStage = when (stage) {
+                 "active", "beforeEnd" -> "active"
+                 "post" -> "post"
+                 else -> "pre"
+             }
++            val realStart = buildCourseTimeMillis(startTime)
++            val realEnd = buildCourseTimeMillis(endTime)
++            val hasRealTime = realStart != null && realEnd != null && realEnd > realStart
+             val classStartAt: Long
+             val classEndAt: Long
+             val timerTarget: Long
+             val hintText: String
+             when (templateStage) {
+                 "active" -> {
+                     classStartAt = now - 10 * 60_000L
+                     classEndAt = now + 5 * 60_000L
+                     timerTarget = classEndAt
+                     hintText = "距下课还有 5 分钟"
+                 }
+                 "post" -> {
+                     classStartAt = now - 20 * 60_000L
+                     classEndAt = now - 60_000L
+                     timerTarget = 0L
+                     hintText = "已下课"
+                 }
+                 else -> {
+-                    classStartAt = now + 5 * 60_000L
+-                    classEndAt = classStartAt + 100 * 60_000L
+-                    timerTarget = classStartAt
+-                    hintText = "距离上课还有 5 分钟"
++                    if (hasRealTime && realStart!! > now) {
++                        classStartAt = realStart
++                        classEndAt = realEnd!!
++                        timerTarget = classStartAt
++                        hintText = "距离上课还有 ${((classStartAt - now) / 60_000L + 1)} 分钟"
++                    } else {
++                        classStartAt = now + 5 * 60_000L
++                        classEndAt = classStartAt + 100 * 60_000L
++                        timerTarget = classStartAt
++                        hintText = "距离上课还有 5 分钟"
++                    }
+                 }
+             }
+ 
+             UmengDiagnosticReporter.record(
+                 context = applicationContext,
+                 category = "send_test_focus_started",
+                 message = DiagnosticLogMessages.SEND_TEST_FOCUS_STARTED,
+                 extras = mapOf(
+                     "stage" to stage,
+                     "courseName" to courseName,
+@@ -1367,20 +1377,25 @@ class MainActivity : FlutterActivity() {
+             val notification = Notification.Builder(this, HYPERFOCUS_TEST_CHANNEL_ID)
+                 .setContentTitle(baseTitleText.ifBlank { courseName })
+                 .setContentText(baseContentText.ifBlank { "查看课表" })
+                 .setSmallIcon(R.mipmap.ic_launcher)
+                 .setOngoing(true)
+                 .setAutoCancel(false)
+                 .addExtras(extras)
+                 .build()
+ 
+             notificationManager.notify(10001, notification)
++            if (timerTarget > 0L && timerTarget > now) {
++                Handler(Looper.getMainLooper()).postDelayed({
++                    notificationManager.cancel(10001)
++                }, timerTarget - now)
++            }
+             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+             val activeIds = notificationManager.activeNotifications.map { it.id }
+             val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
+             Log.d(
+                 "HyperFocusApi",
+                 "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
+             )
+             val activeContainsTest = activeIds.contains(10001)
+             UmengDiagnosticReporter.record(
+@@ -1977,20 +1992,37 @@ class MainActivity : FlutterActivity() {
+     private fun resolveDefaultVibrator(): Vibrator? {
+         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+             val manager =
+                 getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+             manager?.defaultVibrator
+         } else {
+             @Suppress("DEPRECATION")
+             getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+         }
+     }
++
++    private fun buildCourseTimeMillis(timeText: String): Long? {
++        val parts = timeText.split(":")
++        if (parts.size != 2) {
++            return null
++        }
++
++        val hour = parts[0].toIntOrNull() ?: return null
++        val minute = parts[1].toIntOrNull() ?: return null
++
++        return Calendar.getInstance().apply {
++            set(Calendar.HOUR_OF_DAY, hour)
++            set(Calendar.MINUTE, minute)
++            set(Calendar.SECOND, 0)
++            set(Calendar.MILLISECOND, 0)
++        }.timeInMillis
++    }
+ }
+ 
+ internal fun liveShouldMirrorStatusIntoMiuiFocusHint(
+     sdkInt: Int,
+     shouldPromote: Boolean,
+ ): Boolean {
+     return !(sdkInt >= 36 && shouldPromote)
+ }
+ 
+ class LiveUpdateService : Service() {

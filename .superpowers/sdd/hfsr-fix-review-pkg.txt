@@ -1,0 +1,425 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index af3cb2d..7149c07 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -1243,33 +1243,33 @@ class MainActivity : FlutterActivity() {
+             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
+ 
+             val hasTimer = timerTarget > 0L && timerTarget > now
+             val extras = FocusNotification.buildV3 {
+                 business = "course_schedule"
+                 updatable = true
+                 enableFloat = true
+                 ticker = tickerText
+                 aodTitle = tickerText
+                 islandFirstFloat = true
+-                outEffectSrc = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
+-                outEffectColor = if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("outEffectStatusColor") ?: "#FFFFFFFF") else ""
++                outEffectSrc = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
++                outEffectColor = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("hfOutEffectStatusColor") ?: "#FFFFFFFF") else ""
+ 
+                 baseInfo {
+                     type = 2
+                     title = baseTitleText
+                     content = baseContentText
+                     subContent = baseSubcontentText
+                     showDivider = baseSubcontentText.isNotBlank()
+                 }
+ 
+                 picInfo {
+-                    if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
++                    if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                         type = 1
+                     }
+                 }
+ 
+                 hintInfo {
+                     type = 2
+                     title = hintTitleText
+                     content = hintText
+                     subTitle = hintSubtitleText
+                     extraTitle = hintContentText
+@@ -1286,34 +1286,34 @@ class MainActivity : FlutterActivity() {
+                     actionInfo {
+                         actionIntentType = 1
+                         actionIntent = openAppUri
+                         actionTitle = "查看课表"
+                     }
+                 }
+ 
+                 island {
+                     islandProperty = 1
+                     islandTimeout = when (templateStage) {
+-                        "pre" -> (args?.get("islandTimeoutPre")?.toIntOrNull() ?: 300)
+-                        "post" -> (args?.get("islandTimeoutPost")?.toIntOrNull() ?: 600)
+-                        else -> (args?.get("islandTimeoutActive")?.toIntOrNull() ?: 600)
++                        "pre" -> (args?.get("hfIslandTimeoutPre")?.toIntOrNull() ?: 300)
++                        "post" -> (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600)
++                        else -> (args?.get("hfIslandTimeoutActive")?.toIntOrNull() ?: 600)
+                     }
+ 
+                     bigIslandArea {
+                         imageTextInfoLeft {
+                             type = 1
+                             textInfo {
+                                 title = islandAText
+                                 showHighlightColor = true
+                             }
+                             picInfo {
+-                                if (args?.get("iconAEnabled")?.toBooleanStrictOrNull() ?: true) {
++                                if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                                     type = 1
+                                 }
+                             }
+                         }
+ 
+                         if (hasTimer) {
+                             sameWidthDigitInfo {
+                                 timerInfo {
+                                     timerType = -1
+                                     timerWhen = timerTarget
+@@ -1334,21 +1334,21 @@ class MainActivity : FlutterActivity() {
+ 
+                     smallIslandArea { }
+ 
+                     shareData {
+                         title = courseName
+                         content = location
+                     }
+                 }
+             }
+ 
+-            if (args?.get("outEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
++            if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
+                 extras.putString("miui.bigIsland.effect.src", "outer_glow")
+                 extras.putString("miui.effect.src", "outer_glow")
+             }
+ 
+             notificationManager.createNotificationChannel(
+                 NotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
+             )
+             val channel = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                 Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
+diff --git a/lib/screens/live_settings_subpages.dart b/lib/screens/live_settings_subpages.dart
+index a5b6b2f..6aea16e 100644
+--- a/lib/screens/live_settings_subpages.dart
++++ b/lib/screens/live_settings_subpages.dart
+@@ -1489,38 +1489,57 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
+     'islandB_pre': '',
+     'islandB_active': '上课中',
+     'islandB_post': '已下课',
+   };
+ 
+   static const _availableVariables = [
+     '课名', '短课名', '教室', '教师', '开始', '结束', '倒计时', '正计时',
+   ];
+ 
+   late Map<String, TextEditingController> _controllers;
++  late TimetableSettings _draft;
+ 
+   String get _s => _selectedStage;
+ 
+   static const _tabOrder = ['pre', 'active', 'post'];
+ 
++  static const _glowColors = [
++    '#FFFFFF',
++    '#BFDBFE',
++    '#A7F3D0',
++    '#FDE68A',
++    '#F9A8D4',
++    '#FBCFE8',
++  ];
++
+   @override
+   void initState() {
+     super.initState();
++    _draft = context.read<TimetableProvider>().settings;
+     _controllers = {};
+     for (final key in ['ticker', 'islandA', 'islandB']) {
+       for (final stage in _tabOrder) {
+         final k = '${key}_$stage';
+         _controllers[k] = TextEditingController(text: _defaultTemplates[k]!);
+       }
+     }
+     _loadTemplates();
+   }
+ 
++  void _updateDraft(TimetableSettings next) {
++    setState(() => _draft = next);
++    final provider = context.read<TimetableProvider>();
++    unawaited(
++      provider.updateTimetableSettings(next).then<void>((_) {}).catchError((_) {}),
++    );
++  }
++
+   Future<void> _loadTemplates() async {
+     final provider = context.read<TimetableProvider>();
+     final settingsJson = provider.settings.hfTemplatesJson;
+     if (settingsJson.isNotEmpty) {
+       try {
+         final decoded = jsonDecode(settingsJson) as Map<String, dynamic>;
+         if (!mounted) return;
+         for (final key in _controllers.keys) {
+           final v = decoded[key];
+           if (v is String && v.isNotEmpty) {
+@@ -1536,28 +1555,21 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
+     final saved = await service.loadHyperFocusTemplates();
+     if (!mounted) return;
+     var migrated = false;
+     for (final key in _controllers.keys) {
+       if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
+         _controllers[key]?.text = saved[key]!;
+         migrated = true;
+       }
+     }
+     if (migrated) {
+-      await _persistTemplatesToSettings(
+-        provider,
+-        Map.fromEntries(
+-          _controllers.entries.map(
+-            (e) => MapEntry(e.key, e.value.text),
+-          ),
+-        ),
+-      );
++      await _persistTemplatesToSettings(provider, Map.from(saved));
+     }
+   }
+ 
+   Future<void> _persistTemplatesToSettings(
+     TimetableProvider provider,
+     Map<String, String> map,
+   ) async {
+     await provider.updateTimetableSettings(
+       provider.settings.copyWith(hfTemplatesJson: jsonEncode(map)),
+     );
+@@ -1697,20 +1709,53 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
+                       ),
+                       const SizedBox(width: 12),
+                       Expanded(
+                         child: FButton(
+                           onPress: _resetStage,
+                           child: const Text('恢复默认'),
+                         ),
+                       ),
+                     ],
+                   ),
++                  const HyperosSectionGap(),
++                  HyperosSectionLabel(text: '岛视觉'),
++                  HyperosListGroup(
++                    children: [
++                      HyperosSwitchTile(
++                        title: '岛A图标',
++                        value: _draft.hfIconAEnabled,
++                        onChanged: (v) =>
++                            _updateDraft(_draft.copyWith(hfIconAEnabled: v)),
++                      ),
++                      HyperosSwitchTile(
++                        title: '发光效果',
++                        value: _draft.hfOutEffectStatusEnabled,
++                        onChanged: (v) => _updateDraft(
++                          _draft.copyWith(hfOutEffectStatusEnabled: v),
++                        ),
++                      ),
++                      if (_draft.hfOutEffectStatusEnabled)
++                        Padding(
++                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
++                          child: HyperosHexColorChipGroup(
++                            colorHexes: _glowColors,
++                            selectedHex: _normalizeHexForSelection(
++                              _draft.hfOutEffectStatusColor,
++                            ),
++                            colorParser: _parseColor,
++                            onSelectedHex: (hex) => _updateDraft(
++                              _draft.copyWith(hfOutEffectStatusColor: hex),
++                            ),
++                          ),
++                        ),
++                    ],
++                  ),
+                 ],
+               ),
+             ),
+           ),
+         ],
+       ),
+     );
+   }
+ }
+ 
+@@ -1793,28 +1838,21 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
+     final saved = await service.loadHyperFocusTemplates();
+     if (!mounted) return;
+     var migrated = false;
+     for (final key in _controllers.keys) {
+       if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
+         _controllers[key]?.text = saved[key]!;
+         migrated = true;
+       }
+     }
+     if (migrated) {
+-      await _persistTemplatesToSettings(
+-        provider,
+-        Map.fromEntries(
+-          _controllers.entries.map(
+-            (e) => MapEntry(e.key, e.value.text),
+-          ),
+-        ),
+-      );
++      await _persistTemplatesToSettings(provider, Map.from(saved));
+     }
+   }
+ 
+   Future<void> _persistTemplatesToSettings(
+     TimetableProvider provider,
+     Map<String, String> map,
+   ) async {
+     await provider.updateTimetableSettings(
+       provider.settings.copyWith(hfTemplatesJson: jsonEncode(map)),
+     );
+@@ -1971,10 +2009,18 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
+           ),
+         ],
+       ),
+     );
+   }
+ }
+ 
+ Color _parseColor(String hexColor) {
+   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
+ }
++
++String _normalizeHexForSelection(String hex) {
++  final h = hex.trim();
++  if (h.startsWith('#') && h.length == 9) {
++    return '#${h.substring(3)}';
++  }
++  return h;
++}
+diff --git a/lib/screens/timetable_settings_screen.dart b/lib/screens/timetable_settings_screen.dart
+index adc7565..c5db775 100644
+--- a/lib/screens/timetable_settings_screen.dart
++++ b/lib/screens/timetable_settings_screen.dart
+@@ -3018,27 +3018,37 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+     appDebugLog('MiuiLive', '测试课程：${course?.name}');
+     await _hyperFocusService.recordDiagnosticEvent(
+       'send_test_focus_requested',
+       '收到超级岛测试通知发送请求',
+       extras: {
+         'stage': stage,
+         'courseName': course?.name ?? '',
+         'atMillis': DateTime.now().millisecondsSinceEpoch.toString(),
+       },
+     );
++    final settings = provider.settings;
+     final error = await _hyperFocusService.sendTestFocusNotification(
+       courseName: course?.name,
+       startTime: course?.startTime,
+       endTime: course?.endTime,
+       location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
+       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
+       stage: stage,
++      hfIconAEnabled: settings.hfIconAEnabled,
++      hfStatusTextColor: settings.hfStatusTextColor,
++      hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
++      hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
++      hfOutEffectExpandEnabled: settings.hfOutEffectExpandEnabled,
++      hfOutEffectExpandColor: settings.hfOutEffectExpandColor,
++      hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
++      hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
++      hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
+     );
+     appDebugLog('MiuiLive', '发送结果：${error ?? '成功'}');
+     if (!mounted) return;
+     showHyperosSnackBar(context, message: error ?? '测试焦点通知已发送');
+     await _refreshDebugStatus(showLoading: true);
+   }
+ 
+   Future<void> _exportDiagnostics() async {
+     final l10n = AppLocalizations.of(context)!;
+     if (_exportingDiagnostics) return;
+diff --git a/lib/services/miui_live_activities_service.dart b/lib/services/miui_live_activities_service.dart
+index 9a315cf..847929e 100644
+--- a/lib/services/miui_live_activities_service.dart
++++ b/lib/services/miui_live_activities_service.dart
+@@ -688,32 +688,50 @@ class MiuiLiveActivitiesService {
+     }
+   }
+ 
+   Future<String?> sendTestFocusNotification({
+     String? courseName,
+     String? startTime,
+     String? endTime,
+     String? location,
+     String? teacher,
+     String stage = 'pre',
++    bool hfIconAEnabled = true,
++    String hfStatusTextColor = '#FFFFFFFF',
++    bool hfOutEffectStatusEnabled = true,
++    String hfOutEffectStatusColor = '#FFFFFFFF',
++    bool hfOutEffectExpandEnabled = true,
++    String hfOutEffectExpandColor = '#FFFFFFFF',
++    int hfIslandTimeoutPre = 300,
++    int hfIslandTimeoutActive = 600,
++    int hfIslandTimeoutPost = 600,
+   }) async {
+     if (defaultTargetPlatform != TargetPlatform.android) {
+       return '非 Android 设备';
+     }
+     try {
+       await _channel.invokeMethod('sendTestFocus', {
+         if (courseName != null) 'courseName': courseName,
+         if (startTime != null) 'startTime': startTime,
+         if (endTime != null) 'endTime': endTime,
+         if (location != null) 'location': location,
+         if (teacher != null) 'teacher': teacher,
+         'stage': stage,
++        'hfIconAEnabled': hfIconAEnabled.toString(),
++        'hfStatusTextColor': hfStatusTextColor,
++        'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled.toString(),
++        'hfOutEffectStatusColor': hfOutEffectStatusColor,
++        'hfOutEffectExpandEnabled': hfOutEffectExpandEnabled.toString(),
++        'hfOutEffectExpandColor': hfOutEffectExpandColor,
++        'hfIslandTimeoutPre': hfIslandTimeoutPre.toString(),
++        'hfIslandTimeoutActive': hfIslandTimeoutActive.toString(),
++        'hfIslandTimeoutPost': hfIslandTimeoutPost.toString(),
+       });
+       return null;
+     } catch (e) {
+       appDebugLog('MiuiLive', '发送测试焦点通知失败：$e');
+       return '发送失败：$e';
+     }
+   }
+ 
+   Future<bool> saveHyperFocusTemplates(Map<String, String> templates) async {
+     if (!Platform.isAndroid) return false;
+@@ -849,20 +867,29 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
+   }
+ 
+   @override
+   Future<String?> sendTestFocusNotification({
+     String? courseName,
+     String? startTime,
+     String? endTime,
+     String? location,
+     String? teacher,
+     String stage = 'pre',
++    bool hfIconAEnabled = true,
++    String hfStatusTextColor = '#FFFFFFFF',
++    bool hfOutEffectStatusEnabled = true,
++    String hfOutEffectStatusColor = '#FFFFFFFF',
++    bool hfOutEffectExpandEnabled = true,
++    String hfOutEffectExpandColor = '#FFFFFFFF',
++    int hfIslandTimeoutPre = 300,
++    int hfIslandTimeoutActive = 600,
++    int hfIslandTimeoutPost = 600,
+   }) async {
+     return null;
+   }
+ 
+   @override
+   Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
+     return const {
+       'generatedAtMillis': 0,
+       'summary': {
+         'hasNotificationPermission': true,

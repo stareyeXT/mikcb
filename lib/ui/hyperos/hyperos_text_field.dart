@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_miuix/miuix.dart';
 
 import 'hyperos_miuix_spec.dart';
 import 'hyperos_theme.dart';
 import 'hyperos_tokens.dart';
 
-/// HyperOS / Miuix-styled text field (16dp corner, 2dp focus border).
+/// HyperOS-styled text field — delegates to [MiuixTextField].
 class HyperosTextField extends StatelessWidget {
   const HyperosTextField({
     super.key,
@@ -18,12 +18,12 @@ class HyperosTextField extends StatelessWidget {
     this.onSubmitted,
     this.keyboardType,
     this.textInputAction,
-    this.inputFormatters,
     this.maxLines = 1,
     this.minLines,
     this.enabled = true,
     this.obscureText = false,
     this.autofocus = false,
+    this.fontSize = HyperosMiuixTextField.labelFontSizeNormal,
   });
 
   final TextEditingController? controller;
@@ -35,98 +35,50 @@ class HyperosTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
-  final List<TextInputFormatter>? inputFormatters;
   final int maxLines;
   final int? minLines;
   final bool enabled;
   final bool obscureText;
   final bool autofocus;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
-    final primary = HyperosColors.primary(context);
-    final onSurface = HyperosColors.onSurface(context);
-    final summary = HyperosColors.onSurfaceVariantSummary(context);
-    final fill = HyperosColors.secondaryVariant(context);
-    final disabled = HyperosColors.disabledOnSurface(context);
-    final outline = HyperosColors.outline(context);
+    final effectiveLabel = label ?? hint ?? '';
+    final useLabelAsPlaceholder = label == null && hint != null;
+    final resolvedColor = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (label != null) ...[
-          Text(
-            label!,
-            style: TextStyle(
-              fontSize: HyperosMiuixTextField.labelFontSizeNormal,
-              color: enabled ? onSurface : disabled,
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        SizedBox(
-          width: double.infinity,
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            enabled: enabled,
-            autofocus: autofocus,
-            obscureText: obscureText,
-            maxLines: maxLines,
-            minLines: minLines,
-            keyboardType: keyboardType,
-            textInputAction: textInputAction,
-            inputFormatters: inputFormatters,
-            onChanged: onChanged,
-            onSubmitted: onSubmitted,
-            style: TextStyle(
-              fontSize: HyperosMiuixTextField.labelFontSizeNormal,
-              color: enabled ? onSurface : disabled,
-            ),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(color: summary),
-              filled: true,
-              fillColor: enabled ? fill : fill.withValues(alpha: 0.5),
-              contentPadding: HyperosMiuixTextField.insideMargin,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  HyperosMiuixTextField.cornerRadius,
-                ),
-                borderSide: BorderSide(color: outline, width: 1),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  HyperosMiuixTextField.cornerRadius,
-                ),
-                borderSide: BorderSide(color: outline, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  HyperosMiuixTextField.cornerRadius,
-                ),
-                borderSide: BorderSide(
-                  color: primary,
-                  width: HyperosMiuixTextField.borderWidth,
-                ),
-              ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  HyperosMiuixTextField.cornerRadius,
-                ),
-                borderSide: BorderSide(color: outline.withValues(alpha: 0.5)),
-              ),
-            ),
-          ),
+        MiuixTextField(
+          controller: controller,
+          focusNode: focusNode,
+          onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          label: effectiveLabel,
+          useLabelAsPlaceholder: useLabelAsPlaceholder,
+          enabled: enabled,
+          readOnly: false,
+          textStyle: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w400),
+          singleLine: maxLines == 1,
+          maxLines: maxLines,
+          minLines: minLines,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          obscureText: obscureText,
+          autofocus: autofocus,
         ),
-        if (helper != null) ...[
+        if (helper != null && helper!.isNotEmpty) ...[
           const SizedBox(height: 6),
           Text(
             helper!,
-            style: HyperosTypography.sectionDescription(
-              context,
-            ).copyWith(color: summary),
+            style: TextStyle(
+              fontSize: 12,
+              color: resolvedColor.onSurfaceVariant,
+              height: 1.25,
+            ),
           ),
         ],
       ],
@@ -147,6 +99,7 @@ class HyperosPickerField extends StatelessWidget {
     this.icon,
     this.enabled = true,
     this.isPlaceholder = false,
+    this.fontSize = HyperosMiuixTextField.labelFontSizeNormal,
   });
 
   final String label;
@@ -155,6 +108,7 @@ class HyperosPickerField extends StatelessWidget {
   final IconData? icon;
   final bool enabled;
   final bool isPlaceholder;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +131,7 @@ class HyperosPickerField extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: HyperosMiuixTextField.labelFontSizeNormal,
+            fontSize: fontSize,
             color: canTap ? onSurface : disabled,
           ),
         ),
@@ -207,10 +161,7 @@ class HyperosPickerField extends StatelessWidget {
                         value.isEmpty ? '—' : value,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: HyperosMiuixTextField.labelFontSizeNormal,
-                          color: valueColor,
-                        ),
+                        style: TextStyle(fontSize: fontSize, color: valueColor),
                       ),
                     ),
                     Icon(

@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 import '../models/holiday_entry.dart';
+import '../models/location_time_group.dart';
 import '../models/partner_timetable_binding.dart';
+import '../models/schedule_date_rule.dart';
 import '../models/time_scheme.dart';
 import '../models/timetable_profile.dart';
 import '../models/warehouse_macro_models.dart';
@@ -18,6 +20,8 @@ class AppSyncSnapshot {
   final List<TimetableProfile> profiles;
   final String? activeProfileId;
   final List<TimeScheme> timeSchemes;
+  final List<LocationTimeGroup> locationTimeGroups;
+  final List<ScheduleDateRule> scheduleDateRules;
   final List<String> teacherRecords;
   final List<String> locationRecords;
   final WarehouseSyncBundle warehouse;
@@ -29,10 +33,16 @@ class AppSyncSnapshot {
   final PartnerTimetableBinding? partnerTimetableBinding;
   final bool includesPartnerTimetableBinding;
 
+  /// Last successful seasonal date-rule bulk-apply signature (ruleId|scheme|range).
+  /// Absent on older snapshots; treated as null so apply can re-run once if needed.
+  final String? scheduleDateRuleLastAppliedSignature;
+
   const AppSyncSnapshot({
     required this.profiles,
     required this.activeProfileId,
     required this.timeSchemes,
+    this.locationTimeGroups = const [],
+    this.scheduleDateRules = const [],
     required this.teacherRecords,
     required this.locationRecords,
     required this.warehouse,
@@ -43,7 +53,56 @@ class AppSyncSnapshot {
     required this.contentSha256,
     this.partnerTimetableBinding,
     this.includesPartnerTimetableBinding = false,
+    this.scheduleDateRuleLastAppliedSignature,
   });
+
+  /// True when this snapshot contains user-authored business data that must
+  /// not be silently overwritten on first-sync background pull.
+  ///
+  /// Covers full snapshot identity fields (courses, schemes, place-routing,
+  /// date rules, warehouse prefs, macros, holidays, partner binding), not
+  /// only non-empty timetable lists.
+  bool get hasUserAuthoredData {
+    if (teacherRecords.isNotEmpty || locationRecords.isNotEmpty) {
+      return true;
+    }
+    if (locationTimeGroups.isNotEmpty || scheduleDateRules.isNotEmpty) {
+      return true;
+    }
+    if (customHolidays.isNotEmpty || macros.isNotEmpty) {
+      return true;
+    }
+    if (partnerTimetableBinding != null) {
+      return true;
+    }
+    if (warehouse.rememberedLogins.isNotEmpty ||
+        warehouse.customImportUrls.isNotEmpty ||
+        warehouse.recentSchoolIds.isNotEmpty ||
+        warehouse.customDebugRecords.isNotEmpty) {
+      return true;
+    }
+    if (timeSchemes.length > 1) {
+      return true;
+    }
+    if (profiles.length > 1) {
+      return true;
+    }
+    for (final profile in profiles) {
+      if (profile.courses.isNotEmpty ||
+          profile.exams.isNotEmpty ||
+          profile.scheduleItems.isNotEmpty) {
+        return true;
+      }
+      if (profile.isPartnerImported) {
+        return true;
+      }
+      // Renamed away from the factory default profile name.
+      if (profile.name.trim().isNotEmpty && profile.name.trim() != '默认课表') {
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 class AppSyncSnapshotMeta {
@@ -113,14 +172,19 @@ class AppSyncSnapshotService {
     final customHolidays = await _holidayService.loadCustomHolidays();
     final teacherRecords = await _storageService.getTeacherRecords();
     final locationRecords = await _storageService.getLocationRecords();
-    final partnerTimetableBinding =
-        await _storageService.getPartnerTimetableBinding();
+    final partnerTimetableBinding = await _storageService
+        .getPartnerTimetableBinding();
     final timestamp = exportedAt ?? DateTime.now();
 
+    final profilesForSync = stripLiveTestingFixtureCourses(provider.profiles);
+    final lastAppliedSignature = provider.scheduleDateRuleLastAppliedSignature;
+
     final payload = _buildPayloadMap(
-      profiles: provider.profiles,
+      profiles: profilesForSync,
       activeProfileId: provider.activeProfileId,
       timeSchemes: provider.timeSchemes,
+      locationTimeGroups: provider.locationTimeGroups,
+      scheduleDateRules: provider.scheduleDateRules,
       teacherRecords: teacherRecords,
       locationRecords: locationRecords,
       warehouse: warehouse,
@@ -129,13 +193,16 @@ class AppSyncSnapshotService {
       exportedAt: timestamp,
       deviceId: deviceId,
       partnerTimetableBinding: partnerTimetableBinding,
+      scheduleDateRuleLastAppliedSignature: lastAppliedSignature,
     );
     final contentSha256 = computeContentSha256(payload);
 
     return AppSyncSnapshot(
-      profiles: provider.profiles,
+      profiles: profilesForSync,
       activeProfileId: provider.activeProfileId,
       timeSchemes: provider.timeSchemes,
+      locationTimeGroups: provider.locationTimeGroups,
+      scheduleDateRules: provider.scheduleDateRules,
       teacherRecords: teacherRecords,
       locationRecords: locationRecords,
       warehouse: warehouse,
@@ -146,6 +213,7 @@ class AppSyncSnapshotService {
       contentSha256: contentSha256,
       partnerTimetableBinding: partnerTimetableBinding,
       includesPartnerTimetableBinding: true,
+      scheduleDateRuleLastAppliedSignature: lastAppliedSignature,
     );
   }
 
@@ -167,6 +235,8 @@ class AppSyncSnapshotService {
       profiles: snapshot.profiles,
       activeProfileId: snapshot.activeProfileId,
       timeSchemes: snapshot.timeSchemes,
+      locationTimeGroups: snapshot.locationTimeGroups,
+      scheduleDateRules: snapshot.scheduleDateRules,
       teacherRecords: snapshot.teacherRecords,
       locationRecords: snapshot.locationRecords,
       warehouse: snapshot.warehouse,
@@ -175,6 +245,8 @@ class AppSyncSnapshotService {
       exportedAt: snapshot.exportedAt,
       deviceId: snapshot.deviceId,
       partnerTimetableBinding: snapshot.partnerTimetableBinding,
+      scheduleDateRuleLastAppliedSignature:
+          snapshot.scheduleDateRuleLastAppliedSignature,
     );
     payload['contentSha256'] = snapshot.contentSha256;
     return const JsonEncoder.withIndent('  ').convert(payload);
@@ -238,6 +310,8 @@ class AppSyncSnapshotService {
               Map<String, dynamic>.from(item as Map),
             ),
           )
+          .toList()
+          .map(_stripLiveTestingFixtureCoursesFromProfile)
           .toList(),
       activeProfileId: json['activeProfileId'] as String?,
       timeSchemes: rawTimeSchemes
@@ -246,6 +320,22 @@ class AppSyncSnapshotService {
                 TimeScheme.fromJson(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      locationTimeGroups:
+          (json['locationTimeGroups'] as List<dynamic>? ?? const [])
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    LocationTimeGroup.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList(),
+      scheduleDateRules:
+          (json['scheduleDateRules'] as List<dynamic>? ?? const [])
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    ScheduleDateRule.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList(),
       teacherRecords: (json['teacherRecords'] as List<dynamic>? ?? const [])
           .map((item) => item.toString())
           .where((item) => item.isNotEmpty)
@@ -277,6 +367,13 @@ class AppSyncSnapshotService {
       contentSha256: expectedHash.isEmpty ? actualHash : expectedHash,
       partnerTimetableBinding: partnerTimetableBinding,
       includesPartnerTimetableBinding: includesPartnerTimetableBinding,
+      scheduleDateRuleLastAppliedSignature:
+          (json['scheduleDateRuleLastAppliedSignature'] as String?)
+                  ?.trim()
+                  .isEmpty ==
+              true
+          ? null
+          : (json['scheduleDateRuleLastAppliedSignature'] as String?)?.trim(),
     );
   }
 
@@ -298,6 +395,19 @@ class AppSyncSnapshotService {
         return 'sync_snapshot_no_profiles';
       }
 
+      // Seed location groups (and schemes) before profile import so
+      // _syncCoursesWithEffectiveTimeSchemes resolves remote place-routing
+      // instead of rewriting clocks with the device's previous groups (B1).
+      // resync:false avoids applying rules against the still-local profile list.
+      await provider.replaceLocationTimeGroups(
+        snapshot.locationTimeGroups,
+        resync: false,
+      );
+      await provider.replaceScheduleDateRules(
+        snapshot.scheduleDateRules,
+        resync: false,
+      );
+
       final fullBackupJson = _dataTransferService.buildFullBackupJson(
         profiles: snapshot.profiles,
         activeProfileId: snapshot.activeProfileId,
@@ -312,6 +422,11 @@ class AppSyncSnapshotService {
 
       await _storageService.saveTeacherRecords(snapshot.teacherRecords);
       await _storageService.saveLocationRecords(snapshot.locationRecords);
+      await _storageService.saveLocationTimeGroups(snapshot.locationTimeGroups);
+      await _storageService.saveScheduleDateRules(snapshot.scheduleDateRules);
+      await _storageService.saveScheduleDateRuleLastAppliedSignature(
+        snapshot.scheduleDateRuleLastAppliedSignature,
+      );
       await _warehousePreferencesService.importSyncBundle(snapshot.warehouse);
       await _warehouseMacroService.importAllMacros(snapshot.macros);
       await _holidayService.saveCustomHolidays(snapshot.customHolidays);
@@ -360,6 +475,8 @@ class AppSyncSnapshotService {
     required List<TimetableProfile> profiles,
     required String? activeProfileId,
     required List<TimeScheme> timeSchemes,
+    List<LocationTimeGroup> locationTimeGroups = const [],
+    List<ScheduleDateRule> scheduleDateRules = const [],
     required List<String> teacherRecords,
     required List<String> locationRecords,
     required WarehouseSyncBundle warehouse,
@@ -368,6 +485,7 @@ class AppSyncSnapshotService {
     required DateTime exportedAt,
     required String deviceId,
     PartnerTimetableBinding? partnerTimetableBinding,
+    String? scheduleDateRuleLastAppliedSignature,
   }) {
     return {
       'app': 'mikcb',
@@ -378,6 +496,14 @@ class AppSyncSnapshotService {
       'activeProfileId': activeProfileId,
       'profiles': profiles.map((profile) => profile.toJson()).toList(),
       'timeSchemes': timeSchemes.map((scheme) => scheme.toJson()).toList(),
+      'locationTimeGroups': locationTimeGroups
+          .map((group) => group.toJson())
+          .toList(),
+      'scheduleDateRules': scheduleDateRules
+          .map((rule) => rule.toJson())
+          .toList(),
+      'scheduleDateRuleLastAppliedSignature':
+          scheduleDateRuleLastAppliedSignature,
       'teacherRecords': teacherRecords,
       'locationRecords': locationRecords,
       // Never put teaching-system passwords into cloud sync JSON (C3).
@@ -388,6 +514,25 @@ class AppSyncSnapshotService {
       'customHolidays': customHolidays.map((entry) => entry.toJson()).toList(),
       'partnerTimetableBinding': partnerTimetableBinding?.toJson(),
     };
+  }
+
+  /// Drops debug-only `live_test_*` courses so they never leave the device via cloud sync.
+  static List<TimetableProfile> stripLiveTestingFixtureCourses(
+    List<TimetableProfile> profiles,
+  ) {
+    return profiles.map(_stripLiveTestingFixtureCoursesFromProfile).toList();
+  }
+
+  static TimetableProfile _stripLiveTestingFixtureCoursesFromProfile(
+    TimetableProfile profile,
+  ) {
+    final filtered = profile.courses
+        .where((course) => !course.id.startsWith('live_test_'))
+        .toList();
+    if (filtered.length == profile.courses.length) {
+      return profile;
+    }
+    return profile.copyWith(courses: filtered);
   }
 
   static dynamic _canonicalize(dynamic value) {
@@ -434,12 +579,37 @@ SyncConflictChoice resolveSyncConflictAutomatically(SyncConflictInfo info) {
 ///
 /// Local [exportedAt] is often `DateTime.now()` at collect time, so LWW would
 /// prefer empty new devices and wipe the cloud. Prefer remote without UI.
+///
+/// Callers must still refuse first-sync divergence when local already has
+/// user data (see [webdavBackgroundPullShouldCancel]) — this helper alone
+/// must not be used to silently wipe a non-empty device.
 SyncConflictChoice resolveSyncConflictForBackground(SyncConflictInfo info) {
   final automatic = resolveSyncConflictAutomatically(info);
   if (automatic == SyncConflictChoice.keepLocal) {
     return SyncConflictChoice.keepRemote;
   }
   return automatic;
+}
+
+/// Whether background auto-pull must cancel instead of applying remote.
+///
+/// Protects non-empty local data on first sync (no baseline hashes) and when
+/// local has diverged from last upload without a UI conflict prompt.
+bool webdavBackgroundPullShouldCancel({
+  required String? lastUploadedLocalHash,
+  required String? lastAppliedRemoteHash,
+  required String localContentSha256,
+  required bool localHasUserData,
+}) {
+  final isFirstSyncWithoutBaseline =
+      lastUploadedLocalHash == null && lastAppliedRemoteHash == null;
+  if (isFirstSyncWithoutBaseline && localHasUserData) {
+    return true;
+  }
+  final localChangedSinceUpload =
+      lastUploadedLocalHash != null &&
+      localContentSha256 != lastUploadedLocalHash;
+  return localChangedSinceUpload;
 }
 
 /// Whether auto-upload may PUT over the current remote snapshot.
@@ -470,7 +640,8 @@ WebdavAutoUploadDecision decideWebdavAutoUpload({
   if (remoteHash == localContentSha256) {
     return WebdavAutoUploadDecision.upToDate;
   }
-  final matchesBaseline = remoteHash == lastAppliedRemoteHash ||
+  final matchesBaseline =
+      remoteHash == lastAppliedRemoteHash ||
       remoteHash == lastUploadedLocalHash;
   if (matchesBaseline) {
     return WebdavAutoUploadDecision.allow;
@@ -484,11 +655,14 @@ bool webdavPullHasSyncConflict({
   required String localContentSha256,
   required String remoteContentSha256,
 }) {
-  final localChangedSinceSync = lastUploadedLocalHash != null &&
+  final localChangedSinceSync =
+      lastUploadedLocalHash != null &&
       localContentSha256 != lastUploadedLocalHash;
-  final remoteChangedSinceSync = lastAppliedRemoteHash != null &&
+  final remoteChangedSinceSync =
+      lastAppliedRemoteHash != null &&
       remoteContentSha256 != lastAppliedRemoteHash;
-  final divergedOnFirstSync = lastUploadedLocalHash == null &&
+  final divergedOnFirstSync =
+      lastUploadedLocalHash == null &&
       lastAppliedRemoteHash == null &&
       localContentSha256 != remoteContentSha256;
   return (localChangedSinceSync && remoteChangedSinceSync) ||

@@ -1,7 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <queries>
-        <package android:name="com.example.university_timetable" />
-        <package android:name="com.example.university_timetable.debug" />
         <!-- Feedback channel deep links (Coolapk / Xiaohongshu / QQ / WeChat) -->
         <package android:name="com.coolapk.market" />
         <package android:name="com.xingin.xhs" />
@@ -38,6 +36,8 @@
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- QR face-to-face transfer camera scanning -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <!-- Required for connectedDevice foreground service (LAN edit HTTP server) on API 34+ -->
@@ -58,6 +58,7 @@
         android:name=".UmengApplication"
         android:label="${appLabel}"
         android:icon="@mipmap/ic_launcher"
+        android:resizeableActivity="true"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
@@ -65,7 +66,6 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
-            android:screenOrientation="portrait"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"

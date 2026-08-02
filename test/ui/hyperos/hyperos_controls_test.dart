@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
@@ -94,6 +95,36 @@ void main() {
       expect(value, isTrue);
     });
 
+    testWidgets('switch tap is handled once by the row', (tester) async {
+      var value = false;
+      var changeCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                return HyperosSwitchTile(
+                  title: 'Enabled',
+                  value: value,
+                  onChanged: (next) {
+                    changeCount += 1;
+                    setState(() => value = next);
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tapAt(tester.getCenter(find.byType(HyperosSwitch)));
+      await tester.pumpAndSettle();
+
+      expect(changeCount, 1);
+      expect(value, isTrue);
+    });
+
     testWidgets('disabled tile does not toggle', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -124,21 +155,15 @@ void main() {
       final box = tester.widget<SizedBox>(find.byType(SizedBox).first);
       expect(box.height, HyperosMiuixSlider.minHeight);
 
-      final sliderTheme = tester.widget<SliderTheme>(
+      final slider = tester.widget<MiuixSlider>(
         find.descendant(
           of: find.byType(HyperosSlider),
-          matching: find.byType(SliderTheme),
+          matching: find.byType(MiuixSlider),
         ),
       );
-      expect(sliderTheme.data.trackHeight, HyperosMiuixSlider.minHeight);
-      expect(
-        sliderTheme.data.thumbShape,
-        isA<RoundSliderThumbShape>().having(
-          (shape) => shape.enabledThumbRadius,
-          'enabledThumbRadius',
-          HyperosMiuixSlider.thumbRadius,
-        ),
-      );
+      expect(slider.height, HyperosMiuixSlider.minHeight);
+      expect(slider.value, 0.5);
+      expect(slider.enabled, isTrue);
     });
 
     testWidgets('hides division tick marks when divisions is set', (
@@ -158,13 +183,16 @@ void main() {
         ),
       );
 
-      final sliderTheme = tester.widget<SliderTheme>(
+      final slider = tester.widget<MiuixSlider>(
         find.descendant(
           of: find.byType(HyperosSlider),
-          matching: find.byType(SliderTheme),
+          matching: find.byType(MiuixSlider),
         ),
       );
-      expect(sliderTheme.data.tickMarkShape, SliderTickMarkShape.noTickMark);
+      // Divisions map to Miuix steps, but the key-point dots stay hidden to
+      // match the HyperOS volume-slider look (the old noTickMark behavior).
+      expect(slider.steps, 10);
+      expect(slider.showKeyPoints, isFalse);
     });
 
     testWidgets(
@@ -283,6 +311,71 @@ void main() {
 
       expect(find.byType(HyperosChevron), findsOneWidget);
     });
+
+    testWidgets(
+      'ListGroup lone slider presses full tile including track, not title-only pill',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: HyperosListScrollScope(
+                isUserScrolling: false,
+                pressHighlightGeneration: 0,
+                child: HyperosListGroup(
+                  children: [
+                    HyperosSliderTile(
+                      title: 'Conflict opacity',
+                      value: 0.7,
+                      min: 0.2,
+                      max: 1.0,
+                      divisions: 16,
+                      valueLabel: '70%',
+                      onChanged: (_) {},
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // One press shell wraps the whole tile (title + value + slider).
+        expect(find.byType(HyperosPressableRow), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(HyperosPressableRow),
+            matching: find.byType(HyperosSlider),
+          ),
+          findsOneWidget,
+        );
+
+        final titleCenter = tester.getCenter(find.text('Conflict opacity'));
+        final gesture = await tester.startGesture(titleCenter);
+        await tester.pump(const Duration(milliseconds: 30));
+
+        final pressableRect = tester.getRect(find.byType(HyperosPressableRow));
+        final sliderRect = tester.getRect(find.byType(HyperosSlider));
+        // Highlight covers the full preference block, not a short title strip.
+        expect(pressableRect.height, greaterThan(sliderRect.height + 24));
+        expect(pressableRect.top, lessThanOrEqualTo(titleCenter.dy));
+        expect(pressableRect.bottom, greaterThanOrEqualTo(sliderRect.bottom));
+
+        // Lone ListGroup row is first+last → rounded card corners, not mid square.
+        final clip = tester.widget<ClipRRect>(
+          find.descendant(
+            of: find.byType(HyperosPressableRow),
+            matching: find.byType(ClipRRect),
+          ),
+        );
+        final radius = clip.borderRadius.resolve(TextDirection.ltr);
+        expect(radius.topLeft.x, greaterThan(0));
+        expect(radius.bottomLeft.x, greaterThan(0));
+
+        await gesture.up();
+      },
+    );
 
     testWidgets('tap editing dialog updates slider value', (tester) async {
       var value = 9.0;

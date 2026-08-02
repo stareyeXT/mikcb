@@ -76,4 +76,10 @@ object DiagnosticLogMessages {
     const val SEND_TEST_FOCUS_PERMISSION_BLOCKED = "超级岛测试发送被拦截：系统通知权限未开启"
     const val SEND_TEST_FOCUS_CHANNEL_BLOCKED = "超级岛测试发送被拦截：测试通知渠道已被关闭"
     const val SEND_TEST_FOCUS_SUBMITTED = "超级岛测试通知已提交并检查系统接收结果"
+    const val SEND_TEST_FOCUS_FAILED = "发送超级岛测试通知失败"
+
+    // 金标联盟公平运行内存
+    const val FAIR_MEMORY_EVENT_RECEIVED = "收到公平运行内存广播"
+    const val FAIR_MEMORY_HANDLE_FAILED = "处理公平运行内存广播失败"
+    const val FAIR_MEMORY_BUSINESS_FAILED = "公平运行内存业务处理失败"
 }

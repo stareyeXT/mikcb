@@ -118,7 +118,7 @@ class MainActivity : FlutterActivity() {
     private var pendingDebugRoute: Map<String, Any?>? = null
     private var flutterChannel: MethodChannel? = null
     private var lanEditChannel: MethodChannel? = null
-    private var testFocusDismissRunnable: Runnable? = null
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Fix: when launched via ACTION_SEND / ACTION_VIEW from another app (e.g.
@@ -181,6 +181,29 @@ class MainActivity : FlutterActivity() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannels()
 
+        // 公平运行内存：绑定 Flutter 通道（原生广播本身不依赖引擎）。
+        FairMemoryAdapter.attachFlutterEngine(flutterEngine.dartExecutor.binaryMessenger)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MemoryStatsCollector.methodChannelName,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getMemorySnapshot" -> {
+                    try {
+                        result.success(MemoryStatsCollector.buildSnapshot(applicationContext))
+                    } catch (error: Exception) {
+                        result.error(
+                            "MEMORY_SNAPSHOT_FAILED",
+                            error.message,
+                            null,
+                        )
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SYSTEM_UI_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -194,6 +217,26 @@ class MainActivity : FlutterActivity() {
                     }
                     "getDisplayCornerRadiusDp" -> {
                         result.success(readDisplayCornerRadiusDp())
+                    }
+                    "getFontWeightAdjustment" -> {
+                        // Android 12+ (API 31) 暴露系统字体粗细增量；未设置为
+                        // FONT_WEIGHT_ADJUSTMENT_UNDEFINED(Int.MAX_VALUE)。低版本/未定义
+                        // 时返回 null，交由 Dart 侧回退到 MediaQuery.boldText。
+                        val value: Int? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val adj = resources.configuration.fontWeightAdjustment
+                                if (adj ==
+                                    android.content.res.Configuration
+                                        .FONT_WEIGHT_ADJUSTMENT_UNDEFINED
+                                ) {
+                                    null
+                                } else {
+                                    adj
+                                }
+                            } else {
+                                null
+                            }
+                        result.success(value)
                     }
                     else -> result.notImplemented()
                 }
@@ -412,11 +455,12 @@ class MainActivity : FlutterActivity() {
 
                     "sendTestFocus" -> {
                         val args = call.arguments as? Map<String, String>
-                        val failure = sendTestFocusNotification(args)
-                        if (failure == null) {
-                            result.success(true)
-                        } else {
-                            result.error("SEND_TEST_FOCUS_FAILED", failure, null)
+                        sendTestFocusNotification(args) { failure ->
+                            if (failure == null) {
+                                result.success(true)
+                            } else {
+                                result.error("SEND_TEST_FOCUS_FAILED", failure, null)
+                            }
                         }
                     }
 
@@ -600,8 +644,16 @@ class MainActivity : FlutterActivity() {
                     "reconcile" -> {
                         val payload = call.arguments as? Map<*, *>
                         val fires = payload?.get("fires") as? List<*>
+                        val activeExamIds = (payload?.get("activeExamIds") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            ?.toSet()
+                            ?: emptySet()
                         if (fires != null) {
-                            ExamReminderScheduler.reconcile(applicationContext, fires)
+                            ExamReminderScheduler.reconcile(
+                                applicationContext,
+                                fires,
+                                activeExamIds,
+                            )
                             result.success(true)
                         } else {
                             result.error("INVALID_ARGUMENTS", "Missing exam reminder fires", null)
@@ -1087,9 +1139,15 @@ class MainActivity : FlutterActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            permissionResult?.success(
-                grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-            )
+            val granted = grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                // Retry any reminder whose alarm fired while notification
+                // permission was denied, without rebuilding past fires in
+                // Flutter (which could duplicate successful notifications).
+                ExamReminderScheduler.handleBootReschedule(applicationContext)
+            }
+            permissionResult?.success(granted)
             permissionResult = null
         }
     }
@@ -1121,7 +1179,10 @@ class MainActivity : FlutterActivity() {
             .apply()
     }
 
-    private fun sendTestFocusNotification(args: Map<String, String>?): String? {
+    private fun sendTestFocusNotification(
+        args: Map<String, String>?,
+        onDone: (String?) -> Unit,
+    ) {
         val stage = args?.get("stage") ?: "pre"
         val failure = try {
             sendTestFocusNotificationInner(args)
@@ -1129,8 +1190,46 @@ class MainActivity : FlutterActivity() {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)
             "发送异常：${e.message ?: e.javaClass.simpleName}"
         }
-        recordHyperFocusTestResult(stage, failure == null, failure ?: "")
-        return failure
+        if (failure != null) {
+            recordHyperFocusTestResult(stage, false, failure)
+            onDone(failure)
+            return
+        }
+        Handler(Looper.getMainLooper()).postDelayed({
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val activeIds = notificationManager.activeNotifications.map { it.id }
+            val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+            val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
+            Log.d(
+                "HyperFocusApi",
+                "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
+            )
+            val activeContainsTest = activeIds.contains(10001)
+            UmengDiagnosticReporter.record(
+                context = applicationContext,
+                category = "send_test_focus_submitted",
+                message = DiagnosticLogMessages.SEND_TEST_FOCUS_SUBMITTED,
+                extras = mapOf(
+                    "stage" to stage,
+                    "activeIds" to activeIds,
+                    "activeContainsTest" to activeContainsTest,
+                    "testChannelImportance" to (testChannelState?.importance ?: -1),
+                    "liveChannelImportance" to (liveChannelState?.importance ?: -1),
+                )
+            )
+            if (!activeContainsTest) {
+                recordHyperFocusTestResult(
+                    stage,
+                    false,
+                    "已提交但系统未显示（activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}）",
+                )
+                onDone("已提交但系统未显示（activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}）")
+            } else {
+                recordHyperFocusTestResult(stage, true, "")
+                onDone(null)
+            }
+        }, 400L)
     }
 
     private fun sendTestFocusNotificationInner(args: Map<String, String>?): String? {
@@ -1157,13 +1256,16 @@ class MainActivity : FlutterActivity() {
             }
 
             val now = System.currentTimeMillis()
+            val showCountdown = args?.get("showCountdown")?.toBooleanStrictOrNull() ?: true
             val templateStage = when (stage) {
                 "active", "beforeEnd" -> "active"
                 "post" -> "post"
                 else -> "pre"
             }
-            val realStart = buildCourseTimeMillis(startTime)
-            val realEnd = buildCourseTimeMillis(endTime)
+            val startAtMillis = args?.get("startAtMillis")?.toLongOrNull()?.takeIf { it > 0L }
+            val endAtMillis = args?.get("endAtMillis")?.toLongOrNull()?.takeIf { it > 0L }
+            val realStart = startAtMillis ?: buildCourseTimeMillis(startTime)
+            val realEnd = endAtMillis ?: buildCourseTimeMillis(endTime)
             val hasRealTime = realStart != null && realEnd != null && realEnd > realStart
             val classStartAt: Long
             val classEndAt: Long
@@ -1183,16 +1285,25 @@ class MainActivity : FlutterActivity() {
                     hintText = "已下课"
                 }
                 else -> {
-                    if (hasRealTime && realStart!! > now) {
-                        classStartAt = realStart
-                        classEndAt = realEnd!!
-                        timerTarget = classStartAt
-                        hintText = "距离上课还有 ${((classStartAt - now) / 60_000L + 1)} 分钟"
-                    } else {
-                        classStartAt = now + 5 * 60_000L
-                        classEndAt = classStartAt + 100 * 60_000L
-                        timerTarget = classStartAt
-                        hintText = "距离上课还有 5 分钟"
+                    when {
+                        hasRealTime && realStart!! > now -> {
+                            classStartAt = realStart
+                            classEndAt = realEnd!!
+                            timerTarget = classStartAt
+                            hintText = "距离上课还有 ${((classStartAt - now) / 60_000L + 1)} 分钟"
+                        }
+                        hasRealTime && realEnd!! > now -> {
+                            classStartAt = realEnd
+                            classEndAt = realEnd
+                            timerTarget = classStartAt
+                            hintText = "距下课还有 ${((classEndAt - now) / 60_000L + 1)} 分钟"
+                        }
+                        else -> {
+                            classStartAt = now + 5 * 60_000L
+                            classEndAt = classStartAt + 100 * 60_000L
+                            timerTarget = classStartAt
+                            hintText = "距离上课还有 5 分钟"
+                        }
                     }
                 }
             }
@@ -1218,8 +1329,8 @@ class MainActivity : FlutterActivity() {
 
             val templates = loadHyperFocusTemplates(this)
 
-            val countdownText = formatCountdownForTemplate(kotlin.math.max(0L, timerTarget - now))
-            val elapsedText = formatElapsedForTemplate(kotlin.math.max(0L, now - timerTarget))
+            val countdownText = ""
+            val elapsedText = ""
 
             val r = { tpl: String ->
                 resolveTemplate(
@@ -1253,7 +1364,7 @@ class MainActivity : FlutterActivity() {
             }
             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
 
-            val hasTimer = timerTarget > 0L && timerTarget > now
+            val hasTimer = showCountdown && timerTarget > 0L && timerTarget > now
             val extras = FocusNotification.buildV3 {
                 business = "course_schedule"
                 updatable = true
@@ -1261,19 +1372,20 @@ class MainActivity : FlutterActivity() {
                 ticker = tickerText
                 aodTitle = tickerText
                 islandFirstFloat = true
-                outEffectSrc = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) "outer_glow" else ""
-                outEffectColor = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) (args?.get("hfOutEffectStatusColor") ?: "#FFFFFFFF") else ""
+                outEffectSrc = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: false) "outer_glow" else ""
+                outEffectColor = if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: false) (args?.get("hfOutEffectStatusColor") ?: "") else ""
 
                 baseInfo {
                     type = 2
                     title = baseTitleText
-                    content = baseContentText
-                    subContent = baseSubcontentText
-                    showDivider = baseSubcontentText.isNotBlank()
+                    content = listOfNotNull(
+                        baseContentText.ifBlank { null },
+                        baseSubcontentText.ifBlank { null },
+                    ).joinToString(" · ")
                 }
 
                 picInfo {
-                    if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                    if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: false) {
                         type = 1
                     }
                 }
@@ -1281,9 +1393,9 @@ class MainActivity : FlutterActivity() {
                 hintInfo {
                     type = 2
                     title = hintTitleText
-                    content = hintText
+                    content = hintContentText.ifBlank { hintText }
                     subTitle = hintSubtitleText
-                    extraTitle = hintContentText
+                    extraTitle = ""
                     specialTitle = hintSubcontentText
 
                     if (hasTimer) {
@@ -1304,9 +1416,9 @@ class MainActivity : FlutterActivity() {
                 island {
                     islandProperty = 1
                     islandTimeout = when (templateStage) {
-                        "pre" -> (args?.get("hfIslandTimeoutPre")?.toIntOrNull() ?: 300)
-                        "post" -> (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600)
-                        else -> (args?.get("hfIslandTimeoutActive")?.toIntOrNull() ?: 600)
+                        "pre" -> (args?.get("hfIslandTimeoutPre")?.toIntOrNull() ?: 300).coerceIn(60, 3600)
+                        "post" -> (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600).coerceIn(60, 3600)
+                        else -> (args?.get("hfIslandTimeoutActive")?.toIntOrNull() ?: 600).coerceIn(60, 3600)
                     }
 
                     bigIslandArea {
@@ -1317,28 +1429,32 @@ class MainActivity : FlutterActivity() {
                                 showHighlightColor = true
                             }
                             picInfo {
-                                if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: true) {
+                                if (args?.get("hfIconAEnabled")?.toBooleanStrictOrNull() ?: false) {
                                     type = 1
                                 }
                             }
                         }
 
-                        if (hasTimer) {
-                            sameWidthDigitInfo {
-                                timerInfo {
-                                    timerType = -1
-                                    timerWhen = timerTarget
-                                    timerSystemCurrent = now
+                        val islandBHasCountdown =
+                            (templates["islandB_$templateStage"] ?: "").contains("倒计时")
+                        if (islandBText.isNotEmpty() || (hasTimer && islandBHasCountdown)) {
+                            if (hasTimer && islandBHasCountdown) {
+                                sameWidthDigitInfo {
+                                    timerInfo {
+                                        timerType = -1
+                                        timerWhen = timerTarget
+                                        timerSystemCurrent = now
+                                    }
+                                    content = ""
+                                    turnAnim = true
+                                    showHighlightColor = true
                                 }
-                                content = islandBText
-                                turnAnim = true
-                                showHighlightColor = true
-                            }
-                        } else {
-                            sameWidthDigitInfo {
-                                content = islandBText
-                                turnAnim = true
-                                showHighlightColor = true
+                            } else {
+                                sameWidthDigitInfo {
+                                    content = islandBText
+                                    turnAnim = true
+                                    showHighlightColor = true
+                                }
                             }
                         }
                     }
@@ -1352,7 +1468,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: true) {
+            if (args?.get("hfOutEffectStatusEnabled")?.toBooleanStrictOrNull() ?: false) {
                 extras.putString("miui.bigIsland.effect.src", "outer_glow")
                 extras.putString("miui.effect.src", "outer_glow")
             }
@@ -1385,46 +1501,18 @@ class MainActivity : FlutterActivity() {
                 .build()
 
             notificationManager.notify(10001, notification)
-            testFocusDismissRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-            if (timerTarget > 0L && timerTarget > now) {
-                val runnable = Runnable {
-                    (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                        .cancel(10001)
-                }
-                testFocusDismissRunnable = runnable
-                Handler(Looper.getMainLooper()).postDelayed(runnable, timerTarget - now)
+            if (timerTarget > 0L) {
+                val dismissAt = minOf(timerTarget, now + 30 * 60_000L)
+                TestFocusNotificationDismiss.schedule(applicationContext, dismissAt)
             }
             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
-            val activeIds = notificationManager.activeNotifications.map { it.id }
-            val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
-            val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
-            Log.d(
-                "HyperFocusApi",
-                "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
-            )
-            val activeContainsTest = activeIds.contains(10001)
-            UmengDiagnosticReporter.record(
-                context = applicationContext,
-                category = "send_test_focus_submitted",
-                message = DiagnosticLogMessages.SEND_TEST_FOCUS_SUBMITTED,
-                extras = mapOf(
-                    "stage" to stage,
-                    "activeIds" to activeIds,
-                    "activeContainsTest" to activeContainsTest,
-                    "testChannelImportance" to (testChannelState?.importance ?: -1),
-                    "liveChannelImportance" to (liveChannelState?.importance ?: -1),
-                )
-            )
-            if (!activeContainsTest) {
-                return "已提交但系统未显示（activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}）"
-            }
             null
         } catch (e: Exception) {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)
             UmengDiagnosticReporter.report(
                 context = applicationContext,
                 category = "send_test_focus_failed",
-                message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_START_FAILED,
+                message = DiagnosticLogMessages.SEND_TEST_FOCUS_FAILED,
                 throwable = e,
                 dedupeKey = "send_test_focus_failed",
                 extras = mapOf(
@@ -2023,6 +2111,11 @@ class MainActivity : FlutterActivity() {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        FairMemoryAdapter.detachFlutterEngine()
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
 }
 
 internal fun liveShouldMirrorStatusIntoMiuiFocusHint(
@@ -2032,2629 +2125,3 @@ internal fun liveShouldMirrorStatusIntoMiuiFocusHint(
     return !(sdkInt >= 36 && shouldPromote)
 }
 
-class LiveUpdateService : Service() {
-    companion object {
-        private const val TAG = "LiveUpdateService"
-        private const val CHANNEL_ID = "live_update_channel"
-        private const val NOTIFICATION_ID = 2001
-        private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
-        private const val PREFS_NAME = "native_runtime_prefs"
-        private const val KEY_HIDE_FROM_RECENTS = "hide_from_recents"
-        private const val ACTION_ENABLE_SILENT_MODE =
-            "com.mutx163.qingyu.action.ENABLE_SILENT_MODE"
-        private const val ACTION_ENABLE_DO_NOT_DISTURB =
-            "com.mutx163.qingyu.action.ENABLE_DO_NOT_DISTURB"
-        private const val ACTION_DISMISS_STATUS_BAR_STAGE =
-            "com.mutx163.qingyu.action.DISMISS_STATUS_BAR_STAGE"
-        private const val POST_PROMOTED_NOTIFICATIONS_PERMISSION =
-            "android.permission.POST_PROMOTED_NOTIFICATIONS"
-
-        @Volatile
-        private var isServiceRunning = false
-
-        @Volatile
-        private var lastDebugSnapshot: Map<String, Any?> = emptyMap()
-
-        @Volatile
-        private var lastDebugUpdatedAtMillis = 0L
-
-        @Volatile
-        private var lastStopReason: String? = null
-
-        fun buildDebugStatus(context: Context): Map<String, Any?> {
-            val snapshot = lastDebugSnapshot
-            val summary = copyStringKeyMap(snapshot["summary"]).apply {
-                this["serviceRunning"] = isServiceRunning
-                this["statusText"] = when {
-                    isServiceRunning -> this["statusText"] ?: context.getString(R.string.debug_status_running)
-                    else -> context.getString(R.string.debug_status_not_running)
-                }
-                this["isExpectedToShowIsland"] =
-                    (this["isExpectedToShowIsland"] as? Boolean == true) && isServiceRunning
-                this["isActuallyPromotable"] =
-                    (this["isActuallyPromotable"] as? Boolean == true) && isServiceRunning
-                this["notIslandReason"] =
-                    if (isServiceRunning) {
-                        this["notIslandReason"] ?: ""
-                    } else {
-                        lastStopReason ?: context.getString(R.string.debug_service_not_running)
-                    }
-            }
-
-            val service = copyStringKeyMap(snapshot["service"]).apply {
-                this["serviceRunning"] = isServiceRunning
-                this["lastDebugUpdatedAtMillis"] = lastDebugUpdatedAtMillis
-                this["lastStopReason"] = lastStopReason
-            }
-            val recentDiagnostics = linkedMapOf<String, Any?>(
-                "enabled" to UmengDiagnosticReporter.isLiveDiagnosticsEnabled(context),
-                "tail" to UmengDiagnosticReporter.readLiveDiagnosticsTail(context),
-            )
-
-            return linkedMapOf(
-                "generatedAtMillis" to System.currentTimeMillis(),
-                "summary" to summary,
-                "environment" to buildEnvironmentSnapshot(context),
-                "service" to service,
-                "course" to copyStringKeyMap(snapshot["course"]),
-                "timing" to copyStringKeyMap(snapshot["timing"]),
-                "switches" to copyStringKeyMap(snapshot["switches"]),
-                "display" to copyStringKeyMap(snapshot["display"]),
-                "notification" to copyStringKeyMap(snapshot["notification"]),
-                "recentDiagnostics" to recentDiagnostics,
-            )
-        }
-
-        fun buildHyperFocusDebugStatus(context: Context): Map<String, Any?> {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = notificationManager.getNotificationChannel(MainActivity.HYPERFOCUS_TEST_CHANNEL_ID)
-            val channelBlocked = channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE
-            val testPrefs = context.getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
-            val hasLastTest = testPrefs.contains("last_stage")
-            val lastStage = testPrefs.getString("last_stage", null)
-            val lastSucceeded = if (testPrefs.contains("last_succeeded")) testPrefs.getBoolean("last_succeeded", false) else null
-            val lastMessage = testPrefs.getString("last_message", null)
-            val lastAtMillis = if (testPrefs.contains("last_at_millis")) testPrefs.getLong("last_at_millis", 0L) else null
-            val scheduling = LiveUpdateScheduler.buildNextTriggerDebugInfo(context)
-
-            val schedulingSummary = linkedMapOf<String, Any?>(
-                "schedulerReady" to (scheduling["nextTriggerAtMillis"] != null),
-                "nextTriggerCourseName" to scheduling["nextCourseName"],
-                "nextTriggerStage" to scheduling["nextTriggerStage"],
-                "nextTriggerAtMillis" to scheduling["nextTriggerAtMillis"],
-            )
-
-            return linkedMapOf(
-                "generatedAtMillis" to System.currentTimeMillis(),
-                "summary" to linkedMapOf(
-                    "hasNotificationPermission" to hasNotificationPermissionCompat(context),
-                    "testChannelBlocked" to channelBlocked,
-                    "schedulerReady" to schedulingSummary["schedulerReady"],
-                    "nextTriggerCourseName" to schedulingSummary["nextTriggerCourseName"],
-                    "nextTriggerStage" to schedulingSummary["nextTriggerStage"],
-                    "nextTriggerAtMillis" to schedulingSummary["nextTriggerAtMillis"],
-                    "hasLastTestResult" to hasLastTest,
-                    "lastTestStage" to lastStage,
-                    "lastTestSucceeded" to lastSucceeded,
-                    "lastTestMessage" to lastMessage,
-                    "lastTestAtMillis" to lastAtMillis,
-                ),
-                "environment" to buildEnvironmentSnapshot(context),
-                "scheduling" to scheduling,
-                "test" to linkedMapOf(
-                    "lastStage" to lastStage,
-                    "lastSucceeded" to lastSucceeded,
-                    "lastMessage" to lastMessage,
-                    "lastAtMillis" to lastAtMillis,
-                ),
-                "recentDiagnostics" to linkedMapOf(
-                    "enabled" to UmengDiagnosticReporter.isLiveDiagnosticsEnabled(context),
-                    "tail" to UmengDiagnosticReporter.readLiveDiagnosticsTail(context),
-                ),
-            )
-        }
-
-        private fun copyStringKeyMap(value: Any?): LinkedHashMap<String, Any?> {
-            val source = value as? Map<*, *> ?: return linkedMapOf()
-            val result = linkedMapOf<String, Any?>()
-            source.forEach { (key, item) ->
-                if (key is String) {
-                    result[key] = item
-                }
-            }
-            return result
-        }
-
-        private fun buildEnvironmentSnapshot(context: Context): Map<String, Any?> {
-            return linkedMapOf(
-                "androidVersion" to Build.VERSION.SDK_INT,
-                "brand" to Build.BRAND,
-                "manufacturer" to Build.MANUFACTURER,
-                "device" to Build.DEVICE,
-                "model" to Build.MODEL,
-                "isXiaomiFamilyDevice" to isXiaomiFamilyDeviceCompat(),
-                "hasNotificationPermission" to hasNotificationPermissionCompat(context),
-                "hasPromotedPermissionDeclared" to isPromotedPermissionDeclaredCompat(context),
-                "canPostPromotedNotifications" to canPostPromotedNotificationsCompat(context),
-                "ignoringBatteryOptimizations" to isIgnoringBatteryOptimizationsCompat(context),
-                "keepAliveAccessibilityEnabled" to KeepAliveAccessibilityStatus.isEnabled(context),
-                "hideFromRecentsEnabled" to context
-                    .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .getBoolean(KEY_HIDE_FROM_RECENTS, false),
-            )
-        }
-
-        private fun updateDebugSnapshot(snapshot: Map<String, Any?>) {
-            lastDebugSnapshot = snapshot
-            lastDebugUpdatedAtMillis = System.currentTimeMillis()
-            lastStopReason = null
-        }
-
-        private fun markServiceRunning() {
-            isServiceRunning = true
-            lastStopReason = null
-            lastDebugUpdatedAtMillis = System.currentTimeMillis()
-        }
-
-        private fun markServiceStopped(reason: String) {
-            isServiceRunning = false
-            lastStopReason = reason
-            lastDebugUpdatedAtMillis = System.currentTimeMillis()
-        }
-
-        private fun hasNotificationPermissionCompat(context: Context): Boolean {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        }
-
-        private fun isPromotedPermissionDeclaredCompat(context: Context): Boolean {
-            return try {
-                val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.packageManager.getPackageInfo(
-                        context.packageName,
-                        PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong())
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    context.packageManager.getPackageInfo(
-                        context.packageName,
-                        PackageManager.GET_PERMISSIONS
-                    )
-                }
-                packageInfo.requestedPermissions
-                    ?.contains(POST_PROMOTED_NOTIFICATIONS_PERMISSION) == true
-            } catch (e: Exception) {
-                Log.w(TAG, DiagnosticLogMessages.LOG_INSPECT_PROMOTED_PERMISSION_FAILED, e)
-                false
-            }
-        }
-
-        private fun canPostPromotedNotificationsCompat(context: Context): Boolean {
-            return Build.VERSION.SDK_INT >= 36 &&
-                context.getSystemService(NotificationManager::class.java)
-                    ?.canPostPromotedNotifications() == true
-        }
-
-        private fun isIgnoringBatteryOptimizationsCompat(context: Context): Boolean {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-                return true
-            }
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-            return powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
-        }
-
-        private fun isXiaomiFamilyDeviceCompat(): Boolean {
-            val brand = Build.BRAND.lowercase()
-            val manufacturer = Build.MANUFACTURER.lowercase()
-            return manufacturer.contains("xiaomi") ||
-                brand.contains("xiaomi") ||
-                brand.contains("redmi") ||
-                brand.contains("poco")
-        }
-    }
-
-    private val handler = Handler(Looper.getMainLooper())
-    private var ticker: Runnable? = null
-    private var courseName = ""
-    private var shortCourseNameRaw = ""
-    private var location = ""
-    private var teacher = ""
-    private var note = ""
-    private var startTimeText = ""
-    private var endTimeText = ""
-    private var nextName = ""
-    private var autoDismissAfterStartMinutes = 0
-    private var activityStage = ""
-    private var endSecondsCountdownThreshold = 60
-    private var showCountdown = true
-    private var countdownTextStyle = "smart"
-    private var showStageText = true
-    private var showCourseNameInIsland = true
-    private var showLocationInIsland = true
-    private var useShortNameInIsland = false
-    private var hidePrefixText = false
-    private var duringClassTimeDisplayMode = "nearest"
-    private var enableMiuiIslandLabelImage = false
-    private var miuiIslandLabelStyle = "text_only"
-    private var miuiIslandLabelContent = "course_name"
-    private var miuiIslandLabelFontColor = "#FFFFFF"
-    private var miuiIslandLabelFontWeight = "bold"
-    private var miuiIslandLabelRenderQuality = "standard"
-    private var miuiIslandLabelFontSize = 14f
-    private var miuiIslandLabelOffsetX = 0f
-    private var miuiIslandLabelOffsetY = 0f
-    private var miuiIslandLabelLogoPath: String? = null
-    private var miuiIslandLabelLogoCornerRadius = 8f
-    private var miuiIslandExpandedIconMode = "app_icon"
-    private var miuiIslandExpandedIconPath: String? = null
-    private var islandTimeoutPre = 300
-    private var islandTimeoutActive = 600
-    private var islandTimeoutPost = 600
-    private var iconAEnabled = true
-    private var statusTextColor = "#FFFFFFFF"
-    private var outEffectStatusEnabled = true
-    private var outEffectStatusColor = "#FFFFFFFF"
-    private var outEffectExpandEnabled = true
-    private var outEffectExpandColor = "#FFFFFFFF"
-    private var startAtMillis = 0L
-    private var endAtMillis = 0L
-    private var beforeClassLeadMillis = 0L
-    private var endReminderLeadMillis = 600_000L
-    private var liveClassReminderStartMinutes = 0
-    private var enableBeforeClass = true
-    private var enableDuringClass = true
-    private var enableBeforeEnd = true
-    private var promoteDuringClass = true
-    private var showNotificationDuringClass = true
-    private var beforeClassQuickAction = "none"
-    private var progressBreakOffsetsMillis = longArrayOf()
-    private var progressMilestoneLabels = emptyList<String>()
-    private var progressMilestoneTimeTexts = emptyList<String>()
-    private var lastRemainingText = "-1"
-    private var lastProgressUnits = -1
-    private var lastCriticalTimeText = ""
-    private var cachedIslandBitmapKey: String? = null
-    private var cachedIslandBitmap: Bitmap? = null
-    private var hasStartedForeground = false
-    private var lastTickerStage: String? = null
-    private var validateAgainstSchedule = true
-    private var superIslandEngine = "builtIn"
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return try {
-            val quickActionResult = when (intent?.action) {
-                ACTION_ENABLE_SILENT_MODE -> {
-                    readQuickActionTimingExtra(intent)
-                    handleBeforeClassQuickAction(enableDoNotDisturb = false)
-                    START_NOT_STICKY
-                }
-                ACTION_ENABLE_DO_NOT_DISTURB -> {
-                    readQuickActionTimingExtra(intent)
-                    handleBeforeClassQuickAction(enableDoNotDisturb = true)
-                    START_NOT_STICKY
-                }
-                ACTION_DISMISS_STATUS_BAR_STAGE -> {
-                    dismissStatusBarStage()
-                    START_NOT_STICKY
-                }
-                else -> null
-            }
-            if (quickActionResult != null) {
-                return quickActionResult
-            }
-
-            startForegroundSafely(intent)
-
-            if (!hasCompleteLivePayload(intent)) {
-                UmengDiagnosticReporter.record(
-                    context = applicationContext,
-                    category = "live_update_service_missing_payload",
-                    message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_MISSING_PAYLOAD,
-                    extras = mapOf(
-                        "intentIsNull" to (intent == null),
-                        "hasCourseName" to (!intent?.getStringExtra("courseName").isNullOrBlank()),
-                        "hasStage" to (!intent?.getStringExtra("stage").isNullOrBlank()),
-                        "hasStartAtMillis" to ((intent?.getLongExtra("startAtMillis", 0L) ?: 0L) > 0L),
-                        "hasEndAtMillis" to ((intent?.getLongExtra("endAtMillis", 0L) ?: 0L) > 0L),
-                    )
-                )
-                val resumed = LiveUpdateScheduler.reschedule(
-                    applicationContext,
-                    allowImmediateStart = true,
-                    stopStaleSessions = true,
-                )
-                if (!resumed) {
-                    stopAndRemoveNotification()
-                    return START_NOT_STICKY
-                }
-                return START_STICKY
-            }
-
-            courseName = sanitizeTextExtra(intent?.getStringExtra("courseName"))
-            shortCourseNameRaw = sanitizeTextExtra(intent?.getStringExtra("shortName"))
-            location = sanitizeTextExtra(intent?.getStringExtra("location"))
-            teacher = sanitizeTextExtra(intent?.getStringExtra("teacher"))
-            note = sanitizeTextExtra(intent?.getStringExtra("note"))
-            startTimeText = sanitizeTextExtra(intent?.getStringExtra("startTime"))
-            endTimeText = sanitizeTextExtra(intent?.getStringExtra("endTime"))
-            nextName = sanitizeTextExtra(intent?.getStringExtra("nextName"))
-            autoDismissAfterStartMinutes = intent?.getIntExtra("autoDismissAfterStartMinutes", 0) ?: 0
-            activityStage = intent?.getStringExtra("stage").orEmpty()
-            endSecondsCountdownThreshold =
-                intent?.getIntExtra("endSecondsCountdownThreshold", 60) ?: 60
-            showCountdown = intent?.getBooleanExtra("showCountdown", true) ?: true
-            countdownTextStyle = intent?.getStringExtra("countdownTextStyle") ?: "smart"
-            showStageText = intent?.getBooleanExtra("showStageText", true) ?: true
-            showCourseNameInIsland = intent?.getBooleanExtra("showCourseNameInIsland", true) ?: true
-            showLocationInIsland = intent?.getBooleanExtra("showLocationInIsland", true) ?: true
-            useShortNameInIsland = intent?.getBooleanExtra("useShortNameInIsland", false) ?: false
-            hidePrefixText = intent?.getBooleanExtra("hidePrefixText", false) ?: false
-            duringClassTimeDisplayMode =
-                intent?.getStringExtra("duringClassTimeDisplayMode") ?: "nearest"
-            enableMiuiIslandLabelImage =
-                intent?.getBooleanExtra("enableMiuiIslandLabelImage", false) ?: false
-            miuiIslandLabelStyle = intent?.getStringExtra("miuiIslandLabelStyle") ?: "text_only"
-            miuiIslandLabelContent =
-                intent?.getStringExtra("miuiIslandLabelContent") ?: "course_name"
-            miuiIslandLabelFontColor =
-                intent?.getStringExtra("miuiIslandLabelFontColor") ?: "#FFFFFF"
-            miuiIslandLabelFontWeight =
-                intent?.getStringExtra("miuiIslandLabelFontWeight") ?: "bold"
-            miuiIslandLabelRenderQuality =
-                intent?.getStringExtra("miuiIslandLabelRenderQuality") ?: "standard"
-            miuiIslandLabelFontSize =
-                intent?.getFloatExtra("miuiIslandLabelFontSize", 14f) ?: 14f
-            miuiIslandLabelOffsetX =
-                intent?.getFloatExtra("miuiIslandLabelOffsetX", 0f) ?: 0f
-            miuiIslandLabelOffsetY =
-                intent?.getFloatExtra("miuiIslandLabelOffsetY", 0f) ?: 0f
-            miuiIslandLabelLogoPath =
-                intent?.getStringExtra("miuiIslandLabelLogoPath")?.takeIf { it.isNotBlank() }
-            miuiIslandLabelLogoCornerRadius =
-                intent?.getFloatExtra("miuiIslandLabelLogoCornerRadius", 8f) ?: 8f
-            miuiIslandExpandedIconMode =
-                intent?.getStringExtra("miuiIslandExpandedIconMode") ?: "app_icon"
-            miuiIslandExpandedIconPath =
-                intent?.getStringExtra("miuiIslandExpandedIconPath")?.takeIf { it.isNotBlank() }
-            islandTimeoutPre = intent?.getIntExtra("hfIslandTimeoutPre", 300) ?: 300
-            islandTimeoutActive = intent?.getIntExtra("hfIslandTimeoutActive", 600) ?: 600
-            islandTimeoutPost = intent?.getIntExtra("hfIslandTimeoutPost", 600) ?: 600
-            iconAEnabled = intent?.getBooleanExtra("hfIconAEnabled", true) ?: true
-            statusTextColor = intent?.getStringExtra("hfStatusTextColor") ?: "#FFFFFFFF"
-            outEffectStatusEnabled = intent?.getBooleanExtra("hfOutEffectStatusEnabled", true) ?: true
-            outEffectStatusColor = intent?.getStringExtra("hfOutEffectStatusColor") ?: "#FFFFFFFF"
-            outEffectExpandEnabled = intent?.getBooleanExtra("hfOutEffectExpandEnabled", true) ?: true
-            outEffectExpandColor = intent?.getStringExtra("hfOutEffectExpandColor") ?: "#FFFFFFFF"
-            beforeClassLeadMillis =
-                intent?.getLongExtra("beforeClassLeadMillis", 0L)
-                    ?.coerceAtLeast(0L)
-                    ?: 0L
-            endReminderLeadMillis =
-                intent?.getLongExtra("endReminderLeadMillis", 600_000L)
-                    ?.coerceAtLeast(0L)
-                    ?: 600_000L
-            liveClassReminderStartMinutes =
-                intent?.getIntExtra("liveClassReminderStartMinutes", 0)?.coerceAtLeast(0) ?: 0
-            enableBeforeClass = intent?.getBooleanExtra("enableBeforeClass", true) ?: true
-            enableDuringClass = intent?.getBooleanExtra("enableDuringClass", true) ?: true
-            enableBeforeEnd = intent?.getBooleanExtra("enableBeforeEnd", true) ?: true
-            promoteDuringClass = intent?.getBooleanExtra("promoteDuringClass", true) ?: true
-            showNotificationDuringClass =
-                intent?.getBooleanExtra("showNotificationDuringClass", true) ?: true
-            beforeClassQuickAction =
-                intent?.getStringExtra("beforeClassQuickAction") ?: "none"
-            validateAgainstSchedule =
-                intent?.getBooleanExtra("validateAgainstSchedule", true) ?: true
-            superIslandEngine = intent?.getStringExtra("superIslandEngine") ?: "builtIn"
-            progressBreakOffsetsMillis =
-                intent?.getLongArrayExtra("progressBreakOffsetsMillis") ?: longArrayOf()
-            progressMilestoneLabels =
-                intent?.getStringArrayListExtra("progressMilestoneLabels") ?: emptyList()
-            progressMilestoneTimeTexts =
-                intent?.getStringArrayListExtra("progressMilestoneTimeTexts") ?: emptyList()
-            startAtMillis =
-                intent?.getLongExtra("startAtMillis", 0L)?.takeIf { it > 0L }
-                    ?: buildCourseTimeMillis(startTimeText)
-                    ?: System.currentTimeMillis()
-            endAtMillis =
-                intent?.getLongExtra("endAtMillis", 0L)?.takeIf { it > 0L }
-                    ?: buildCourseTimeMillis(endTimeText)
-                    ?: startAtMillis
-
-            lastRemainingText = "-1"
-            lastProgressUnits = -1
-            lastCriticalTimeText = ""
-            markServiceRunning()
-
-            UmengDiagnosticReporter.record(
-                context = applicationContext,
-                category = "live_update_service_started",
-                message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_STARTED,
-                extras = mapOf(
-                    "courseName" to courseName,
-                    "stage" to activityStage,
-                    "startAtMillis" to startAtMillis,
-                    "endAtMillis" to endAtMillis,
-                    "enableBeforeClass" to enableBeforeClass,
-                    "enableDuringClass" to enableDuringClass,
-                    "enableBeforeEnd" to enableBeforeEnd,
-                    "promoteDuringClass" to promoteDuringClass,
-                    "showNotificationDuringClass" to showNotificationDuringClass,
-                    "showCourseNameInIsland" to showCourseNameInIsland,
-                    "showLocationInIsland" to showLocationInIsland,
-                    "enableMiuiIslandLabelImage" to enableMiuiIslandLabelImage,
-                    "miuiIslandLabelFontSize" to miuiIslandLabelFontSize,
-                    "miuiIslandLabelOffsetX" to miuiIslandLabelOffsetX,
-                    "miuiIslandLabelOffsetY" to miuiIslandLabelOffsetY,
-                    "hasMiuiIslandLabelLogoPath" to (!miuiIslandLabelLogoPath.isNullOrBlank()),
-                    "miuiIslandLabelLogoCornerRadius" to miuiIslandLabelLogoCornerRadius,
-                    "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                )
-            )
-
-            val initialText = computeRemainingText(System.currentTimeMillis())
-            lastRemainingText = initialText
-            updateForegroundNotification(buildNotification(initialText))
-            startTicker()
-            START_STICKY
-        } catch (e: Exception) {
-            markServiceStopped(getString(R.string.stop_service_start_failed))
-            UmengDiagnosticReporter.report(
-                context = applicationContext,
-                category = "live_update_service_start_failed",
-                message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_START_FAILED,
-                throwable = e,
-                dedupeKey = "live_update_service_start_failed",
-                extras = mapOf(
-                    "courseName" to courseName,
-                    "stage" to activityStage,
-                )
-            )
-            if (hasStartedForeground) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
-                hasStartedForeground = false
-            }
-            stopSelf()
-            START_NOT_STICKY
-        }
-    }
-
-    override fun onDestroy() {
-        stopTicker()
-        if (isServiceRunning) {
-            markServiceStopped(getString(R.string.stop_service_destroyed))
-        }
-        if (hasStartedForeground) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
-            hasStartedForeground = false
-        }
-        if (validateAgainstSchedule) {
-            LiveUpdateScheduler.onLiveUpdateStopped(applicationContext)
-        }
-        super.onDestroy()
-    }
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        val keepAliveExperimentEnabled = isTaskRemovalKeepAliveEnabled()
-        val keepAliveAccessibilityEnabled = isKeepAliveAccessibilityEnabled()
-        getSharedPreferences("native_runtime_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_task_removed_at", System.currentTimeMillis())
-            .apply()
-        UmengDiagnosticReporter.record(
-            context = applicationContext,
-            category = "live_update_task_removed",
-            message = DiagnosticLogMessages.LIVE_UPDATE_TASK_REMOVED,
-            extras = mapOf(
-                "courseName" to courseName,
-                "stage" to activityStage,
-                "keepAliveExperimentEnabled" to keepAliveExperimentEnabled,
-                "hideFromRecentsEnabled" to isHideFromRecentsEnabled(),
-                "keepAliveAccessibilityEnabled" to keepAliveAccessibilityEnabled,
-            )
-        )
-        val resumed = LiveUpdateScheduler.reschedule(
-            applicationContext,
-            allowImmediateStart = true,
-            stopStaleSessions = validateAgainstSchedule,
-        )
-        if (!resumed) {
-            stopAndRemoveNotification()
-        } else {
-            UmengDiagnosticReporter.record(
-                context = applicationContext,
-                category = "live_update_task_removed_resumed",
-                message = DiagnosticLogMessages.LIVE_UPDATE_TASK_REMOVED_RESUMED,
-                extras = mapOf(
-                    "courseName" to courseName,
-                    "stage" to activityStage,
-                    "keepAliveExperimentEnabled" to keepAliveExperimentEnabled,
-                    "keepAliveAccessibilityEnabled" to keepAliveAccessibilityEnabled,
-                )
-            )
-        }
-        super.onTaskRemoved(rootIntent)
-    }
-
-    private fun isTaskRemovalKeepAliveEnabled(): Boolean {
-        return isHideFromRecentsEnabled() || isKeepAliveAccessibilityEnabled()
-    }
-
-    private fun startForegroundSafely(intent: Intent?) {
-        ensureNotificationChannel()
-        if (hasStartedForeground) {
-            return
-        }
-
-        val bootstrapTitle = intent?.getStringExtra("courseName")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { getString(R.string.notification_course_reminder_title, it) }
-            ?: getString(R.string.app_display_name)
-        val notification = buildBootstrapNotification(bootstrapTitle)
-        // FOREGROUND_SERVICE_TYPE_SPECIAL_USE is API 34+.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
-        hasStartedForeground = true
-    }
-
-    private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
-
-        val manager = getSystemService(NotificationManager::class.java) ?: return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.notification_channel_live_update_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = getString(R.string.notification_channel_live_update_desc)
-        }
-        manager.createNotificationChannel(channel)
-    }
-
-    private fun buildBootstrapNotification(title: String): Notification {
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-        } else {
-            Notification.Builder(this)
-        }
-
-        return builder
-            .setContentTitle(title)
-            .setContentText(getString(R.string.notification_preparing_reminder))
-            .setSmallIcon(R.drawable.ic_course)
-            .setOngoing(true)
-            .setAutoCancel(false)
-            .setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_SERVICE)
-            .build()
-    }
-
-    private fun updateForegroundNotification(notification: Notification) {
-        if (!hasStartedForeground) {
-            startForeground(NOTIFICATION_ID, notification)
-            hasStartedForeground = true
-            return
-        }
-
-        getSystemService(NotificationManager::class.java)
-            ?.notify(NOTIFICATION_ID, notification)
-            ?: startForeground(NOTIFICATION_ID, notification)
-    }
-
-    private fun buildBeforeClassQuickAction(): Notification.Action? {
-        val (action, label) = when (beforeClassQuickAction) {
-            "silent" -> ACTION_ENABLE_SILENT_MODE to getString(R.string.action_enable_silent)
-            "do_not_disturb" -> ACTION_ENABLE_DO_NOT_DISTURB to getString(R.string.action_enable_dnd)
-            else -> return null
-        }
-        val pendingIntent = PendingIntent.getService(
-            this,
-            action.hashCode(),
-            Intent(this, LiveUpdateService::class.java).apply {
-                this.action = action
-                putExtra("endAtMillis", endAtMillis)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return Notification.Action.Builder(
-            Icon.createWithResource(this, R.drawable.ic_notification),
-            label,
-            pendingIntent,
-        ).build()
-    }
-
-    private fun buildDismissStatusBarAction(): Notification.Action {
-        val pendingIntent = PendingIntent.getService(
-            this,
-            ACTION_DISMISS_STATUS_BAR_STAGE.hashCode(),
-            Intent(this, LiveUpdateService::class.java).apply {
-                action = ACTION_DISMISS_STATUS_BAR_STAGE
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return Notification.Action.Builder(
-            Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-            getString(R.string.action_close),
-            pendingIntent,
-        ).build()
-    }
-
-    private fun handleBeforeClassQuickAction(enableDoNotDisturb: Boolean) {
-        val restoreAtMillis = endAtMillis.takeIf { it > 0L }
-            ?: (System.currentTimeMillis() + 2 * 60 * 60_000L)
-        val applied = if (enableDoNotDisturb) {
-            val enabled = BeforeClassQuickActionRestore.enableDoNotDisturbMode(
-                this,
-                restoreAtMillis,
-            )
-            if (!enabled) {
-                openNotificationPolicyAccessSettings()
-            }
-            enabled
-        } else {
-            val enabled = BeforeClassQuickActionRestore.enableSilentMode(
-                this,
-                restoreAtMillis,
-            )
-            if (!enabled) {
-                openSoundSettings()
-            }
-            enabled
-        }
-        UmengDiagnosticReporter.record(
-            context = applicationContext,
-            category = "live_update_before_class_quick_action",
-            message = DiagnosticLogMessages.LIVE_UPDATE_BEFORE_CLASS_QUICK_ACTION,
-            extras = mapOf(
-                "action" to if (enableDoNotDisturb) "do_not_disturb" else "silent",
-                "applied" to applied,
-                "courseName" to courseName,
-                "stage" to activityStage,
-            )
-        )
-        if (hasStartedForeground) {
-            updateForegroundNotification(buildNotification(computeRemainingText(System.currentTimeMillis())))
-        }
-    }
-
-    private fun dismissStatusBarStage() {
-        markServiceStopped(getString(R.string.stop_status_bar_dismissed))
-        UmengDiagnosticReporter.record(
-            context = applicationContext,
-            category = "live_update_status_bar_dismissed",
-            message = DiagnosticLogMessages.LIVE_UPDATE_STATUS_BAR_DISMISSED,
-            extras = mapOf(
-                "courseName" to courseName,
-                "stage" to activityStage,
-            )
-        )
-        stopTicker()
-        if (hasStartedForeground) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
-            hasStartedForeground = false
-        }
-        stopSelf()
-    }
-
-    private fun readQuickActionTimingExtra(intent: Intent?) {
-        val restoreAtMillis = intent?.getLongExtra("endAtMillis", 0L) ?: 0L
-        if (restoreAtMillis > 0L) {
-            endAtMillis = restoreAtMillis
-        }
-    }
-
-    private fun restoreBeforeClassQuickActionIfClassEnded() {
-        BeforeClassQuickActionRestore.restoreIfClassEnded(applicationContext)
-    }
-
-    private fun openNotificationPolicyAccessSettings() {
-        openSettingsIntent(
-            Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-        )
-    }
-
-    private fun openSoundSettings() {
-        openSettingsIntent(Intent(Settings.ACTION_SOUND_SETTINGS))
-    }
-
-    private fun openSettingsIntent(intent: Intent) {
-        try {
-            startActivity(intent.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
-        } catch (e: Exception) {
-            Log.w(TAG, DiagnosticLogMessages.LOG_OPEN_SETTINGS_INTENT_FAILED, e)
-            try {
-                startActivity(
-                    Intent(Settings.ACTION_SETTINGS).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                )
-            } catch (fallbackError: Exception) {
-                Log.w(TAG, DiagnosticLogMessages.LOG_OPEN_FALLBACK_SETTINGS_FAILED, fallbackError)
-            }
-        }
-    }
-
-    private fun isHideFromRecentsEnabled(): Boolean {
-        return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_HIDE_FROM_RECENTS, false)
-    }
-
-    private fun hasCompleteLivePayload(intent: Intent?): Boolean {
-        if (intent == null) {
-            return false
-        }
-        val courseName = intent.getStringExtra("courseName")
-        val stage = intent.getStringExtra("stage")
-        val startAtMillis = intent.getLongExtra("startAtMillis", 0L)
-        val endAtMillis = intent.getLongExtra("endAtMillis", 0L)
-        return !courseName.isNullOrBlank() &&
-            !stage.isNullOrBlank() &&
-            startAtMillis > 0L &&
-            endAtMillis > 0L &&
-            endAtMillis >= startAtMillis
-    }
-
-    private fun isKeepAliveAccessibilityEnabled(): Boolean {
-        return KeepAliveAccessibilityStatus.isEnabled(this)
-    }
-
-    private fun startTicker() {
-        stopTicker()
-        ticker = object : Runnable {
-            override fun run() {
-                val now = System.currentTimeMillis()
-                BeforeClassQuickActionRestore.restoreIfClassEnded(applicationContext, now)
-                if (validateAgainstSchedule &&
-                    !LiveUpdateScheduler.hasActiveLiveSelection(applicationContext, now)
-                ) {
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = true,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-                val stage = resolveStage(now)
-                if (autoDismissAfterStartMinutes > 0 &&
-                    now >= startAtMillis + autoDismissAfterStartMinutes * 60_000L
-                ) {
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-
-                if (stage == null) {
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-
-                // When stage transitions, reschedule so onStartCommand re-reads
-                // the correct displaySettings for the new stage.
-                if (lastTickerStage != null && stage != lastTickerStage) {
-                    lastTickerStage = stage
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-                lastTickerStage = stage
-
-                if (now >= endAtMillis + 30_000L) { // Auto-remove 30s after class end, especially for tests.
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-
-                val currentText = computeRemainingText(now)
-                val currentDuringClassProgress = if (stage == "duringClass") {
-                    buildDuringClassProgress(now)
-                } else {
-                    null
-                }
-                val currentCriticalTimeText = currentDuringClassProgress?.criticalTimeText ?: currentText
-                val shouldRefreshProgressThisTick =
-                    currentDuringClassProgress?.updatesEverySecond == true
-                val currentProgress =
-                    if (shouldRefreshProgressThisTick) {
-                        currentDuringClassProgress.progressUnits
-                    } else {
-                        -1
-                    }
-                if (currentText != lastRemainingText ||
-                    currentProgress != lastProgressUnits ||
-                    currentCriticalTimeText != lastCriticalTimeText
-                ) {
-                    lastRemainingText = currentText
-                    lastProgressUnits = currentProgress
-                    lastCriticalTimeText = currentCriticalTimeText
-                    getSystemService(NotificationManager::class.java)
-                        ?.notify(NOTIFICATION_ID, buildNotification(currentText))
-                }
-
-                handler.postDelayed(this, computeNextTickDelayMillis(now, stage, currentDuringClassProgress))
-            }
-        }
-        handler.post(ticker!!)
-    }
-
-    private fun stopTicker() {
-        ticker?.let { runnable ->
-            handler.removeCallbacks(runnable)
-        }
-        ticker = null
-    }
-
-    private fun computeRemainingText(now: Long): String {
-        val stage = resolveStage(now)
-        val timeUntilEnd = endAtMillis - now
-
-        val prefixTextStart = if (hidePrefixText) "" else getString(R.string.prefix_until_class_start)
-        val prefixTextEnd = if (hidePrefixText) "" else getString(R.string.prefix_until_class_end)
-
-        return if (!showCountdown) {
-            ""
-        } else {
-            when (stage) {
-                "beforeClass" -> {
-                    val timeUntilStart = (startAtMillis - now).coerceAtLeast(0L)
-                    "${prefixTextStart}${formatCountdownDuration(
-                        durationMillis = timeUntilStart,
-                        secondsThresholdMillis = 60_000L,
-                    )}"
-                }
-                "beforeEnd" -> {
-                    "${prefixTextEnd}${formatCountdownDuration(
-                        durationMillis = timeUntilEnd,
-                        secondsThresholdMillis = endSecondsCountdownThreshold * 1000L,
-                    )}"
-                }
-                "duringClass",
-                "duringClassStatusBar" -> getString(R.string.stage_in_class)
-                else -> ""
-            }
-        }
-    }
-
-    private fun resolveStage(now: Long): String? {
-        if (now >= endAtMillis) {
-            return null
-        }
-        // Do not show the before-class stage earlier than its window start.
-        // (leadMillis == 0 means the caller did not supply a window; keep the
-        // legacy behavior of trusting the start intent in that case.)
-        if (beforeClassLeadMillis > 0L && now < startAtMillis - beforeClassLeadMillis) {
-            return null
-        }
-
-        val reminderStart = if (liveClassReminderStartMinutes == 0) {
-            startAtMillis
-        } else {
-            maxOf(startAtMillis, endAtMillis - liveClassReminderStartMinutes * 60_000L)
-        }
-        val endReminderStart = maxOf(startAtMillis, endAtMillis - endReminderLeadMillis)
-        return when {
-            now < startAtMillis -> if (enableBeforeClass) "beforeClass" else null
-            liveClassReminderStartMinutes > 0 && now < reminderStart ->
-                if (enableDuringClass && showNotificationDuringClass) {
-                    "duringClassStatusBar"
-                } else {
-                    null
-                }
-            now < reminderStart -> null
-            liveClassReminderStartMinutes > 0 && enableBeforeEnd -> "beforeEnd"
-            liveClassReminderStartMinutes > 0 && canDisplayDuringStage() -> "duringClass"
-            now >= endReminderStart && enableBeforeEnd -> "beforeEnd"
-            now < endReminderStart && canDisplayDuringStage() -> "duringClass"
-            now >= endReminderStart && canDisplayDuringStage() -> "duringClass"
-            else -> null
-        }
-    }
-
-    private fun canDisplayDuringStage(): Boolean {
-        return enableDuringClass && (promoteDuringClass || showNotificationDuringClass)
-    }
-
-    private fun isXiaomiFamilyDevice(): Boolean {
-        val brand = Build.BRAND.lowercase()
-        val manufacturer = Build.MANUFACTURER.lowercase()
-        return manufacturer.contains("xiaomi") ||
-            brand.contains("xiaomi") ||
-            brand.contains("redmi") ||
-            brand.contains("poco")
-    }
-
-    private fun dp(value: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)
-
-    private fun sp(value: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
-
-    private fun resolveIslandLabelBitmap(text: String): Bitmap? {
-        if (!enableMiuiIslandLabelImage || !isXiaomiFamilyDevice() || text.isBlank()) {
-            return null
-        }
-
-        val cacheKey = listOf(
-            text,
-            miuiIslandLabelStyle,
-            miuiIslandLabelFontColor,
-            miuiIslandLabelFontWeight,
-            miuiIslandLabelRenderQuality,
-            miuiIslandLabelFontSize.toString(),
-            miuiIslandLabelOffsetX.toString(),
-            miuiIslandLabelOffsetY.toString(),
-            miuiIslandLabelLogoPath.orEmpty(),
-            miuiIslandLabelLogoCornerRadius.toString(),
-        ).joinToString("|")
-        if (cacheKey == cachedIslandBitmapKey && cachedIslandBitmap != null) {
-            return cachedIslandBitmap
-        }
-
-        val bitmap = buildIslandLabelBitmap(
-            text = text,
-            includeAppIcon = miuiIslandLabelStyle == "icon_and_text",
-            customIconPath = miuiIslandLabelLogoPath,
-            customIconCornerRadiusDp = miuiIslandLabelLogoCornerRadius,
-            fontColorHex = miuiIslandLabelFontColor,
-            fontWeight = miuiIslandLabelFontWeight,
-            renderQuality = miuiIslandLabelRenderQuality,
-            fontSizeSp = miuiIslandLabelFontSize,
-            offsetXDp = miuiIslandLabelOffsetX,
-            offsetYDp = miuiIslandLabelOffsetY,
-        )
-        cachedIslandBitmapKey = cacheKey
-        cachedIslandBitmap = bitmap
-        return bitmap
-    }
-
-    private fun buildIslandLabelBitmap(
-        text: String,
-        includeAppIcon: Boolean,
-        customIconPath: String?,
-        customIconCornerRadiusDp: Float,
-        fontColorHex: String,
-        fontWeight: String,
-        renderQuality: String,
-        fontSizeSp: Float,
-        offsetXDp: Float,
-        offsetYDp: Float,
-    ): Bitmap? {
-        val resolvedFontSizeSp = fontSizeSp.coerceIn(1f, 32f)
-        val renderScale = when (renderQuality) {
-            "high" -> 3f
-            "ultra" -> 4f
-            else -> 2f
-        }
-        val textColor = parseColorHexOrDefault(fontColorHex, 0xFFFFFFFF.toInt())
-        val typeface = resolveIslandLabelTypeface(fontWeight)
-        val baseTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = textColor
-            textSize = sp(resolvedFontSizeSp)
-            this.typeface = typeface
-            isFakeBoldText = fontWeight == "bold"
-            isSubpixelText = true
-            isLinearText = true
-        }
-        val iconSizeDp = if (includeAppIcon) 24f else 0f
-        val iconGapDp = if (includeAppIcon) 3f else 0f
-        val horizontalPaddingDp = if (includeAppIcon) 3f else 0.75f
-        val verticalPaddingDp = 0.5f
-        val maxWidthDp = if (includeAppIcon) 132f else 112f
-        val maxTextWidthPx = dp(
-            maxWidthDp - horizontalPaddingDp * 2f - iconSizeDp - iconGapDp
-        ).coerceAtLeast(dp(28f))
-
-        var fittedSizeSp = resolvedFontSizeSp
-        while (fittedSizeSp > 1f) {
-            baseTextPaint.textSize = sp(fittedSizeSp)
-            if (baseTextPaint.measureText(text) <= maxTextWidthPx) {
-                break
-            }
-            fittedSizeSp -= 1f
-        }
-
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = textColor
-            textSize = sp(fittedSizeSp) * renderScale
-            this.typeface = typeface
-            isFakeBoldText = fontWeight == "bold"
-            isSubpixelText = true
-            isLinearText = true
-            setShadowLayer(dp(0.75f) * renderScale, 0f, dp(0.25f) * renderScale, 0x44000000)
-        }
-
-        val displayText = if (baseTextPaint.measureText(text) <= maxTextWidthPx) {
-            text
-        } else {
-            TextUtils.ellipsize(
-                text,
-                baseTextPaint,
-                maxTextWidthPx,
-                TextUtils.TruncateAt.END
-            ).toString()
-        }
-
-        val glyphBounds = Rect()
-        textPaint.getTextBounds(displayText, 0, displayText.length, glyphBounds)
-        val textWidthPx = textPaint.measureText(displayText)
-        val textHeightPx = glyphBounds.height().toFloat().coerceAtLeast(sp(1f) * renderScale)
-        val iconSizePx = (dp(iconSizeDp) * renderScale).toInt()
-        val iconGapPx = dp(iconGapDp) * renderScale
-        val horizontalPaddingPx = dp(horizontalPaddingDp) * renderScale
-        val verticalPaddingPx = dp(verticalPaddingDp) * renderScale
-        val textOnlyMinHeightPx = dp(18f) * renderScale
-        val clampedOffsetXDp = offsetXDp.coerceIn(-2f, 2f)
-        val clampedOffsetYDp = offsetYDp.coerceIn(-2f, 2f)
-        val horizontalOffsetPx = dp(clampedOffsetXDp) * renderScale
-        val verticalOffsetPx = dp(clampedOffsetYDp) * renderScale
-
-        val contentWidth = (
-            horizontalPaddingPx * 2f +
-                textWidthPx +
-                if (includeAppIcon) iconSizePx + iconGapPx else 0f
-            )
-        val width = maxOf(
-            ceil(contentWidth).toInt(),
-            if (includeAppIcon) (dp(20f) * renderScale).toInt() else 1
-        )
-        val contentHeight = (
-            verticalPaddingPx * 2f + maxOf(textHeightPx, iconSizePx.toFloat())
-            )
-        val height = maxOf(
-            contentHeight,
-            if (includeAppIcon) sp(1f) * renderScale else textOnlyMinHeightPx
-        ).toInt()
-        if (width <= 0 || height <= 0) {
-            return null
-        }
-
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        var textStartX = horizontalPaddingPx
-        val centerY = height / 2f
-
-        if (includeAppIcon) {
-            val iconTop = ((height - iconSizePx) / 2f).toInt()
-            val customBitmap = customIconPath?.let {
-                decodeSquareBitmap(it, iconSizePx.coerceAtLeast(1))
-            }
-            if (customBitmap != null) {
-                drawRoundedBitmap(
-                    canvas = canvas,
-                    bitmap = customBitmap,
-                    left = horizontalPaddingPx,
-                    top = iconTop.toFloat(),
-                    sizePx = iconSizePx.toFloat(),
-                    cornerRadiusPx = (dp(customIconCornerRadiusDp.coerceIn(0f, 12f)) * renderScale)
-                        .coerceAtMost(iconSizePx / 2f),
-                )
-            } else {
-                val appIcon = packageManager.getApplicationIcon(packageName)
-                appIcon.setBounds(
-                    horizontalPaddingPx.toInt(),
-                    iconTop,
-                    horizontalPaddingPx.toInt() + iconSizePx,
-                    iconTop + iconSizePx
-                )
-                appIcon.draw(canvas)
-            }
-            textStartX += iconSizePx + iconGapPx
-        } else {
-            textStartX = (
-                (width - textWidthPx) / 2f + horizontalOffsetPx
-            ).coerceIn(horizontalPaddingPx, width - horizontalPaddingPx - textWidthPx)
-        }
-        if (includeAppIcon) {
-            textStartX = (
-                textStartX + horizontalOffsetPx
-            ).coerceIn(horizontalPaddingPx, width - horizontalPaddingPx - textWidthPx)
-        }
-        val baseline = centerY - (glyphBounds.top + glyphBounds.bottom) / 2f + verticalOffsetPx
-        canvas.drawText(displayText, textStartX, baseline, textPaint)
-        return bitmap
-    }
-
-    private fun drawRoundedBitmap(
-        canvas: Canvas,
-        bitmap: Bitmap,
-        left: Float,
-        top: Float,
-        sizePx: Float,
-        cornerRadiusPx: Float,
-    ) {
-        if (cornerRadiusPx <= 0f) {
-            canvas.drawBitmap(bitmap, left, top, null)
-            return
-        }
-        val rect = RectF(left, top, left + sizePx, top + sizePx)
-        val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.shader = shader
-            isFilterBitmap = true
-        }
-        canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, paint)
-    }
-
-    private fun parseColorHexOrDefault(colorHex: String?, fallback: Int): Int {
-        val normalized = colorHex?.trim()?.removePrefix("#")?.takeIf { it.isNotBlank() } ?: return fallback
-        return try {
-            when (normalized.length) {
-                6 -> (0xFF000000 or normalized.toLong(16)).toInt()
-                8 -> normalized.toLong(16).toInt()
-                else -> fallback
-            }
-        } catch (_: Exception) {
-            fallback
-        }
-    }
-
-    private fun resolveIslandLabelTypeface(fontWeight: String): Typeface {
-        return when (fontWeight) {
-            "regular" -> Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            "medium" -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            else -> Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        }
-    }
-
-    private fun buildHyperFocusBundle(
-        stage: String?,
-        remainingText: String,
-    ): Bundle? {
-        if (!isXiaomiFamilyDevice()) return null
-        val now = System.currentTimeMillis()
-        val stageKey = when (stage) {
-            "beforeClass" -> "pre"
-            "afterClass" -> "post"
-            else -> "active"
-        }
-        val targetTimerWhen = if (stageKey == "pre") startAtMillis else endAtMillis
-        val expired = targetTimerWhen <= now
-        if (expired) {
-            return buildHyperFocusDismissBundle()
-        }
-
-        return try {
-            val templates = loadHyperFocusTemplates(this)
-
-            val countdownDiff = kotlin.math.max(0L, targetTimerWhen - now)
-            val elapsedDiff = kotlin.math.max(0L, now - targetTimerWhen)
-            val countdownText = formatCountdownForTemplate(countdownDiff)
-            val elapsedText = formatElapsedForTemplate(elapsedDiff)
-
-            val r = { tpl: String ->
-                resolveTemplate(
-                    tpl = tpl,
-                    courseName = courseName,
-                    shortName = shortCourseNameRaw,
-                    location = location,
-                    teacher = teacher,
-                    startTime = startTimeText,
-                    endTime = endTimeText,
-                    countdownText = countdownText,
-                    elapsedText = elapsedText,
-                )
-            }
-
-            val tickerText = r(templates["ticker_$stageKey"] ?: "{课名}")
-            val islandAText = r(templates["islandA_$stageKey"] ?: "{课名}")
-            val islandBText = r(templates["islandB_$stageKey"] ?: "")
-            val baseTitleText = r(templates["baseTitle_$stageKey"] ?: "{课名}")
-            val baseContentText = r(templates["baseContent_$stageKey"] ?: "")
-            val baseSubcontentText = r(templates["baseSubcontent_$stageKey"] ?: "")
-            val hintTitleText = r(templates["hintTitle_$stageKey"] ?: "")
-            val hintContentText = r(templates["hintContent_$stageKey"] ?: "")
-            val hintSubcontentText = r(templates["hintSubcontent_$stageKey"] ?: "")
-            val hintSubtitleText = r(templates["hintSubtitle_$stageKey"] ?: "")
-
-            val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-            val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
-
-            val extras = FocusNotification.buildV3 {
-                business = "course_schedule"
-                updatable = true
-                enableFloat = true
-                ticker = tickerText
-                aodTitle = tickerText
-                islandFirstFloat = true
-                outEffectSrc = if (outEffectStatusEnabled) "outer_glow" else ""
-                outEffectColor = if (outEffectStatusEnabled) outEffectStatusColor else ""
-
-                baseInfo {
-                    type = 2
-                    title = baseTitleText
-                    content = baseContentText
-                    subContent = baseSubcontentText
-                    showDivider = baseSubcontentText.isNotBlank()
-                }
-
-                picInfo {
-                    if (iconAEnabled) {
-                        type = 1
-                    }
-                }
-
-                hintInfo {
-                    type = 2
-                    title = hintTitleText
-                    content = remainingText.ifBlank { hintTitleText }
-                    subTitle = hintSubtitleText
-                    extraTitle = hintContentText
-                    specialTitle = hintSubcontentText
-
-                    timerInfo {
-                        timerType = -1
-                                timerWhen = targetTimerWhen
-                        timerSystemCurrent = now
-                    }
-
-                    actionInfo {
-                        actionIntentType = 1
-                        actionIntent = openAppUri
-                        actionTitle = "查看课表"
-                    }
-                }
-
-                island {
-                    islandProperty = 1
-                    islandTimeout = when (stageKey) {
-                        "pre" -> islandTimeoutPre
-                        "post" -> islandTimeoutPost
-                        else -> islandTimeoutActive
-                    }
-
-                    bigIslandArea {
-                        imageTextInfoLeft {
-                            type = 1
-                            textInfo {
-                                title = islandAText
-                                showHighlightColor = true
-                            }
-                            picInfo {
-                                if (iconAEnabled) {
-                                    type = 1
-                                }
-                            }
-                        }
-
-                        sameWidthDigitInfo {
-                            timerInfo {
-                                timerType = -1
-                    timerWhen = targetTimerWhen
-                                timerSystemCurrent = now
-                            }
-                            content = islandBText
-                            turnAnim = true
-                            showHighlightColor = true
-                        }
-                    }
-
-                    smallIslandArea { }
-
-                    shareData {
-                        title = courseName
-                        content = location.ifBlank { "" }
-                    }
-                }
-            }
-
-            if (outEffectStatusEnabled) {
-                extras.putString("miui.bigIsland.effect.src", "outer_glow")
-                extras.putString("miui.effect.src", "outer_glow")
-            }
-
-            extras
-        } catch (e: Exception) {
-            Log.e(TAG, "buildHyperFocusBundle failed", e)
-            null
-        }
-
-    }
-
-    private fun buildHyperFocusDismissBundle(): Bundle? {
-        return try {
-            FocusNotification.buildV3 {
-                business = "course_schedule"
-                updatable = false
-                enableFloat = false
-                ticker = ""
-                aodTitle = ""
-
-                baseInfo {
-                    type = 2
-                    title = courseName.ifBlank { "" }
-                    content = ""
-                    subContent = ""
-                }
-                picInfo { type = 1 }
-                hintInfo {
-                    type = 2
-                    title = ""
-                    content = ""
-                }
-                island {
-                    islandProperty = 0
-                    islandTimeout = 0
-                    bigIslandArea { }
-                    smallIslandArea { }
-                    shareData {
-                        title = ""
-                        content = ""
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "buildHyperFocusDismissBundle failed", e)
-            null
-        }
-    }
-
-    private fun buildMiuiFocusParam(
-        title: String,
-        remainingText: String,
-        timeRangeText: String,
-        bodyContent: String,
-        visibleLocation: String,
-        stage: String?,
-        classProgress: DuringClassProgress?,
-        startAtMillis: Long,
-        endAtMillis: Long,
-        islandName: String,
-        progressBreakOffsetsMillis: LongArray,
-        progressMilestoneLabels: List<String>,
-        progressMilestoneTimeTexts: List<String>,
-    ): String? {
-        if (!isXiaomiFamilyDevice()) {
-            return null
-        }
-
-        return try {
-            val extraInfo = JSONObject().apply {
-                if (visibleLocation.isNotBlank()) put("location", visibleLocation)
-                if (teacher.isNotBlank()) put("teacher", teacher)
-                if (timeRangeText.isNotBlank()) put("time", timeRangeText)
-                if (nextName.isNotBlank()) put("nextCourse", nextName)
-            }
-
-            // 摘要态：岛内容
-            val paramIsland = buildIslandSummary(
-                stage = stage,
-                classProgress = classProgress,
-                islandName = islandName,
-                visibleLocation = visibleLocation,
-                startAtMillis = startAtMillis,
-                endAtMillis = endAtMillis,
-                progressBreakOffsetsMillis = progressBreakOffsetsMillis,
-                progressMilestoneLabels = progressMilestoneLabels,
-                progressMilestoneTimeTexts = progressMilestoneTimeTexts,
-            )
-
-            val paramV2 = JSONObject().apply {
-                put("protocol", 1)
-                put("business", "class_schedule")
-                put("updatable", true)
-                put("enableFloat", true)
-                put("ticker", title)
-                // 展开态：焦点通知卡片
-                put(
-                    "baseInfo",
-                    JSONObject().apply {
-                        put("title", title)
-                        put("content", bodyContent.ifBlank { remainingText })
-                        put("type", 2)
-                    }
-                )
-                if (remainingText.isNotBlank()) {
-                    put(
-                        "hintInfo",
-                        JSONObject().apply {
-                            put("type", 1)
-                            put("title", remainingText)
-                        }
-                    )
-                }
-                if (extraInfo.length() > 0) {
-                    put("extraInfo", extraInfo)
-                }
-                put("param_island", paramIsland)
-            }
-
-            JSONObject().apply {
-                put("param_v2", paramV2)
-            }.toString()
-        } catch (e: Exception) {
-            Log.w(TAG, DiagnosticLogMessages.LOG_BUILD_MIUI_FOCUS_PARAM_FAILED, e)
-            null
-        }
-    }
-
-    private fun buildIslandSummary(
-        stage: String?,
-        classProgress: DuringClassProgress?,
-        islandName: String,
-        visibleLocation: String,
-        startAtMillis: Long,
-        endAtMillis: Long,
-        progressBreakOffsetsMillis: LongArray,
-        progressMilestoneLabels: List<String>,
-        progressMilestoneTimeTexts: List<String>,
-    ): JSONObject {
-        val totalMillis = (endAtMillis - startAtMillis).coerceAtLeast(1L)
-        val now = System.currentTimeMillis()
-        val elapsedMillis = (now - startAtMillis).coerceIn(0L, totalMillis)
-        val progressPercent = classProgress?.progressPercent
-            ?: ((elapsedMillis.toDouble() / totalMillis.toDouble()) * 100).toInt().coerceIn(0, 100)
-
-        val islandContentText = when (stage) {
-            "beforeClass" -> remainingTextForIsland(stage, startAtMillis, endAtMillis)
-            "beforeEnd" -> remainingTextForIsland(stage, startAtMillis, endAtMillis)
-            else -> classProgress?.compactDisplayText ?: getString(R.string.stage_in_class)
-        }
-
-        val bigIslandArea = JSONObject().apply {
-            // A 区：图文组件1
-            val imageTextInfoLeft = JSONObject().apply {
-                put("type", 1)
-                put(
-                    "textInfo",
-                    JSONObject().apply {
-                        put("title", islandName)
-                        put("content", islandContentText)
-                    }
-                )
-                // 上课中阶段显示环形进度
-                if (stage == "duringClass" && classProgress != null) {
-                    put(
-                        "progressInfo",
-                        JSONObject().apply {
-                            put("progress", progressPercent)
-                            put("colorReach", "#4CAF50")
-                            put("colorUnReach", "#33FFFFFF")
-                        }
-                    )
-                }
-            }
-            put("imageTextInfoLeft", imageTextInfoLeft)
-
-            // B 区：仅上课中阶段显示线性进度+节点
-            if (stage == "duringClass" && classProgress != null) {
-                val milestonePoints = buildMilestonePoints(
-                    progressBreakOffsetsMillis,
-                    progressMilestoneLabels,
-                    progressMilestoneTimeTexts,
-                    totalMillis,
-                )
-                val progressTextInfo = JSONObject().apply {
-                    put(
-                        "progressInfo",
-                        JSONObject().apply {
-                            put("progress", progressPercent)
-                            put("colorReach", "#4CAF50")
-                            put("colorUnReach", "#33FFFFFF")
-                            if (milestonePoints.isNotEmpty()) {
-                                put("picMiddle", milestonePoints.first().picKey)
-                            }
-                        }
-                    )
-                    put(
-                        "textInfo",
-                        JSONObject().apply {
-                            val nextMilestone = classProgress.nextMilestoneDisplayText
-                            if (nextMilestone != null) {
-                                put("title", nextMilestone)
-                            } else {
-                                put("title", classProgress.finalDismissDisplayText)
-                            }
-                        }
-                    )
-                }
-                put("progressTextInfo", progressTextInfo)
-            }
-        }
-
-        val smallIslandArea = JSONObject()
-
-        return JSONObject().apply {
-            put("islandProperty", 1)
-            put("islandTimeout", 3600)
-            put("bigIslandArea", bigIslandArea)
-            put("smallIslandArea", smallIslandArea)
-        }
-    }
-
-    private fun remainingTextForIsland(
-        stage: String?,
-        startAtMillis: Long,
-        endAtMillis: Long,
-    ): String {
-        val now = System.currentTimeMillis()
-        return when (stage) {
-            "beforeClass" -> {
-                val remaining = startAtMillis - now
-                if (remaining > 0) {
-                    getString(R.string.remaining_until_class_start, formatCountdownDuration(remaining))
-                } else {
-                    getString(R.string.stage_before_class)
-                }
-            }
-            "beforeEnd" -> {
-                val remaining = endAtMillis - now
-                if (remaining > 0) {
-                    getString(R.string.remaining_until_class_end, formatCountdownDuration(remaining))
-                } else {
-                    getString(R.string.stage_before_end)
-                }
-            }
-            else -> getString(R.string.stage_in_class)
-        }
-    }
-
-    private data class MilestonePoint(
-        val position: Int,
-        val picKey: String,
-    )
-
-    private fun buildMilestonePoints(
-        progressBreakOffsetsMillis: LongArray,
-        progressMilestoneLabels: List<String>,
-        progressMilestoneTimeTexts: List<String>,
-        totalMillis: Long,
-    ): List<MilestonePoint> {
-        if (progressBreakOffsetsMillis.isEmpty() || totalMillis <= 0) return emptyList()
-        val points = mutableListOf<MilestonePoint>()
-        for (index in progressBreakOffsetsMillis.indices) {
-            val offsetMillis = progressBreakOffsetsMillis[index]
-            val position = ((offsetMillis.toDouble() / totalMillis.toDouble()) * 100)
-                .toInt().coerceIn(1, 99)
-            val label = progressMilestoneLabels.getOrNull(index) ?: continue
-            points.add(MilestonePoint(position = position, picKey = "miui.focus.pic_milestone_$index"))
-        }
-        return points.distinctBy { it.position }.sortedBy { it.position }
-    }
-
-    private fun decodeSquareBitmap(path: String, targetSize: Int): Bitmap? {
-        val source = BitmapFactory.decodeFile(path) ?: return null
-        val side = minOf(source.width, source.height)
-        if (side <= 0) {
-            source.recycle()
-            return null
-        }
-        val offsetX = ((source.width - side) / 2).coerceAtLeast(0)
-        val offsetY = ((source.height - side) / 2).coerceAtLeast(0)
-        val cropped = Bitmap.createBitmap(source, offsetX, offsetY, side, side)
-        if (cropped != source) {
-            source.recycle()
-        }
-        val resolvedTargetSize = targetSize.coerceAtLeast(1)
-        if (cropped.width == resolvedTargetSize && cropped.height == resolvedTargetSize) {
-            return cropped
-        }
-        val scaled = Bitmap.createScaledBitmap(cropped, resolvedTargetSize, resolvedTargetSize, true)
-        if (scaled != cropped) {
-            cropped.recycle()
-        }
-        return scaled
-    }
-
-    private fun decodeExpandedIconBitmap(path: String): Bitmap? {
-        val targetSize = dp(56f).toInt().coerceAtLeast(96)
-        return decodeSquareBitmap(path, targetSize)
-    }
-
-    private fun applyExpandedLargeIcon(builder: Notification.Builder) {
-        when (miuiIslandExpandedIconMode) {
-            "hidden" -> return
-            "custom_image" -> {
-                val path = miuiIslandExpandedIconPath ?: return
-                decodeExpandedIconBitmap(path)?.let(builder::setLargeIcon)
-            }
-            else -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    builder.setLargeIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
-                }
-            }
-        }
-    }
-
-    private fun buildRoundedLauncherIcon(targetSizePx: Int, cornerRadiusPx: Float): Icon? {
-        val size = targetSizePx.coerceAtLeast(1)
-        return try {
-            val drawable = packageManager.getApplicationIcon(packageName)
-            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            val clipPath = Path().apply {
-                addRoundRect(
-                    RectF(0f, 0f, size.toFloat(), size.toFloat()),
-                    cornerRadiusPx,
-                    cornerRadiusPx,
-                    Path.Direction.CW
-                )
-            }
-            canvas.save()
-            canvas.clipPath(clipPath)
-            drawable.setBounds(0, 0, size, size)
-            drawable.draw(canvas)
-            canvas.restore()
-            Icon.createWithBitmap(bitmap)
-        } catch (e: Exception) {
-            Log.w(TAG, DiagnosticLogMessages.LOG_BUILD_ROUNDED_LAUNCHER_ICON_FAILED, e)
-            null
-        }
-    }
-
-    private fun buildNotification(remainingText: String): Notification {
-        val now = System.currentTimeMillis()
-        val stage = resolveStage(now)
-        val isUpcoming = stage == "beforeClass"
-        val isDuringClassStatusBar = stage == "duringClassStatusBar"
-        val isEndingSoon = stage == "beforeEnd"
-        val isDuringClass = stage == "duringClass" || isDuringClassStatusBar
-        val shouldPromote = when {
-            isDuringClassStatusBar -> false
-            isDuringClass -> promoteDuringClass
-            else -> true
-        }
-        val showStandardNotification = when {
-            isDuringClassStatusBar -> true
-            isDuringClass -> showNotificationDuringClass
-            else -> true
-        }
-        val classProgress = if (stage == "duringClass") buildDuringClassProgress(now) else null
-        val usesProgressExpandedStyle = Build.VERSION.SDK_INT >= 36 && classProgress != null
-
-        val shortCourseName = if (courseName.length > 8) courseName.substring(0, 8) + ".." else courseName
-        val nameToUse = if (useShortNameInIsland && shortCourseNameRaw.isNotBlank()) shortCourseNameRaw else courseName
-        val islandCourseName = if (showCourseNameInIsland) {
-            if (nameToUse.length > 5) nameToUse.substring(0, 5) else nameToUse
-        } else ""
-        val visibleLocation = if (showLocationInIsland) location else ""
-        val islandLocation = visibleLocation
-        val miuiIslandLabelText = when (miuiIslandLabelContent) {
-            "location" -> location
-            "course_name_and_location" -> listOf(
-                nameToUse.takeIf { it.isNotBlank() },
-                location.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" ")
-            else -> nameToUse
-        }
-        val miuiIslandLabelBitmap = resolveIslandLabelBitmap(miuiIslandLabelText)
-
-        val stageTitle = when (stage) {
-            "beforeClass" -> getString(R.string.stage_before_class)
-            "beforeEnd" -> getString(R.string.stage_before_end)
-            else -> getString(R.string.stage_in_class)
-        }
-        val visibleStatusText = when {
-            !showCountdown && showStageText -> stageTitle
-            !showCountdown -> ""
-            else -> remainingText.ifBlank { stageTitle }
-        }
-        val title = when (stage) {
-            "beforeClass" -> getString(R.string.title_before_class, shortCourseName)
-            "beforeEnd" -> getString(R.string.title_before_end, shortCourseName)
-            else -> shortCourseName
-        }
-        val shortNameLabel = shortCourseNameRaw.takeIf { it.isNotBlank() && it != courseName }
-        val timeRangeText = if (startTimeText.isNotBlank() || endTimeText.isNotBlank()) {
-            "$startTimeText - $endTimeText".trim()
-        } else {
-            ""
-        }
-        val subText = if (isUpcoming) {
-            listOf(
-                timeRangeText.takeIf { it.isNotBlank() }?.let { getString(R.string.label_class_start_time, it) },
-                visibleLocation.takeIf { it.isNotBlank() }?.let { getString(R.string.label_location, it) }
-            ).filterNotNull().joinToString("  ·  ")
-        } else if (isEndingSoon) {
-            listOf(
-                timeRangeText.takeIf { it.isNotBlank() }?.let { getString(R.string.label_class_end_time, it) },
-                visibleLocation.takeIf { it.isNotBlank() }?.let { getString(R.string.label_location, it) }
-            ).filterNotNull().joinToString("  ·  ")
-        } else {
-            ""
-        }
-        val summaryText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-            listOf(
-                classProgress.nextMilestoneDisplayText,
-                classProgress.finalDismissDisplayText,
-                visibleLocation.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
-        } else {
-            listOf(
-                visibleLocation.takeIf { it.isNotBlank() },
-                teacher.takeIf { it.isNotBlank() },
-                visibleStatusText.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
-        }
-
-        val notificationIntent = Intent(this, MainActivity::class.java).apply {
-            this.action = Intent.ACTION_MAIN
-            this.addCategory(Intent.CATEGORY_LAUNCHER)
-            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            notificationIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val detailStatusText = when {
-            (isDuringClass || isEndingSoon) && classProgress != null && showCountdown -> null
-            visibleStatusText.isNotBlank() && !shouldPromote -> visibleStatusText
-            else -> null
-        }
-
-        val expandedDetailText = buildString {
-            append(stageTitle)
-            if (shortNameLabel != null) {
-                append("\n").append(getString(R.string.detail_short_name, shortNameLabel))
-            }
-            if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-                if (classProgress.nextMilestoneDisplayText != null) {
-                    append("\n").append(
-                        getString(R.string.detail_next_milestone, classProgress.nextMilestoneDisplayText)
-                    )
-                }
-                append("\n").append(
-                    getString(R.string.detail_final_dismiss, classProgress.finalDismissDisplayText)
-                )
-            } else if (detailStatusText != null) {
-                append("\n").append(getString(R.string.detail_status, detailStatusText))
-            }
-            if (timeRangeText.isNotBlank()) append("\n").append(getString(R.string.detail_time, timeRangeText))
-            if (location.isNotBlank()) append("\n").append(getString(R.string.label_location, location))
-            if (teacher.isNotBlank()) append("\n").append(getString(R.string.detail_teacher, teacher))
-            if (nextName.isNotBlank()) append("\n").append(getString(R.string.detail_next_course, nextName))
-            if (note.isNotBlank()) append("\n").append(getString(R.string.detail_note, note))
-        }
-
-        val promotedContentText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-            listOf(
-                classProgress.compactDisplayText,
-                visibleLocation.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
-        } else {
-            listOf(
-                visibleStatusText.takeIf { it.isNotBlank() },
-                timeRangeText.takeIf { it.isNotBlank() },
-                visibleLocation.takeIf { it.isNotBlank() },
-                teacher.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
-        }
-        val promotedExpandedDetailText = buildString {
-            if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-                if (classProgress.nextMilestoneDisplayText != null) {
-                    append(getString(R.string.detail_next_milestone, classProgress.nextMilestoneDisplayText))
-                    append("\n")
-                }
-                append(getString(R.string.detail_final_dismiss, classProgress.finalDismissDisplayText))
-            } else if (detailStatusText != null) {
-                append(getString(R.string.detail_status, detailStatusText))
-            }
-            if (timeRangeText.isNotBlank()) append("\n").append(getString(R.string.detail_time, timeRangeText))
-            if (location.isNotBlank()) append("\n").append(getString(R.string.label_location, location))
-            if (teacher.isNotBlank()) append("\n").append(getString(R.string.detail_teacher, teacher))
-            if (shortNameLabel != null) append("\n").append(getString(R.string.detail_short_name, shortNameLabel))
-            if (nextName.isNotBlank()) append("\n").append(getString(R.string.detail_next_course, nextName))
-            if (note.isNotBlank()) append("\n").append(getString(R.string.detail_note, note))
-        }
-
-        val contentText = if (!showStandardNotification) {
-            ""
-        } else if ((isDuringClass || isEndingSoon) && classProgress != null) {
-            promotedContentText
-        } else if (shouldPromote && !showCourseNameInIsland && !showLocationInIsland) {
-            visibleStatusText
-        } else {
-            listOf(islandCourseName, islandLocation, teacher, visibleStatusText)
-                .filter { it.isNotBlank() }
-                .joinToString(" · ")
-        }
-            
-        val miuiFocusHintText = if (
-            liveShouldMirrorStatusIntoMiuiFocusHint(
-                sdkInt = Build.VERSION.SDK_INT,
-                shouldPromote = shouldPromote,
-            )
-        ) {
-            visibleStatusText
-        } else {
-            ""
-        }
-
-        val hyperFocusBundle = if (superIslandEngine == "hyperFocusApi" && shouldPromote && !isDuringClassStatusBar) {
-            buildHyperFocusBundle(
-                stage = stage,
-                remainingText = miuiFocusHintText,
-            )
-        } else {
-            null
-        }
-        val miuiFocusParam = if (superIslandEngine == "hyperFocusApi" || !shouldPromote || isDuringClassStatusBar) {
-            null
-        } else {
-            buildMiuiFocusParam(
-                title = title,
-                remainingText = miuiFocusHintText,
-                timeRangeText = timeRangeText,
-                bodyContent = promotedContentText,
-                visibleLocation = visibleLocation,
-                stage = stage,
-                classProgress = classProgress,
-                startAtMillis = startAtMillis,
-                endAtMillis = endAtMillis,
-                islandName = nameToUse,
-                progressBreakOffsetsMillis = progressBreakOffsetsMillis,
-                progressMilestoneLabels = progressMilestoneLabels,
-                progressMilestoneTimeTexts = progressMilestoneTimeTexts,
-            )
-        }
-
-        val islandCriticalStatusText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-            classProgress.criticalTimeText
-        } else {
-            visibleStatusText
-        }
-
-        val islandCriticalText = if (shouldPromote && !showCourseNameInIsland && !showLocationInIsland) {
-            islandCriticalStatusText
-        } else {
-            listOf(islandCourseName, islandLocation, islandCriticalStatusText)
-                .filter { it.isNotBlank() }
-                .joinToString(" ")
-        }
-
-        val iconRes = when (stage) {
-            "beforeClass" -> R.drawable.ic_upcoming
-            "beforeEnd" -> R.drawable.ic_countdown
-            else -> R.drawable.ic_course
-        }
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-        } else {
-            Notification.Builder(this)
-        }
-
-        val notificationTitle = if (shouldPromote || showStandardNotification) {
-            title
-        } else {
-            ""
-        }
-        val notificationContentText = if (shouldPromote) {
-            promotedContentText
-        } else if (!showStandardNotification) {
-            ""
-        } else {
-            contentText
-        }
-        val notificationExpandedText = if (shouldPromote) {
-            promotedExpandedDetailText
-        } else if (!showStandardNotification) {
-            ""
-        } else {
-            expandedDetailText
-        }
-
-        builder.apply {
-            setContentTitle(notificationTitle)
-            setContentText(notificationContentText)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && miuiIslandLabelBitmap != null) {
-                setSmallIcon(Icon.createWithBitmap(miuiIslandLabelBitmap))
-            } else {
-                setSmallIcon(iconRes)
-            }
-            applyExpandedLargeIcon(this)
-            setContentIntent(pendingIntent)
-            setOngoing(true)
-            setAutoCancel(false)
-            setOnlyAlertOnce(true)
-            setCategory(
-                if (isDuringClassStatusBar) {
-                    Notification.CATEGORY_REMINDER
-                } else {
-                    Notification.CATEGORY_PROGRESS
-                }
-            )
-            setColorized(false)
-            setShowWhen(!shouldPromote)
-            setWhen(if (isUpcoming) startAtMillis else endAtMillis)
-            setUsesChronometer(false)
-            if (usesProgressExpandedStyle) {
-                val progress = requireNotNull(classProgress)
-                setProgress(progress.progressMax, progress.progressUnits, false)
-            } else {
-                setProgress(0, 0, false)
-            }
-
-            if (showStandardNotification && !shouldPromote && subText.isNotBlank()) {
-                setSubText(subText)
-            }
-
-            if (Build.VERSION.SDK_INT >= 36) {
-                if (isDuringClassStatusBar) {
-                    setShortCriticalText("")
-                    setExtras(Bundle())
-                } else if (shouldPromote) {
-                    setShortCriticalText(islandCriticalText)
-                    setExtras(
-                        Bundle().apply {
-                            putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
-                        }
-                    )
-                } else {
-                    setShortCriticalText("")
-                    setExtras(Bundle())
-                }
-            }
-        }
-
-        if (isUpcoming) {
-            buildBeforeClassQuickAction()?.let(builder::addAction)
-        }
-        if (isDuringClassStatusBar) {
-            builder.addAction(buildDismissStatusBarAction())
-        }
-
-        if (usesProgressExpandedStyle) {
-            val progress = requireNotNull(classProgress)
-            builder.setStyle(
-                Notification.ProgressStyle()
-                    .setStyledByProgress(true)
-                    .setProgress(progress.progressUnits)
-                    .setProgressSegments(
-                        listOf(
-                            Notification.ProgressStyle.Segment(
-                                progress.progressMax
-                            )
-                        )
-                    )
-                    .setProgressTrackerIcon(
-                        buildRoundedLauncherIcon(dp(28f).toInt(), dp(9f))
-                            ?: Icon.createWithResource(this, R.mipmap.ic_launcher)
-                    )
-                    .setProgressPoints(
-                        progress.breakPointUnits.map { point ->
-                            Notification.ProgressStyle.Point(point)
-                        }
-                    )
-            )
-        } else {
-            builder.setStyle(
-                Notification.BigTextStyle()
-                    .setBigContentTitle(notificationTitle)
-                    .bigText(notificationExpandedText)
-                    .setSummaryText(if (showStandardNotification) summaryText else "")
-            )
-        }
-
-        val notification = builder.build()
-        if (hyperFocusBundle != null) {
-            notification.extras.putAll(hyperFocusBundle)
-        } else {
-            miuiFocusParam?.let { notification.extras.putString("miui.focus.param", it) }
-        }
-
-        val canPostPromoted = if (Build.VERSION.SDK_INT >= 36) {
-            getSystemService(NotificationManager::class.java)?.canPostPromotedNotifications() == true
-        } else {
-            false
-        }
-        val hasPromotableCharacteristics = if (Build.VERSION.SDK_INT >= 36) {
-            notification.hasPromotableCharacteristics()
-        } else {
-            null
-        }
-        val isMiuiFocusIslandReady =
-            isXiaomiFamilyDevice() &&
-                (miuiFocusParam != null || hyperFocusBundle != null) &&
-                shouldPromote &&
-                !isDuringClassStatusBar
-        val isActuallyPromotable = when {
-            isDuringClassStatusBar || !shouldPromote -> false
-            Build.VERSION.SDK_INT >= 36 &&
-                canPostPromoted &&
-                hasPromotableCharacteristics == true -> true
-            isMiuiFocusIslandReady -> true
-            else -> false
-        }
-        val notIslandReason = when {
-            !hasStartedForeground -> getString(R.string.debug_foreground_not_started)
-            stage == null -> getString(R.string.debug_stage_not_displayable)
-            isDuringClassStatusBar -> getString(R.string.debug_status_bar_only)
-            !shouldPromote && isDuringClass && !promoteDuringClass ->
-                getString(R.string.debug_during_class_normal_notification)
-            !shouldPromote -> getString(R.string.debug_promote_not_requested)
-            !hasNotificationPermissionCompat(this) -> getString(R.string.debug_notification_permission_off)
-            isActuallyPromotable -> ""
-            Build.VERSION.SDK_INT >= 36 && !isPromotedPermissionDeclaredCompat(this) ->
-                getString(R.string.debug_promoted_permission_not_declared)
-            Build.VERSION.SDK_INT >= 36 && !canPostPromoted && !isMiuiFocusIslandReady ->
-                getString(R.string.debug_system_denied_promoted)
-            Build.VERSION.SDK_INT >= 36 && hasPromotableCharacteristics == false && !isMiuiFocusIslandReady ->
-                getString(R.string.debug_notification_not_promotable)
-            isXiaomiFamilyDevice() && miuiFocusParam == null && hyperFocusBundle == null ->
-                getString(R.string.debug_miui_focus_param_missing)
-            Build.VERSION.SDK_INT < 36 && !isXiaomiFamilyDevice() ->
-                getString(R.string.debug_os_not_supported)
-            else -> getString(R.string.debug_try_return_home)
-        }
-
-        updateDebugSnapshot(
-            linkedMapOf(
-                "summary" to linkedMapOf(
-                    "serviceRunning" to true,
-                    "currentStage" to activityStage,
-                    "resolvedStage" to stage,
-                    "isExpectedToShowIsland" to shouldPromote,
-                    "isActuallyPromotable" to isActuallyPromotable,
-                    "statusText" to if (isActuallyPromotable) {
-                        getString(R.string.debug_island_ready)
-                    } else {
-                        getString(R.string.debug_island_not_ready)
-                    },
-                    "notIslandReason" to notIslandReason,
-                ),
-                "service" to linkedMapOf(
-                    "serviceRunning" to true,
-                    "hasStartedForeground" to hasStartedForeground,
-                    "activityStage" to activityStage,
-                    "resolvedStage" to stage,
-                    "lastRemainingText" to remainingText,
-                    "lastProgressUnits" to lastProgressUnits,
-                    "lastCriticalTimeText" to lastCriticalTimeText,
-                ),
-                "course" to linkedMapOf(
-                    "courseName" to courseName,
-                    "shortCourseNameRaw" to shortCourseNameRaw,
-                    "nextCourseName" to nextName,
-                    "location" to location,
-                    "teacher" to teacher,
-                    "note" to note,
-                    "startTimeText" to startTimeText,
-                    "endTimeText" to endTimeText,
-                ),
-                "timing" to linkedMapOf(
-                    "nowMillis" to now,
-                    "startAtMillis" to startAtMillis,
-                    "endAtMillis" to endAtMillis,
-                    "remainingToStartMillis" to (startAtMillis - now).coerceAtLeast(0L),
-                    "remainingToEndMillis" to (endAtMillis - now).coerceAtLeast(0L),
-                    "endReminderLeadMillis" to endReminderLeadMillis,
-                    "liveClassReminderStartMinutes" to liveClassReminderStartMinutes,
-                    "endSecondsCountdownThreshold" to endSecondsCountdownThreshold,
-                    "autoDismissAfterStartMinutes" to autoDismissAfterStartMinutes,
-                ),
-                "switches" to linkedMapOf(
-                    "enableBeforeClass" to enableBeforeClass,
-                    "enableDuringClass" to enableDuringClass,
-                    "enableBeforeEnd" to enableBeforeEnd,
-                    "promoteDuringClass" to promoteDuringClass,
-                    "showNotificationDuringClass" to showNotificationDuringClass,
-                ),
-                "display" to linkedMapOf(
-                    "showCountdown" to showCountdown,
-                    "countdownTextStyle" to countdownTextStyle,
-                    "showStageText" to showStageText,
-                    "showCourseNameInIsland" to showCourseNameInIsland,
-                    "showLocationInIsland" to showLocationInIsland,
-                    "useShortNameInIsland" to useShortNameInIsland,
-                    "hidePrefixText" to hidePrefixText,
-                    "duringClassTimeDisplayMode" to duringClassTimeDisplayMode,
-                    "enableMiuiIslandLabelImage" to enableMiuiIslandLabelImage,
-                    "miuiIslandLabelStyle" to miuiIslandLabelStyle,
-                    "miuiIslandLabelContent" to miuiIslandLabelContent,
-                    "miuiIslandLabelFontColor" to miuiIslandLabelFontColor,
-                    "miuiIslandLabelFontWeight" to miuiIslandLabelFontWeight,
-                    "miuiIslandLabelRenderQuality" to miuiIslandLabelRenderQuality,
-                    "miuiIslandLabelFontSize" to miuiIslandLabelFontSize,
-                    "miuiIslandLabelOffsetX" to miuiIslandLabelOffsetX,
-                    "miuiIslandLabelOffsetY" to miuiIslandLabelOffsetY,
-                    "miuiIslandLabelLogoPath" to miuiIslandLabelLogoPath,
-                    "miuiIslandLabelLogoCornerRadius" to miuiIslandLabelLogoCornerRadius,
-                    "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                    "miuiIslandExpandedIconPath" to miuiIslandExpandedIconPath,
-                    "beforeClassQuickAction" to beforeClassQuickAction,
-                ),
-                "notification" to linkedMapOf(
-                    "shouldPromote" to shouldPromote,
-                    "showStandardNotification" to showStandardNotification,
-                    "isDuringClassStatusBar" to isDuringClassStatusBar,
-                    "canPostPromotedNotifications" to canPostPromoted,
-                    "hasPromotableCharacteristics" to hasPromotableCharacteristics,
-                    "miuiFocusParamPresent" to (miuiFocusParam != null),
-                    "notificationTitle" to notificationTitle,
-                    "notificationContentText" to notificationContentText,
-                    "notificationExpandedText" to notificationExpandedText,
-                    "visibleStatusText" to visibleStatusText,
-                    "islandCriticalText" to islandCriticalText,
-                    "promotedContentText" to promotedContentText,
-                ),
-            )
-        )
-
-        if (Build.VERSION.SDK_INT >= 36) {
-            if (shouldPromote && (hasPromotableCharacteristics != true || !canPostPromoted)) {
-                UmengDiagnosticReporter.record(
-                    context = applicationContext,
-                    category = "live_update_not_promoted",
-                    message = DiagnosticLogMessages.LIVE_UPDATE_NOT_PROMOTED,
-                    extras = mapOf(
-                        "courseName" to courseName,
-                        "stage" to stage,
-                        "canPostPromoted" to canPostPromoted,
-                        "hasPromotableCharacteristics" to hasPromotableCharacteristics,
-                        "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                    )
-                )
-                UmengDiagnosticReporter.report(
-                    context = applicationContext,
-                    category = "live_update_promoted_not_shown",
-                    message = DiagnosticLogMessages.LIVE_UPDATE_PROMOTED_NOT_SHOWN,
-                    dedupeKey = "live_update_promoted_not_shown:${courseName}:${activityStage}",
-                    extras = mapOf(
-                        "courseName" to courseName,
-                        "stage" to stage,
-                        "canPostPromoted" to canPostPromoted,
-                        "hasPromotableCharacteristics" to hasPromotableCharacteristics,
-                        "showStandardNotification" to showStandardNotification,
-                        "remainingText" to remainingText,
-                        "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                    )
-                )
-            }
-        }
-
-        return notification
-    }
-
-    private fun sanitizeTextExtra(value: String?): String {
-        val normalized = value?.trim().orEmpty()
-        return if (normalized.equals("null", ignoreCase = true)) "" else normalized
-    }
-
-    private fun stopAndRemoveNotification() {
-        restoreBeforeClassQuickActionIfClassEnded()
-        markServiceStopped(getString(R.string.stop_reminder_ended))
-        UmengDiagnosticReporter.record(
-            context = applicationContext,
-            category = "live_update_service_stopped",
-            message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_STOPPED,
-            extras = mapOf(
-                "courseName" to courseName,
-                "stage" to activityStage,
-            )
-        )
-        stopTicker()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
-        LiveUpdateScheduler.onLiveUpdateStopped(applicationContext)
-        stopSelf()
-    }
-
-    private fun buildCourseTimeMillis(timeText: String): Long? {
-        val parts = timeText.split(":")
-        if (parts.size != 2) {
-            return null
-        }
-
-        val hour = parts[0].toIntOrNull() ?: return null
-        val minute = parts[1].toIntOrNull() ?: return null
-
-        if (hour !in 0..23 || minute !in 0..59) return null
-
-        return Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
-
-    private fun formatCountdownDuration(
-        durationMillis: Long,
-        secondsThresholdMillis: Long = 60_000L,
-    ): String = CountdownFormat.formatDuration(durationMillis, countdownTextStyle, secondsThresholdMillis)
-
-    private fun formatCountdownForFocus(millis: Long): String {
-        if (millis <= 0) return "0:00"
-        val totalSec = millis / 1000L
-        val h = totalSec / 3600L
-        val m = (totalSec % 3600L) / 60L
-        val s = totalSec % 60L
-        return if (h > 0) {
-            String.format("%d:%02d:%02d", h, m, s)
-        } else {
-            String.format("%02d:%02d", m, s)
-        }
-    }
-
-    private data class DuringClassProgress(
-        val progressMax: Int,
-        val progressUnits: Int,
-        val progressPercent: Int,
-        val nextMilestoneDisplayText: String?,
-        val finalDismissDisplayText: String,
-        val compactDisplayText: String,
-        val criticalTimeText: String,
-        val breakPointUnits: List<Int>,
-        val updatesEverySecond: Boolean,
-    )
-
-    private fun buildDuringClassProgress(now: Long): DuringClassProgress? {
-        val totalMillis = (endAtMillis - startAtMillis).coerceAtLeast(1L)
-        val elapsedMillis = (now - startAtMillis).coerceIn(0L, totalMillis)
-        val remainingMillis = (endAtMillis - now).coerceAtLeast(0L)
-        val progressMax = 1000
-        val progressUnits =
-            ((elapsedMillis.toDouble() / totalMillis.toDouble()) * progressMax)
-                .toInt()
-                .coerceIn(0, progressMax)
-        val progressPercent = ((progressUnits * 100L) / progressMax).toInt().coerceIn(0, 100)
-        val breakPointUnits = progressBreakOffsetsMillis
-            .map { offsetMillis ->
-                ((offsetMillis.coerceIn(0L, totalMillis).toDouble() / totalMillis.toDouble()) * progressMax)
-                    .toInt()
-                    .coerceIn(1, progressMax - 1)
-            }
-            .distinct()
-            .sorted()
-        val nextMilestoneIndex =
-            progressBreakOffsetsMillis.indexOfFirst { it > elapsedMillis }.takeIf { it >= 0 }
-        val nextMilestoneLabel =
-            nextMilestoneIndex?.let { progressMilestoneLabels.getOrNull(it)?.takeIf { label -> label.isNotBlank() } }
-        val nextMilestoneRemainingText =
-            nextMilestoneIndex?.let { formatCountdownDuration(progressBreakOffsetsMillis[it] - elapsedMillis) }
-        val finalDismissRemainingText = formatCountdownDuration(remainingMillis)
-        val nextMilestoneDisplayText =
-            if (nextMilestoneLabel != null && nextMilestoneRemainingText != null) {
-                "$nextMilestoneLabel $nextMilestoneRemainingText"
-            } else if (nextMilestoneRemainingText != null) {
-                nextMilestoneRemainingText
-            } else {
-                null
-            }
-        val finalDismissDisplayText = getString(R.string.final_dismiss_with_time, finalDismissRemainingText)
-        val compactDisplayText = if (duringClassTimeDisplayMode == "total") {
-            finalDismissDisplayText
-        } else {
-            nextMilestoneDisplayText ?: finalDismissDisplayText
-        }
-        val criticalTimeText = if (duringClassTimeDisplayMode == "total") {
-            finalDismissRemainingText
-        } else {
-            nextMilestoneRemainingText ?: finalDismissRemainingText
-        }
-        return DuringClassProgress(
-            progressMax = progressMax,
-            progressUnits = progressUnits,
-            progressPercent = progressPercent,
-            nextMilestoneDisplayText = nextMilestoneDisplayText,
-            finalDismissDisplayText = finalDismissDisplayText,
-            compactDisplayText = compactDisplayText,
-            criticalTimeText = criticalTimeText,
-            breakPointUnits = breakPointUnits,
-            updatesEverySecond = shouldRefreshEverySecond(
-                durationMillis = nextMilestoneIndex?.let { progressBreakOffsetsMillis[it] - elapsedMillis }
-                    ?: remainingMillis,
-                secondsThresholdMillis = 60_000L,
-            ),
-        )
-    }
-
-    private fun shouldRefreshEverySecond(
-        durationMillis: Long,
-        secondsThresholdMillis: Long,
-    ): Boolean {
-        if (!showCountdown) {
-            return false
-        }
-        return when (countdownTextStyle) {
-            "minute_second_cn",
-            "minute_second_colon",
-            "minute_second_min_s",
-            "minute_second_min_slash_s",
-            "second_only_cn",
-            "second_only_short",
-            "second_only_slash" -> true
-            "smart",
-            "smart_min_s" -> durationMillis <= secondsThresholdMillis
-            else -> false
-        }
-    }
-
-    private fun nextCountdownTextChangeDelayMillis(
-        durationMillis: Long,
-        secondsThresholdMillis: Long,
-    ): Long {
-        if (!showCountdown) {
-            return 60_000L
-        }
-        val safeDurationMillis = durationMillis.coerceAtLeast(0L)
-        val totalSeconds = (safeDurationMillis / 1000L).coerceAtLeast(0L)
-        return when (countdownTextStyle) {
-            "minute_second_cn",
-            "minute_second_colon",
-            "minute_second_min_s",
-            "minute_second_min_slash_s",
-            "second_only_cn",
-            "second_only_short",
-            "second_only_slash" -> 1_000L
-            "minute_only_cn",
-            "minute_only_min",
-            "minute_only_slash" -> {
-                val currentMinutes = (totalSeconds / 60L).coerceAtLeast(1L)
-                if (currentMinutes <= 1L) {
-                    safeDurationMillis.coerceAtLeast(1_000L)
-                } else {
-                    (safeDurationMillis - currentMinutes * 60_000L + 1L).coerceAtLeast(1_000L)
-                }
-            }
-            else -> {
-                when {
-                    safeDurationMillis <= secondsThresholdMillis -> 1_000L
-                    totalSeconds > 120L -> {
-                        val currentMinutes = (totalSeconds / 60L).coerceAtLeast(1L)
-                        (safeDurationMillis - currentMinutes * 60_000L + 1L).coerceAtLeast(1_000L)
-                    }
-                    totalSeconds > 60L -> {
-                        (safeDurationMillis - secondsThresholdMillis + 1L).coerceAtLeast(1_000L)
-                    }
-                    else -> 1_000L
-                }
-            }
-        }
-    }
-
-    private fun computeNextTickDelayMillis(
-        now: Long,
-        stage: String?,
-        duringClassProgress: DuringClassProgress?,
-    ): Long {
-        val refreshEverySecond = when (stage) {
-            "beforeClass" -> shouldRefreshEverySecond(
-                durationMillis = (startAtMillis - now).coerceAtLeast(0L),
-                secondsThresholdMillis = 60_000L,
-            )
-            "beforeEnd" -> shouldRefreshEverySecond(
-                durationMillis = (endAtMillis - now).coerceAtLeast(0L),
-                secondsThresholdMillis = endSecondsCountdownThreshold * 1000L,
-            )
-            "duringClass" -> duringClassProgress?.updatesEverySecond == true
-            else -> false
-        }
-        if (refreshEverySecond) {
-            return 1000L
-        }
-        val stageDelay = when (stage) {
-            "beforeClass" -> minOf(
-                (startAtMillis - now).coerceAtLeast(1_000L),
-                nextCountdownTextChangeDelayMillis(
-                    durationMillis = (startAtMillis - now).coerceAtLeast(0L),
-                    secondsThresholdMillis = 60_000L,
-                ),
-            )
-            "beforeEnd" -> minOf(
-                (endAtMillis - now).coerceAtLeast(1_000L),
-                nextCountdownTextChangeDelayMillis(
-                    durationMillis = (endAtMillis - now).coerceAtLeast(0L),
-                    secondsThresholdMillis = endSecondsCountdownThreshold * 1000L,
-                ),
-            )
-            "duringClass" -> {
-                val elapsedMillis = (now - startAtMillis).coerceAtLeast(0L)
-                val nextMilestoneDelay = progressBreakOffsetsMillis
-                    .firstOrNull { it > elapsedMillis }
-                    ?.minus(elapsedMillis)
-                listOfNotNull(
-                    nextMilestoneDelay?.takeIf { it > 0L },
-                    (endAtMillis - now).takeIf { it > 0L },
-                    nextCountdownTextChangeDelayMillis(
-                        durationMillis = nextMilestoneDelay ?: (endAtMillis - now).coerceAtLeast(0L),
-                        secondsThresholdMillis = 60_000L,
-                    ),
-                ).minOrNull() ?: 60_000L
-            }
-            "duringClassStatusBar" -> {
-                val beforeEndStartMillis = maxOf(
-                    startAtMillis,
-                    endAtMillis - liveClassReminderStartMinutes * 60_000L,
-                )
-                listOfNotNull(
-                    (beforeEndStartMillis - now).takeIf { it > 0L },
-                    (endAtMillis - now).takeIf { it > 0L },
-                ).minOrNull() ?: 60_000L
-            }
-            else -> 60_000L
-        }
-        return stageDelay.coerceIn(1_000L, 60_000L)
-    }
-}
-
-// ── HyperFocus Template System (top-level, shared by MainActivity and LiveUpdateService) ──
-
-internal val hfDefaultTemplates = mapOf(
-    "ticker_pre" to "课名",
-    "ticker_active" to "课名",
-    "ticker_post" to "课名",
-    "islandA_pre" to "教室",
-    "islandA_active" to "短课名",
-    "islandA_post" to "短课名",
-    "islandB_pre" to "",
-    "islandB_active" to "上课中",
-    "islandB_post" to "已下课",
-    "baseTitle_pre" to "课名",
-    "baseTitle_active" to "课名",
-    "baseTitle_post" to "课名",
-    "baseContent_pre" to "开始,结束",
-    "baseContent_active" to "开始,结束",
-    "baseContent_post" to "开始,结束",
-    "baseSubcontent_pre" to "教室",
-    "baseSubcontent_active" to "教室",
-    "baseSubcontent_post" to "教室",
-    "hintTitle_pre" to "",
-    "hintTitle_active" to "上课中",
-    "hintTitle_post" to "已下课",
-    "hintContent_pre" to "即将上课",
-    "hintContent_active" to "距离下课",
-    "hintContent_post" to "已经下课",
-    "hintSubcontent_pre" to "",
-    "hintSubcontent_active" to "",
-    "hintSubcontent_post" to "",
-    "hintSubtitle_pre" to "",
-    "hintSubtitle_active" to "",
-    "hintSubtitle_post" to "",
-)
-
-internal fun loadHyperFocusTemplates(context: Context): Map<String, String> {
-    val json = context.getSharedPreferences("hyper_focus_templates", Context.MODE_PRIVATE)
-        .getString("templates_json", null) ?: return hfDefaultTemplates
-    return try {
-        val obj = org.json.JSONObject(json)
-        for (key in obj.keys()) {
-            val v = obj.optString(key, "")
-            if (v.contains("{")) {
-                return hfDefaultTemplates
-            }
-        }
-        val merged = hfDefaultTemplates.toMutableMap()
-        for (key in obj.keys()) {
-            merged[key] = obj.optString(key, hfDefaultTemplates[key] ?: "")
-        }
-        merged
-    } catch (_: Exception) {
-        hfDefaultTemplates
-    }
-}
-
-internal fun resolveTemplate(
-    tpl: String,
-    courseName: String,
-    shortName: String,
-    location: String,
-    teacher: String,
-    startTime: String,
-    endTime: String,
-    countdownText: String,
-    elapsedText: String,
-): String {
-    if (tpl.contains("{")) {
-        var result = tpl
-        result = result.replace("{课名}", courseName)
-        result = result.replace("{短课名}", shortName.ifBlank { courseName })
-        result = result.replace("{教室}", location.ifBlank { courseName })
-        result = result.replace("{教师}", teacher)
-        result = result.replace("{开始}", startTime)
-        result = result.replace("{结束}", endTime)
-        result = result.replace("{倒计时}", countdownText)
-        result = result.replace("{正计时}", elapsedText)
-        return result
-    }
-    val variableMap = mapOf(
-        "课名" to courseName,
-        "短课名" to shortName.ifBlank { courseName },
-        "教室" to location.ifBlank { courseName },
-        "教师" to teacher,
-        "开始" to startTime,
-        "结束" to endTime,
-        "倒计时" to countdownText,
-        "正计时" to elapsedText,
-    )
-    return tpl.split(",")
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .map { variableMap[it] ?: "" }
-        .filter { it.isNotEmpty() }
-        .joinToString(" ")
-}
-
-internal fun formatCountdownForTemplate(millis: Long): String {
-    if (millis <= 0) return "00:00"
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%02d:%02d".format(minutes, seconds)
-    }
-}
-
-internal fun formatElapsedForTemplate(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%02d:%02d".format(minutes, seconds)
-    }
-}

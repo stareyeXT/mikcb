@@ -1,0 +1,220 @@
+diff --git a/lib/screens/live_settings_subpages.dart b/lib/screens/live_settings_subpages.dart
+index 2de0086..c16f114 100644
+--- a/lib/screens/live_settings_subpages.dart
++++ b/lib/screens/live_settings_subpages.dart
+@@ -1193,69 +1193,188 @@ class _ImagePreview extends StatelessWidget {
+ }
+ 
+ class HyperFocusTimingScreen extends StatefulWidget {
+   const HyperFocusTimingScreen({super.key});
+ 
+   @override
+   State<HyperFocusTimingScreen> createState() => _HyperFocusTimingScreenState();
+ }
+ 
+ class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
++  static const List<int> _beforeClassMinutesOptions = [
++    1,
++    5,
++    10,
++    15,
++    20,
++    30,
++    40,
++    50,
++    60,
++  ];
++  static const List<int> _endSecondsOptions = [15, 30, 45, 60, 90];
++  static const double _timeCorrectionMin = -30;
++  static const double _timeCorrectionMax = 30;
++
+   late TimetableSettings _draft;
++  Timer? _autoSaveTimer;
+ 
+   @override
+   void initState() {
+     super.initState();
+     _draft = context.read<TimetableProvider>().settings;
+   }
+ 
+-  void _updateDraft(TimetableSettings next) {
+-    final provider = context.read<TimetableProvider>();
+-    provider.updateTimetableSettings(next);
+-    setState(() => _draft = next);
++  @override
++  void dispose() {
++    if (_autoSaveTimer?.isActive ?? false) {
++      _autoSaveTimer?.cancel();
++      _persistDraft(_draft);
++    } else {
++      _autoSaveTimer?.cancel();
++    }
++    super.dispose();
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
++    final l10n = AppLocalizations.of(context)!;
++    final duringClassEnabled =
++        _draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd;
++    final timeCorrectionText = _formatLiveTimeCorrection(
++      l10n,
++      _draft.liveTimeCorrectionSeconds,
++    );
+     return HyperosSubpage(
+       onBack: () => Navigator.pop(context),
+       title: const Text('提醒时机'),
+       child: HyperosListView(
+-        itemCount: 1,
+-        itemBuilder: (context, index) => HyperosListGroup(
+-          children: [
+-            HyperosSwitchTile(
+-              title: '课前提醒',
+-              value: _draft.hfEnableBeforeClass,
+-              onChanged: (v) => _updateDraft(
+-                _draft.copyWith(hfEnableBeforeClass: v),
++        children: [
++          HyperosSectionLabel(text: l10n.liveReminderSwitchesTitle),
++          HyperosListGroup(
++            children: [
++              HyperosSwitchTile(
++                title: l10n.beforeClassReminderTitle,
++                subtitle: l10n.beforeClassReminderSubtitle(
++                  _draft.liveShowBeforeClassMinutes,
++                ),
++                value: _draft.liveEnableBeforeClass,
++                onChanged: (value) =>
++                    _updateDraft(_draft.copyWith(liveEnableBeforeClass: value)),
+               ),
+-            ),
+-            HyperosSwitchTile(
+-              title: '课中提醒',
+-              value: _draft.hfEnableDuringClass,
+-              onChanged: (v) => _updateDraft(
+-                _draft.copyWith(hfEnableDuringClass: v),
++              HyperosSwitchTile(
++                title: l10n.duringClassReminderTitle,
++                subtitle: l10n.duringClassReminderSubtitle,
++                value: duringClassEnabled,
++                onChanged: (value) => _updateDraft(
++                  _draft.copyWith(
++                    liveEnableDuringClass: value,
++                    liveEnableBeforeEnd: value,
++                  ),
++                ),
+               ),
+-            ),
+-            HyperosSwitchTile(
+-              title: '课后提醒',
+-              value: _draft.hfEnableBeforeEnd,
+-              onChanged: (v) => _updateDraft(
+-                _draft.copyWith(hfEnableBeforeEnd: v),
++              if (duringClassEnabled)
++                HyperosSelectTile<int>(
++                  label: l10n.liveClassReminderLeadTitle,
++                  subtitle: _buildLiveClassReminderLeadSummary(l10n, _draft),
++                  items: {
++                    l10n.liveClassReminderLeadOptionImmediate: 0,
++                    l10n.liveClassReminderLeadOptionMinutes(5): 5,
++                    l10n.liveClassReminderLeadOptionMinutes(10): 10,
++                    l10n.liveClassReminderLeadOptionMinutes(15): 15,
++                    l10n.liveClassReminderLeadOptionMinutes(20): 20,
++                    l10n.liveClassReminderLeadOptionMinutes(30): 30,
++                  },
++                  value: _draft.liveClassReminderStartMinutes,
++                  onChanged: (value) => _updateDraft(
++                    _draft.copyWith(liveClassReminderStartMinutes: value),
++                  ),
++                ),
++            ],
++          ),
++          const HyperosSectionGap(),
++          HyperosSectionLabel(text: l10n.liveTimeThresholdTitle),
++          HyperosListGroup(
++            children: [
++              HyperosSelectTile<int>(
++                label: l10n.beforeClassPopupLabel,
++                items: {
++                  for (final value in _beforeClassMinutesOptions)
++                    l10n.beforeClassMinutesOption(value): value,
++                },
++                value: _draft.liveShowBeforeClassMinutes,
++                onChanged: (value) => _updateDraft(
++                  _draft.copyWith(liveShowBeforeClassMinutes: value),
++                ),
+               ),
+-            ),
+-          ],
+-        ),
++              HyperosSelectTile<int>(
++                label: l10n.beforeEndSecondsLabel,
++                items: {
++                  for (final value in _endSecondsOptions)
++                    l10n.beforeEndSecondsOption(value): value,
++                },
++                value: _draft.liveEndSecondsCountdownThreshold,
++                onChanged: (value) => _updateDraft(
++                  _draft.copyWith(liveEndSecondsCountdownThreshold: value),
++                ),
++              ),
++            ],
++          ),
++          const HyperosSectionGap(),
++          HyperosSectionLabel(text: l10n.timeCorrectionTitle),
++          HyperosListGroup(
++            children: [
++              HyperosSliderTile(
++                title: l10n.timeCorrectionLabel(timeCorrectionText),
++                dialogTitle: l10n.timeCorrectionTitle,
++                dialogHelper: l10n.timeCorrectionHelp,
++                value: _draft.liveTimeCorrectionSeconds.toDouble(),
++                min: _timeCorrectionMin,
++                max: _timeCorrectionMax,
++                divisions: (_timeCorrectionMax - _timeCorrectionMin).round(),
++                onChanged: (value) => _updateDraft(
++                  _draft.copyWith(liveTimeCorrectionSeconds: value.round()),
++                  debounce: true,
++                ),
++              ),
++            ],
++          ),
++        ],
+       ),
+     );
+   }
++
++  void _updateDraft(TimetableSettings next, {bool debounce = false}) {
++    setState(() => _draft = next);
++    _autoSaveTimer?.cancel();
++    if (debounce) {
++      _autoSaveTimer = Timer(
++        const Duration(milliseconds: 250),
++        () => _persistDraft(next),
++      );
++      return;
++    }
++    _persistDraft(next);
++  }
++
++  void _persistDraft(TimetableSettings next) {
++    final provider = context.read<TimetableProvider>();
++    unawaited(
++      provider.updateTimetableSettings(next).then((message) {
++        if (!mounted) return;
++        if (message != null) {
++          showAppToast(context, message: message);
++          setState(() => _draft = provider.settings);
++        }
++      }).catchError((_) {}),
++    );
++  }
+ }
+ 
+ class HyperFocusDisplayScreen extends StatefulWidget {
+   const HyperFocusDisplayScreen({super.key});
+ 
+   @override
+   State<HyperFocusDisplayScreen> createState() => _HyperFocusDisplayScreenState();
+ }
+ 
+ class _HyperFocusDisplayScreenState extends State<HyperFocusDisplayScreen> {

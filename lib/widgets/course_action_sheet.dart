@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
@@ -10,6 +9,7 @@ import '../providers/timetable/couple_timetable_logic.dart';
 import '../providers/timetable_provider.dart';
 import '../utils/hex_color.dart';
 import '../ui/hyperos/hyperos.dart';
+import 'course_note_sheet.dart';
 
 typedef CourseActionHandler = void Function(Course course);
 
@@ -255,10 +255,7 @@ class _RelatedCoursesPanel extends StatelessWidget {
                         children: [
                           Text(
                             title,
-                            style: typo.sm.copyWith(
-                              fontWeight: FontWeight.w600,
-                              height: 1.25,
-                            ),
+                            style: typo.sm.copyWith(height: 1.25),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -384,10 +381,7 @@ class _RelatedCourseCompactRow extends StatelessWidget {
                           Expanded(
                             child: Text(
                               course.name,
-                              style: typo.sm.copyWith(
-                                fontWeight: FontWeight.w600,
-                                height: 1.25,
-                              ),
+                              style: typo.sm.copyWith(height: 1.25),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -396,10 +390,7 @@ class _RelatedCourseCompactRow extends StatelessWidget {
                             const SizedBox(width: 6),
                             Text(
                               badgeLabel,
-                              style: typo.xs2.copyWith(
-                                color: courseColor,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: typo.xs2.copyWith(color: courseColor),
                             ),
                           ],
                         ],
@@ -426,10 +417,7 @@ class _RelatedCourseCompactRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   l10n.courseActionConflictSwitchAction,
-                  style: typo.xs2.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: typo.xs2.copyWith(color: colors.primary),
                 ),
               ],
             ),
@@ -502,18 +490,40 @@ class _CourseActionSheetContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.theme.colors;
     final typo = context.theme.typography.body;
-    final provider = context.read<TimetableProvider>();
-    final courseColor = _previewItemColor(context, previewItem, colors);
+    final provider = context.watch<TimetableProvider>();
+    var course = previewItem.course;
+    for (final item in provider.courses) {
+      if (item.id == previewItem.course.id) {
+        course = item;
+        break;
+      }
+    }
+    final courseColor = _previewItemColor(
+      context,
+      CourseActionPreviewItem(
+        course: course,
+        isPartnerCourse: previewItem.isPartnerCourse,
+        coupleKind: previewItem.coupleKind,
+        isConflict: previewItem.isConflict,
+      ),
+      colors,
+    );
     final coupleBadge = _previewItemBadgeLabel(l10n, previewItem);
     final natureLabel = course.courseNature == CourseNature.elective
         ? l10n.courseNatureElective
         : l10n.courseNatureRequired;
     final teacher = course.teacher.trim();
     final location = course.location.trim();
-    final description = (course.description ?? course.note)?.trim();
-    final headerDetail = description?.isNotEmpty == true
-        ? description!
-        : course.weekDescription(l10n);
+    final description = course.description?.trim();
+    // Course intro is shared [description]; fall back to legacy per-entry note.
+    final legacyNote = course.note?.trim();
+    final courseIntroText = (description != null && description.isNotEmpty)
+        ? description
+        : ((legacyNote != null && legacyNote.isNotEmpty) ? legacyNote : null);
+    final sessionNote = course.sessionNoteForWeek(week);
+    final sessionNoteText = sessionNote?.trimmedText;
+    final hasHomework = sessionNote?.hasHomework == true;
+    final headerDetail = courseIntroText ?? course.weekDescription(l10n);
     final sectionTitle =
         '${_weekdayLabel(l10n, course.dayOfWeek)} · ${l10n.sectionRangeLabel(course.startSection, course.endSection)}';
     final timeSubtitle = _formatTimeTileSubtitle(
@@ -522,14 +532,13 @@ class _CourseActionSheetContent extends StatelessWidget {
       week: week,
       settings: provider.settings,
     );
-    final teacherSubtitle = description?.isNotEmpty == true
+    final teacherSubtitle = courseIntroText != null
         ? course.weekDescription(l10n)
         : (course.shortName?.trim().isNotEmpty == true
               ? l10n.shortNamePrefix(course.shortName!.trim())
               : course.weekDescription(l10n));
     final locationSubtitle =
-        course.shortName?.trim().isNotEmpty == true &&
-            description?.isNotEmpty == true
+        course.shortName?.trim().isNotEmpty == true && courseIntroText != null
         ? l10n.shortNamePrefix(course.shortName!.trim())
         : course.weekDescription(l10n);
     final canReschedule = !previewItem.isReadOnly && course.isInWeek(week);
@@ -540,6 +549,18 @@ class _CourseActionSheetContent extends StatelessWidget {
         : previewItem.isPartnerCourse
         ? Icons.person_outline_rounded
         : Icons.menu_book_rounded;
+    final noteTitle = _resolveNoteTileTitle(
+      l10n: l10n,
+      wholeNote: courseIntroText,
+      sessionNoteText: sessionNoteText,
+      hasHomework: hasHomework,
+    );
+    final noteSubtitle = _resolveNoteTileSubtitle(
+      l10n: l10n,
+      wholeNote: courseIntroText,
+      sessionNoteText: sessionNoteText,
+      hasHomework: hasHomework,
+    );
 
     return Column(
       key: ValueKey('course-action-content-${course.id}'),
@@ -568,33 +589,18 @@ class _CourseActionSheetContent extends StatelessWidget {
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(
-                        course.name,
-                        style: typo.sm.copyWith(
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                      ),
+                      Text(course.name, style: typo.sm.copyWith(height: 1.2)),
                       if (!previewItem.isPartnerCourse)
-                        Text(
-                          natureLabel,
-                          style: muted.copyWith(fontWeight: FontWeight.w600),
-                        ),
+                        Text(natureLabel, style: muted),
                       if (previewItem.isConflict)
                         Text(
                           l10n.conflictLabel,
-                          style: typo.xs2.copyWith(
-                            color: colors.destructive,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: typo.xs2.copyWith(color: colors.destructive),
                         ),
                       if (coupleBadge != null)
                         Text(
                           coupleBadge,
-                          style: typo.xs2.copyWith(
-                            color: courseColor,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: typo.xs2.copyWith(color: courseColor),
                         ),
                     ],
                   ),
@@ -615,10 +621,7 @@ class _CourseActionSheetContent extends StatelessWidget {
           icon: Icons.schedule_outlined,
           title: sectionTitle,
           subtitle: timeSubtitle,
-          trailing: Text(
-            '${course.startTime}-${course.endTime}',
-            style: muted.copyWith(fontWeight: FontWeight.w600),
-          ),
+          trailing: Text('${course.startTime}-${course.endTime}', style: muted),
         ),
         const SizedBox(height: 8),
         _CourseDetailTile(
@@ -631,6 +634,63 @@ class _CourseActionSheetContent extends StatelessWidget {
           icon: Icons.location_on_outlined,
           title: location.isNotEmpty ? location : l10n.unknownLocation,
           subtitle: locationSubtitle,
+        ),
+        const SizedBox(height: 8),
+        _CourseDetailTile(
+          icon: Icons.sticky_note_2_outlined,
+          title: noteTitle,
+          subtitle: noteSubtitle,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasHomework) ...[
+                Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colors.primary.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.assignment_outlined,
+                    size: 11,
+                    color: colors.primary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: colors.mutedForeground,
+              ),
+            ],
+          ),
+          onTap: () {
+            // Only one sheet at a time: close the action sheet, then open notes.
+            final hostNavigator = Navigator.of(context);
+            final courseSnapshot = course;
+            final weekSnapshot = week;
+            final isReadOnly = previewItem.isReadOnly;
+            hostNavigator.pop();
+            // Wait for the action sheet dismiss animation so the two never stack.
+            Future<void>.delayed(const Duration(milliseconds: 280), () {
+              final hostContext = hostNavigator.context;
+              if (!hostContext.mounted) {
+                return;
+              }
+              showCourseNoteSheet(
+                hostContext,
+                course: courseSnapshot,
+                week: weekSnapshot,
+                readOnly: isReadOnly,
+              );
+            });
+          },
         ),
         const SizedBox(height: 12),
         _CourseDetailTile(
@@ -664,7 +724,7 @@ class _CourseActionSheetContent extends StatelessWidget {
                 child: HyperosFrostedSheetButton(
                   key: ValueKey('course-action-reschedule-${course.id}'),
                   label: l10n.courseActionRescheduleSecondary,
-                  bordered: true,
+                  bordered: false,
                   expand: true,
                   onPressed: canReschedule
                       ? () =>
@@ -679,7 +739,7 @@ class _CourseActionSheetContent extends StatelessWidget {
                   label: isSuspended
                       ? l10n.courseActionUnsuspend
                       : l10n.courseActionSuspendSecondary,
-                  bordered: true,
+                  bordered: false,
                   expand: true,
                   onPressed: () =>
                       _closeSheetThen(context, () => onSuspend(course)),
@@ -704,6 +764,45 @@ class _CourseActionSheetContent extends StatelessWidget {
   }
 }
 
+String _resolveNoteTileTitle({
+  required AppLocalizations l10n,
+  required String? wholeNote,
+  required String? sessionNoteText,
+  required bool hasHomework,
+}) {
+  if (sessionNoteText != null && sessionNoteText.isNotEmpty) {
+    return sessionNoteText;
+  }
+  if (hasHomework) {
+    return l10n.courseNoteHomeworkMarked;
+  }
+  if (wholeNote != null && wholeNote.isNotEmpty) {
+    return wholeNote;
+  }
+  return l10n.courseNoteAction;
+}
+
+String _resolveNoteTileSubtitle({
+  required AppLocalizations l10n,
+  required String? wholeNote,
+  required String? sessionNoteText,
+  required bool hasHomework,
+}) {
+  final hasSession =
+      hasHomework || (sessionNoteText != null && sessionNoteText.isNotEmpty);
+  final hasWhole = wholeNote != null && wholeNote.isNotEmpty;
+  if (hasSession && hasWhole) {
+    return l10n.courseNoteTileSubtitleBoth;
+  }
+  if (hasSession) {
+    return l10n.courseNoteTileSubtitleSession;
+  }
+  if (hasWhole) {
+    return l10n.courseNoteTileSubtitleWhole;
+  }
+  return l10n.courseNoteTileSubtitleEmpty;
+}
+
 class _CourseDetailTile extends StatelessWidget {
   const _CourseDetailTile({
     required this.icon,
@@ -711,6 +810,7 @@ class _CourseDetailTile extends StatelessWidget {
     this.subtitle,
     this.titleWidget,
     this.trailing,
+    this.onTap,
   });
 
   final IconData icon;
@@ -718,56 +818,68 @@ class _CourseDetailTile extends StatelessWidget {
   final String? subtitle;
   final Widget? titleWidget;
   final Widget? trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final typo = context.theme.typography.body;
     final colors = context.theme.colors;
 
-    return HyperosFrostedSurface(
-      borderRadius: BorderRadius.circular(HyperosTokens.controlRadius),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: colors.mutedForeground),
-            const SizedBox(width: 10),
-            if (titleWidget != null)
-              titleWidget!
-            else
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Row(
+        // Center icon / text / trailing so chevrons sit mid-height on multi-line tiles.
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: colors.mutedForeground),
+          const SizedBox(width: 10),
+          if (titleWidget != null)
+            titleWidget!
+          else
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title!,
+                    style: typo.sm.copyWith(height: 1.25),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      title!,
-                      style: typo.sm.copyWith(
-                        fontWeight: FontWeight.w600,
-                        height: 1.25,
+                      subtitle!,
+                      style: typo.xs2.copyWith(
+                        color: colors.mutedForeground,
+                        height: 1.3,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: typo.xs2.copyWith(
-                          color: colors.mutedForeground,
-                          height: 1.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
-            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-          ],
-        ),
+            ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ],
       ),
+    );
+
+    return HyperosFrostedSurface(
+      borderRadius: BorderRadius.circular(HyperosTokens.controlRadius),
+      child: onTap == null
+          ? content
+          : Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(
+                  HyperosTokens.controlRadius,
+                ),
+                child: content,
+              ),
+            ),
     );
   }
 }
@@ -799,10 +911,7 @@ class _CourseActionNoticeText extends StatelessWidget {
           TextSpan(text: notice.substring(0, weekIndex)),
           TextSpan(
             text: weekToken,
-            style: TextStyle(
-              color: colors.foreground,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: colors.foreground),
           ),
           TextSpan(text: notice.substring(weekIndex + weekToken.length)),
         ],

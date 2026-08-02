@@ -190,23 +190,32 @@ object TodayWidgetSupport {
             null
         }
         val semesterWeekCount = settingsJson.optInt("semesterWeekCount", 20).coerceAtLeast(1)
-        val currentWeek = calculateWeekForDate(
+        val semesterStartMillis = settingsJson.optLong("semesterStartDate").takeIf { it > 0L }
+        // Course filtering must use calendar week (no semesterWeekCount clamp).
+        // Clamping to the last teaching week after the term ends would revive
+        // endWeek=N courses on every matching weekday forever.
+        val scheduleWeek = liveSchedulerCalculateCalendarWeekForDate(
             semesterStartMillis = settingsJson.optLong("semesterStartDate").takeIf { it > 0L },
-            fallbackWeek = profileJson.optInt("currentWeek", 1).coerceAtLeast(1),
-            semesterWeekCount = semesterWeekCount,
-            nowMillis = nowMillis,
+            currentWeek = profileJson.optInt("currentWeek", 1).coerceAtLeast(1),
+            dateMillis = nowMillis,
         )
+        // Label can stay UI-clamped for browsing consistency; filtering uses scheduleWeek.
+        val currentWeek = if (scheduleWeek < 1) {
+            1
+        } else {
+            scheduleWeek.coerceIn(1, semesterWeekCount)
+        }
         val todayWeekday = nowCalendar.get(Calendar.DAY_OF_WEEK).let(::calendarDayToWeekday)
         val allCourses = parseSourceCourses(profileJson.optJSONArray("courses"))
         // 含停课的原始课程数（用于区分"没课"和"课都停了"）
         val originalTodayCourseCount = if (isHoliday) 0 else {
-            allCourses.count { it.dayOfWeek == todayWeekday && it.isInWeekIgnoringSuspension(currentWeek) }
+            allCourses.count { it.dayOfWeek == todayWeekday && it.isInWeekIgnoringSuspension(scheduleWeek) }
         }
         val todayCourses = if (isHoliday) {
             emptyList()
         } else {
             allCourses
-                .filter { it.dayOfWeek == todayWeekday && it.isInWeek(currentWeek) }
+                .filter { it.dayOfWeek == todayWeekday && it.isInWeek(scheduleWeek) }
                 .sortedWith(compareBy<WidgetSourceCourse>({ it.startSection }, { it.startTime }))
         }
         val currentCourse = if (isHoliday) {
@@ -350,12 +359,16 @@ object TodayWidgetSupport {
             }
             tomorrowDayOfWeek = tomorrowCal.get(Calendar.DAY_OF_WEEK).let(::calendarDayToWeekday)
             val tomorrowWeekday = tomorrowDayOfWeek
-            tomorrowWeek = calculateWeekForDate(
-                semesterStartMillis = settingsJson.optLong("semesterStartDate").takeIf { it > 0L },
-                fallbackWeek = currentWeek,
-                semesterWeekCount = semesterWeekCount,
-                nowMillis = tomorrowCal.timeInMillis,
+            val tomorrowScheduleWeek = liveSchedulerCalculateCalendarWeekForDate(
+                semesterStartMillis = semesterStartMillis,
+                currentWeek = currentWeek,
+                dateMillis = tomorrowCal.timeInMillis,
             )
+            tomorrowWeek = if (tomorrowScheduleWeek < 1) {
+                1
+            } else {
+                tomorrowScheduleWeek.coerceIn(1, semesterWeekCount)
+            }
             val tomorrowDateStr = widgetFormatDate(
                 year = tomorrowCal.get(Calendar.YEAR),
                 month = tomorrowCal.get(Calendar.MONTH) + 1,
@@ -372,7 +385,7 @@ object TodayWidgetSupport {
                 emptyList()
             } else {
                 allCourses
-                    .filter { it.dayOfWeek == tomorrowWeekday && it.isInWeek(tomorrowWeek) }
+                    .filter { it.dayOfWeek == tomorrowWeekday && it.isInWeek(tomorrowScheduleWeek) }
                     .sortedWith(compareBy<WidgetSourceCourse>({ it.startSection }, { it.startTime }))
                     .map { it.toWidgetCourseInfo() }
             }
@@ -431,7 +444,19 @@ object TodayWidgetSupport {
             month = nowCalendar.get(Calendar.MONTH) + 1,
             dayOfMonth = nowCalendar.get(Calendar.DAY_OF_MONTH),
         )
-        if (isHoliday) return null
+        // On a holiday there are no same-day course flip points, but still schedule
+        // a midnight refresh so the widget can leave holiday mode the next day.
+        if (isHoliday) {
+            val tomorrowStart = Calendar.getInstance().apply {
+                timeInMillis = nowMillis
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            return if (tomorrowStart > nowMillis) tomorrowStart else null
+        }
         val semesterWeekCount = settingsJson.optInt("semesterWeekCount", 20).coerceAtLeast(1)
         val currentWeek = calculateWeekForDate(
             semesterStartMillis = settingsJson.optLong("semesterStartDate").takeIf { it > 0L },
@@ -1041,29 +1066,44 @@ object TodayWidgetSupport {
         )
     }
 
+    private var cachedProfileRaw: String? = null
+    private var cachedProfileJson: JSONObject? = null
+
     private fun readActiveProfileJson(context: Context): JSONObject? {
         val flutterPrefs = context.getSharedPreferences(FLUTTER_PREFS_NAME, Context.MODE_PRIVATE)
         val profilesPayload = flutterPrefs.getString(KEY_TIMETABLE_PROFILES, null) ?: return null
-        return try {
-            val activeProfileId = flutterPrefs.getString(KEY_ACTIVE_PROFILE_ID, null)
+        val activeProfileId = flutterPrefs.getString(KEY_ACTIVE_PROFILE_ID, null)
+        val cacheKey = "$profilesPayload\u0001$activeProfileId"
+        val cached = cachedProfileJson
+        if (cacheKey == cachedProfileRaw && cached != null) {
+            return cached
+        }
+        val profile = try {
             val profiles = JSONArray(profilesPayload)
             var fallbackProfile: JSONObject? = null
             for (index in 0 until profiles.length()) {
-                val profile = profiles.optJSONObject(index) ?: continue
+                val candidate = profiles.optJSONObject(index) ?: continue
                 if (fallbackProfile == null) {
-                    fallbackProfile = profile
+                    fallbackProfile = candidate
                 }
                 if (!activeProfileId.isNullOrBlank() &&
-                    profile.optString("id") == activeProfileId
+                    candidate.optString("id") == activeProfileId
                 ) {
-                    return profile
+                    fallbackProfile = candidate
+                    break
                 }
             }
             fallbackProfile
         } catch (_: Exception) {
             null
         }
+        cachedProfileRaw = cacheKey
+        cachedProfileJson = profile
+        return profile
     }
+
+    private var cachedHolidayRaw: String? = null
+    private var cachedHolidayEntries: List<WidgetHolidayEntry>? = null
 
     /**
      * Load holiday entries for [calendar]'s year (and next year near year-end)
@@ -1082,15 +1122,24 @@ object TodayWidgetSupport {
                 add(year + 1)
             }
         }
+        val rawYearData = years.map { year ->
+            flutterPrefs.getString("$KEY_HOLIDAY_DATA_PREFIX$year", null)
+        }
+        val rawCustom = flutterPrefs.getString(KEY_CUSTOM_HOLIDAYS, null)
+        val cacheKey = (rawYearData + rawCustom).joinToString("\u0001")
+        val cached = cachedHolidayEntries
+        if (cacheKey == cachedHolidayRaw && cached != null) {
+            return cached
+        }
         val entries = mutableListOf<WidgetHolidayEntry>()
-        for (targetYear in years) {
+        for ((index, targetYear) in years.withIndex()) {
             entries += widgetParseHolidayEntriesFromHolidayDataJson(
-                flutterPrefs.getString("$KEY_HOLIDAY_DATA_PREFIX$targetYear", null),
+                rawYearData[index],
             )
         }
-        entries += widgetParseHolidayEntriesFromCustomJson(
-            flutterPrefs.getString(KEY_CUSTOM_HOLIDAYS, null),
-        )
+        entries += widgetParseHolidayEntriesFromCustomJson(rawCustom)
+        cachedHolidayRaw = cacheKey
+        cachedHolidayEntries = entries
         return entries
     }
 
@@ -1151,23 +1200,18 @@ object TodayWidgetSupport {
         if (semesterStartMillis == null) {
             return fallbackWeek.coerceIn(1, semesterWeekCount)
         }
-        val normalizedNow = Calendar.getInstance().apply {
-            timeInMillis = nowMillis
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+        // Align to Monday like Flutter getWeekIndex / LiveUpdateScheduler so
+        // desktop widgets do not show the wrong week when semesterStart is mid-week.
+        val week = liveSchedulerCalculateWeekForDate(
+            semesterStartMillis = semesterStartMillis,
+            currentWeek = fallbackWeek,
+            dateMillis = nowMillis,
+            semesterWeekCount = semesterWeekCount,
+        )
+        if (week < 1) {
+            // Before semester start: show week 1 content rather than empty (UI clamp).
+            return 1
         }
-        val normalizedStart = Calendar.getInstance().apply {
-            timeInMillis = semesterStartMillis
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val diffDays =
-            ((normalizedNow.timeInMillis - normalizedStart.timeInMillis) / 86_400_000L).toInt()
-        val week = (diffDays / 7) + 1
         return week.coerceIn(1, semesterWeekCount)
     }
 
@@ -1297,4 +1341,3 @@ object TodayWidgetSupport {
         }
     }
 }
-

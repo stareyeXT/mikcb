@@ -72,12 +72,16 @@ Future<void> _pumpToTestingEntry(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   await tester.scrollUntilVisible(
-    find.text('测试'),
+    find.text('自检'),
     200,
     scrollable: find.byType(Scrollable).last,
   );
-  await tester.tap(find.text('测试'));
-  await tester.pumpAndSettle();
+  await tester.tap(find.text('自检'));
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 50)),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 600));
 }
 
 void main() {
@@ -94,10 +98,13 @@ void main() {
           switch (call.method) {
             case 'initialize':
               return null;
-            case 'getHyperFocusDebugStatus':
+            case 'getLiveUpdateDebugStatus':
               return {
                 'generatedAtMillis': 0,
                 'summary': {
+                  'serviceRunning': true,
+                  'isActuallyPromotable': true,
+                  'statusText': '运行正常',
                   'hasNotificationPermission': true,
                   'testChannelBlocked': false,
                   'schedulerReady': true,
@@ -135,35 +142,32 @@ void main() {
     (tester) async {
       await _pumpToTestingEntry(tester);
 
-      expect(find.text('超级岛测试与诊断'), findsOneWidget);
-      expect(find.text('通知权限已开启'), findsOneWidget);
-      expect(find.text('测试渠道正常'), findsOneWidget);
-      expect(find.text('调度已就绪'), findsOneWidget);
+      expect(find.text('自检'), findsOneWidget);
+      expect(find.text('服务运行中'), findsOneWidget);
+      expect(find.text('运行正常'), findsOneWidget);
       expect(find.text('自动刷新'), findsOneWidget);
+      expect(find.text('刷新诊断'), findsOneWidget);
     },
   );
 
   _testOnAndroid(
-    'hyper focus testing screen sends test with scheduled stage',
+    'hyper focus testing screen send triggers production refresh diagnostics',
     (tester) async {
-      String? sentStage;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(liveChannel, (call) async {
             switch (call.method) {
               case 'initialize':
                 return null;
-              case 'getHyperFocusDebugStatus':
+              case 'getLiveUpdateDebugStatus':
                 return {
                   'summary': {
-                    'hasNotificationPermission': true,
-                    'testChannelBlocked': false,
-                    'schedulerReady': true,
-                    'hasLastTestResult': false,
+                    'serviceRunning': true,
+                    'isActuallyPromotable': true,
+                    'statusText': '运行正常',
                   },
                   'scheduling': {'nextTriggerStage': 'active'},
                 };
-              case 'sendTestFocus':
-                sentStage = (call.arguments as Map)['stage'] as String?;
+              case 'suspendScheduleTriggers':
                 return null;
               default:
                 return null;
@@ -203,14 +207,19 @@ void main() {
       await _pumpToTestingEntry(tester);
 
       await tester.tap(find.text('发送测试通知'));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pumpAndSettle();
+      for (int i = 0; i < 20; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('当前没有可测试的课程').evaluate().isNotEmpty) {
+          break;
+        }
+      }
 
-      expect(sentStage, 'active');
-      expect(recordedCategories, contains('send_test_focus_requested'));
-      expect(find.text('测试焦点通知已发送'), findsOneWidget);
+      expect(recordedCategories, contains('live_update_test_requested'));
+      expect(find.text('当前没有可测试的课程'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
     },
   );
 }

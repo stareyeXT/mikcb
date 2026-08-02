@@ -1,0 +1,116 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index ec4dc49..54b6801 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -2052,63 +2052,46 @@ class LiveUpdateService : Service() {
+         fun buildHyperFocusDebugStatus(context: Context): Map<String, Any?> {
+             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+             val channel = notificationManager.getNotificationChannel(MainActivity.HYPERFOCUS_TEST_CHANNEL_ID)
+             val channelBlocked = channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE
+             val testPrefs = context.getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
+             val hasLastTest = testPrefs.contains("last_stage")
+             val lastStage = testPrefs.getString("last_stage", null)
+             val lastSucceeded = if (testPrefs.contains("last_succeeded")) testPrefs.getBoolean("last_succeeded", false) else null
+             val lastMessage = testPrefs.getString("last_message", null)
+             val lastAtMillis = if (testPrefs.contains("last_at_millis")) testPrefs.getLong("last_at_millis", 0L) else null
+-            val templates = loadHyperFocusTemplates(context)
+             val scheduling = LiveUpdateScheduler.buildNextTriggerDebugInfo(context)
+ 
+-            fun templateFlags(stage: String): Map<String, Boolean> = linkedMapOf(
+-                "ticker" to (templates["ticker_$stage"]?.isNotBlank() == true),
+-                "islandA" to (templates["islandA_$stage"]?.isNotBlank() == true),
+-                "islandB" to (templates["islandB_$stage"]?.isNotBlank() == true),
+-                "baseTitle" to (templates["baseTitle_$stage"]?.isNotBlank() == true),
+-                "baseContent" to (templates["baseContent_$stage"]?.isNotBlank() == true),
+-                "baseSubcontent" to (templates["baseSubcontent_$stage"]?.isNotBlank() == true),
+-                "hintTitle" to (templates["hintTitle_$stage"]?.isNotBlank() == true),
+-            )
+-
+             val schedulingSummary = linkedMapOf<String, Any?>(
+                 "schedulerReady" to (scheduling["nextTriggerAtMillis"] != null),
+                 "nextTriggerCourseName" to scheduling["nextCourseName"],
+                 "nextTriggerStage" to scheduling["nextTriggerStage"],
+                 "nextTriggerAtMillis" to scheduling["nextTriggerAtMillis"],
+             )
+ 
+             return linkedMapOf(
+                 "generatedAtMillis" to System.currentTimeMillis(),
+                 "summary" to linkedMapOf(
+                     "hasNotificationPermission" to hasNotificationPermissionCompat(context),
+                     "testChannelBlocked" to channelBlocked,
+-                    "templatesLoaded" to templates.isNotEmpty(),
+                     "schedulerReady" to schedulingSummary["schedulerReady"],
+                     "nextTriggerCourseName" to schedulingSummary["nextTriggerCourseName"],
+                     "nextTriggerStage" to schedulingSummary["nextTriggerStage"],
+                     "nextTriggerAtMillis" to schedulingSummary["nextTriggerAtMillis"],
+                     "hasLastTestResult" to hasLastTest,
+                     "lastTestStage" to lastStage,
+                     "lastTestSucceeded" to lastSucceeded,
+                     "lastTestMessage" to lastMessage,
+                     "lastTestAtMillis" to lastAtMillis,
+                 ),
+                 "environment" to buildEnvironmentSnapshot(context),
+                 "scheduling" to scheduling,
+-                "templates" to linkedMapOf(
+-                    "pre" to templateFlags("pre"),
+-                    "active" to templateFlags("active"),
+-                    "post" to templateFlags("post"),
+-                ),
+                 "test" to linkedMapOf(
+                     "lastStage" to lastStage,
+                     "lastSucceeded" to lastSucceeded,
+                     "lastMessage" to lastMessage,
+                     "lastAtMillis" to lastAtMillis,
+                 ),
+                 "recentDiagnostics" to linkedMapOf(
+                     "enabled" to UmengDiagnosticReporter.isLiveDiagnosticsEnabled(context),
+                     "tail" to UmengDiagnosticReporter.readLiveDiagnosticsTail(context),
+                 ),
+diff --git a/lib/services/miui_live_activities_service.dart b/lib/services/miui_live_activities_service.dart
+index f2e1b6e..2847ef7 100644
+--- a/lib/services/miui_live_activities_service.dart
++++ b/lib/services/miui_live_activities_service.dart
+@@ -432,21 +432,20 @@ class MiuiLiveActivitiesService {
+         'hyper_focus_debug_status_failed',
+         AppLogMessages.liveUpdateDebugStatusFailed,
+         error: e,
+         stackTrace: stackTrace,
+       );
+       appDebugLog('MiuiLive', '获取超级岛调试状态失败：$e');
+       return {
+         'summary': {
+           'hasNotificationPermission': false,
+           'testChannelBlocked': true,
+-          'templatesLoaded': false,
+           'schedulerReady': false,
+           'hasLastTestResult': false,
+         },
+       };
+     }
+   }
+ 
+   Map<String, dynamic> _buildData(
+     Course currentCourse,
+     Course? nextCourse, {
+@@ -816,21 +815,20 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
+     return null;
+   }
+ 
+   @override
+   Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
+     return const {
+       'generatedAtMillis': 0,
+       'summary': {
+         'hasNotificationPermission': true,
+         'testChannelBlocked': false,
+-        'templatesLoaded': true,
+         'schedulerReady': true,
+         'hasLastTestResult': false,
+       },
+       'scheduling': {
+         'nextCourseName': '高等数学',
+         'nextCourseStartAtMillis': 0,
+         'nextCourseEndAtMillis': 0,
+         'nextTriggerAtMillis': 0,
+         'nextTriggerStage': 'pre',
+         'hasActiveSelection': true,

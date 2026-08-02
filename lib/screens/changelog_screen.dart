@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:forui/forui.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
 import 'about_screen.dart';
@@ -48,6 +48,10 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
   List<String> _getKnownVersions() {
     // 返回所有已知版本，按倒序排列（最新在前）
     return [
+      'v2.0.5.4',
+      'v2.0.5.3',
+      'v2.0.5.2',
+      'v2.0.5.1',
       'v2.0.5',
       'v2.0.4.5',
       'v2.0.4.4',
@@ -152,21 +156,22 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
       onBack: () => Navigator.pop(context),
       title: Text(l10n.aboutChangelogTitle),
       childPad: false,
-      child: Material(
-        type: MaterialType.transparency,
-        child: HyperosBlurredBodyInset(
-          child: _loading
-              ? const Center(child: HyperosCircularProgress())
-              : HyperosListView(
-                  includeHeaderInset: false,
-                  itemCount: _entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = _entries[index];
-                    return _ChangelogCard(entry: entry);
-                  },
-                ),
-        ),
-      ),
+      // Standard list path (header inset inside the scrollable + notification
+      // bubbling) so the large title collapses; the old BodyInset +
+      // includeHeaderInset:false combo swallowed vertical scroll notifications
+      // and froze the large title.
+      child: _loading
+          // Non-scroll centered view: inset below the bar manually.
+          ? const HyperosBlurredBodyInset(
+              child: Center(child: HyperosCircularProgress()),
+            )
+          : HyperosListView(
+              itemCount: _entries.length,
+              itemBuilder: (context, index) {
+                final entry = _entries[index];
+                return _ChangelogCard(entry: entry);
+              },
+            ),
     );
   }
 }
@@ -192,8 +197,8 @@ class _ChangelogCardState extends State<_ChangelogCard> {
 
   @override
   Widget build(BuildContext context) {
-    final typo = context.theme.typography.body;
-    final colors = context.theme.colors;
+    final theme = MiuixTheme.of(context);
+    final colors = theme.colors;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -216,21 +221,22 @@ class _ChangelogCardState extends State<_ChangelogCard> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: colors.primary.withValues(alpha: 0.12),
+                          color: colors.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           widget.entry.version,
-                          style: typo.sm.copyWith(
+                          style: TextStyle(
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: colors.primary,
+                            color: colors.onSurfaceContainer,
                           ),
                         ),
                       ),
                       const Spacer(),
                       Icon(
                         _expanded ? Icons.expand_less : Icons.expand_more,
-                        color: colors.mutedForeground,
+                        color: colors.onSurfaceVariantActions,
                       ),
                     ],
                   ),

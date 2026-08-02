@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 
-import 'hyperos_miuix_spec.dart';
-import 'hyperos_theme.dart';
-
-/// HyperOS notification badge overlay (dot or numeric label).
+/// HyperOS notification badge overlay — delegates to [MiuixBadgedBox] + [MiuixBadge].
 class HyperosBadge extends StatelessWidget {
   const HyperosBadge({
     super.key,
@@ -22,44 +20,23 @@ class HyperosBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!show) return child;
 
-    final badgeColor = HyperosColors.error(context);
-    final textColor = HyperosColors.onError(context);
-
     final hasLabel = label != null && label!.isNotEmpty;
-    final badge = hasLabel
-        ? Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-            decoration: BoxDecoration(
-              color: badgeColor,
-              borderRadius: BorderRadius.circular(50),
-            ),
-            child: Text(
-              label!,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: HyperosMiuixTypography.footnote2,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-                height: 1.1,
-              ),
-            ),
-          )
-        : Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: badgeColor,
-              shape: BoxShape.circle,
-            ),
-          );
+    // MiuixText 从 MiuixContentColor 取 onError 前景色，并继承 MiuixBadge 注入的
+    // 上游文字样式（11sp/16 行框）；普通 Text 读不到内容色会回退成黑字。
+    final badge = MiuixBadge(
+      child: hasLabel
+          ? MiuixText(label!, textAlign: TextAlign.center)
+          : null,
+    );
+
+    if (alignment == Alignment.topRight) {
+      return MiuixBadgedBox(badge: badge, child: child);
+    }
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
         child,
-        // Align handles any alignment (including centered edges); the translate
-        // nudges corner badges 4dp outside the child like the HyperOS overlay.
         Positioned.fill(
           child: Align(
             alignment: alignment,
@@ -91,7 +68,8 @@ class HyperosTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final defaultBg = HyperosColors.secondaryContainer(context);
+    final theme = MiuixTheme.of(context);
+    final defaultBg = theme.colors.secondaryContainer;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -99,7 +77,7 @@ class HyperosTag extends StatelessWidget {
         color: outlined ? Colors.transparent : (backgroundColor ?? defaultBg),
         borderRadius: BorderRadius.circular(6),
         border: outlined
-            ? Border.all(color: HyperosColors.actionIcon(context))
+            ? Border.all(color: theme.colors.onSurfaceVariantActions)
             : null,
       ),
       child: Text(
@@ -107,11 +85,11 @@ class HyperosTag extends StatelessWidget {
         style:
             textStyle ??
             TextStyle(
-              fontSize: HyperosMiuixTypography.footnote2,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
               color: outlined
-                  ? HyperosColors.secondaryText(context)
-                  : HyperosColors.primaryText(context),
+                  ? theme.colors.onSurfaceVariantSummary
+                  : theme.colors.onSurface,
             ),
       ),
     );

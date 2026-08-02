@@ -100,6 +100,7 @@ Future<int> _timetableImportParsedCourses(
   required bool replaceExisting,
   DateTime? semesterStart,
   required String source,
+  bool preserveLocalColors = true,
 }) {
   return host._runMutation(() async {
     if (importedCourses.isEmpty) {
@@ -115,13 +116,18 @@ Future<int> _timetableImportParsedCourses(
       mergedCourses = replaceImportedCoursesPreservingLocalFields(
         existingCourses: host._courses,
         importedCourses: dedupedImportedCourses,
+        preserveLocalColors: preserveLocalColors,
       );
       effectiveImportedCount = dedupedImportedCourses.length;
       syncResult = null;
+      // Overwrite import replaces the active timetable: drop leftover agenda
+      // rows that belonged to the previous course set (aligns with backup path).
+      host._scheduleItems = [];
     } else {
       final result = syncImportedCourses(
         existingCourses: host._courses,
         importedCourses: importedCourses,
+        preserveLocalColors: preserveLocalColors,
       );
       if (courseListsEqual(host._courses, result.mergedCourses)) {
         return 0;
@@ -139,10 +145,15 @@ Future<int> _timetableImportParsedCourses(
       host._courses,
       fallbackWeekCount: host._settings.semesterWeekCount,
     );
+    final cappedRequiredWeekCount = requiredWeekCount.clamp(
+      1,
+      ImportExportLogic.maxAllowedSemesterWeekCount,
+    );
     host._settings = host._settings.copyWith(
       semesterStartDate: semesterStart ?? host._settings.semesterStartDate,
-      semesterWeekCount: requiredWeekCount > host._settings.semesterWeekCount
-          ? requiredWeekCount
+      semesterWeekCount:
+          cappedRequiredWeekCount > host._settings.semesterWeekCount
+          ? cappedRequiredWeekCount
           : host._settings.semesterWeekCount,
     );
     if (semesterStart != null) {
@@ -192,6 +203,9 @@ Future<String?> _timetableImportAppDataBackup(
       settings: resolvedSettings,
     );
     host._exams = List<Exam>.from(backup.exams);
+    // Single-profile backups do not carry schedule items; overwrite must not
+    // leave stale agenda entries from the previous active profile.
+    host._scheduleItems = [];
     host._settings = resolvedSettings;
     host._currentWeek = clampCurrentWeekToSettings(
       backup.currentWeek,
@@ -324,6 +338,17 @@ Future<String?> _timetableImportFullAppDataBackup(
           (profile) => profile.id == host._activeProfileId,
         ),
       );
+
+      // Full backup schema does not carry partner binding; drop orphans when
+      // the partner profile is missing from the restored profiles list.
+      final hasPartnerProfile = host._profiles.any(
+        (profile) => profile.id == PartnerTimetableService.partnerProfileId,
+      );
+      if (!hasPartnerProfile && host._partnerBinding != null) {
+        host._partnerBinding = null;
+        await host._storageService.savePartnerTimetableBinding(null);
+      }
+
       host._currentLiveCourseId = null;
       host._notifyStateChanged();
       unawaited(host._syncExamReminders());

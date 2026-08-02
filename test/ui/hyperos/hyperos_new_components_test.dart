@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
 
@@ -76,6 +77,41 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(result, isTrue);
+    });
+
+    testWidgets('can keep a form dialog fixed while remaining dismissible', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              return TextButton(
+                onPressed: () {
+                  showHyperosDialog<void>(
+                    context: context,
+                    title: 'Fixed form',
+                    message: 'Form content',
+                    enableDrag: false,
+                  );
+                },
+                child: const Text('open'),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('Fixed form'), const Offset(0, 500));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fixed form'), findsOneWidget);
+
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(find.text('Fixed form'), findsNothing);
     });
   });
 
@@ -361,7 +397,8 @@ void main() {
         ),
       );
 
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      // HyperosLinearProgress delegates to the Miuix indicator now.
+      expect(find.byType(MiuixLinearProgressIndicator), findsOneWidget);
     });
   });
 

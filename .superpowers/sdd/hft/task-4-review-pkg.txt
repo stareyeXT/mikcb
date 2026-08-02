@@ -1,0 +1,281 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt
+index d189253..c525080 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/LiveUpdateScheduler.kt
+@@ -763,20 +763,37 @@ object LiveUpdateScheduler {
+         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+             .edit()
+             .putLong(KEY_SUSPEND_UNTIL_MILLIS, untilMillis)
+             .apply()
+         cancelScheduledAlarm(context)
+         if (untilMillis > System.currentTimeMillis()) {
+             scheduleAlarm(context, untilMillis)
+         }
+     }
+ 
++    /** Read-only scheduler state for the HyperFocus diagnostics screen. */
++    fun buildNextTriggerDebugInfo(context: Context): Map<String, Any?> {
++        val snapshot = loadSnapshot(context) ?: return emptyMap()
++        val nowMillis = System.currentTimeMillis()
++        val selection = findNextSelection(context, snapshot, nowMillis)
++        val suspendedUntil = suspendedUntilMillis(context)
++        return linkedMapOf(
++            "nextCourseName" to selection?.currentCourse?.name,
++            "nextCourseStartAtMillis" to selection?.startAtMillis,
++            "nextCourseEndAtMillis" to selection?.endAtMillis,
++            "nextTriggerAtMillis" to selection?.triggerAtMillis,
++            "nextTriggerStage" to selection?.stage,
++            "hasActiveSelection" to hasActiveLiveSelection(snapshot, context, nowMillis),
++            "suspendedUntilMillis" to (suspendedUntil.takeIf { it > nowMillis }),
++        )
++    }
++
+     private fun suspendedUntilMillis(context: Context): Long {
+         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+             .getLong(KEY_SUSPEND_UNTIL_MILLIS, 0L)
+     }
+ 
+     /** Whether the persisted schedule snapshot still has a course to show right now. */
+     fun hasActiveLiveSelection(context: Context, nowMillis: Long = System.currentTimeMillis()): Boolean {
+         val snapshot = loadSnapshot(context) ?: return false
+         return hasActiveLiveSelection(snapshot, context, nowMillis)
+     }
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index e1456cf..4ea0bef 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -78,20 +78,21 @@ import kotlin.math.ceil
+ class MainActivity : FlutterActivity() {
+     companion object {
+         private const val METHOD_CHANNEL = "com.mutx163.qingyu/miui_live"
+         private const val SYSTEM_UI_CHANNEL = "com.mutx163.qingyu/system_ui"
+         private const val UMENG_CHANNEL = "com.mutx163.qingyu/umeng_analytics"
+         private const val HOME_WIDGET_CHANNEL = "com.mutx163.qingyu/home_widget"
+         private const val EXAM_REMINDER_CHANNEL = "com.mutx163.qingyu/exam_reminder"
+         private const val SUPPORT_CHANNEL = "com.mutx163.qingyu/support"
+         private const val MIGRATION_CHANNEL = "com.mutx163.qingyu/migration"
+         private const val CHANNEL_ID = "live_update_channel"
++        const val HYPERFOCUS_TEST_CHANNEL_ID = "hyperfocus_test_channel"
+         private const val PERMISSION_REQUEST_CODE = 1001
+         private const val PREFS_NAME = "native_runtime_prefs"
+         private const val KEY_HIDE_FROM_RECENTS = "hide_from_recents"
+         private const val KEY_MANAGED_UPDATE_DOWNLOAD_IDS = "managed_update_download_ids"
+         private const val POST_PROMOTED_NOTIFICATIONS_PERMISSION =
+             "android.permission.POST_PROMOTED_NOTIFICATIONS"
+         private const val ICS_CHANNEL = "com.mutx163.qingyu/ics_import"
+         private const val LAN_EDIT_CHANNEL = "com.mutx163.qingyu/lan_edit"
+         private const val FROSTED_BLUR_CHANNEL = "com.mutx163.qingyu/frosted_blur"
+         private const val LAUNCH_URL_CHANNEL = "com.mutx163.qingyu/launch_url"
+@@ -374,20 +375,23 @@ class MainActivity : FlutterActivity() {
+                         }
+                     }
+ 
+                     "stopLiveUpdate" -> {
+                         stopLiveUpdateService()
+                         result.success(true)
+                     }
+                     "getLiveUpdateDebugStatus" -> {
+                         result.success(LiveUpdateService.buildDebugStatus(this))
+                     }
++                    "getHyperFocusDebugStatus" -> {
++                        result.success(LiveUpdateService.buildHyperFocusDebugStatus(this))
++                    }
+                     "syncScheduleSnapshot" -> {
+                         val snapshotJson = call.arguments as? String
+                         if (snapshotJson != null) {
+                             LiveUpdateScheduler.syncSnapshot(this, snapshotJson)
+                             result.success(true)
+                         } else {
+                             result.error("INVALID_ARGUMENTS", "Missing schedule snapshot", null)
+                         }
+                     }
+                     "clearScheduleSnapshot" -> {
+@@ -1099,21 +1103,43 @@ class MainActivity : FlutterActivity() {
+     }
+ 
+     private fun isIgnoringBatteryOptimizations(): Boolean {
+         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+             return true
+         }
+         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+         return powerManager?.isIgnoringBatteryOptimizations(packageName) == true
+     }
+ 
++    private fun recordHyperFocusTestResult(stage: String, succeeded: Boolean, message: String) {
++        getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
++            .edit()
++            .putString("last_stage", stage)
++            .putBoolean("last_succeeded", succeeded)
++            .putString("last_message", message)
++            .putLong("last_at_millis", System.currentTimeMillis())
++            .apply()
++    }
++
+     private fun sendTestFocusNotification(args: Map<String, String>?): String? {
++        val stage = args?.get("stage") ?: "pre"
++        val failure = try {
++            sendTestFocusNotificationInner(args)
++        } catch (e: Throwable) {
++            Log.e("HyperFocusApi", "sendTestFocus failed", e)
++            "发送异常：${e.message ?: e.javaClass.simpleName}"
++        }
++        recordHyperFocusTestResult(stage, failure == null, failure ?: "")
++        return failure
++    }
++
++    private fun sendTestFocusNotificationInner(args: Map<String, String>?): String? {
+         return try {
+             val courseName = args?.get("courseName") ?: "高等数学"
+             val shortName = args?.get("shortName") ?: courseName
+             val startTime = args?.get("startTime") ?: "08:00"
+             val endTime = args?.get("endTime") ?: "09:40"
+             val location = args?.get("location") ?: "教科A-101"
+             val teacher = args?.get("teacher") ?: ""
+             val stage = args?.get("stage") ?: "pre"
+             Log.d("HyperFocusApi", "sendTestFocus stage=$stage")
+ 
+@@ -1271,31 +1297,30 @@ class MainActivity : FlutterActivity() {
+                     shareData {
+                         title = courseName
+                         content = location
+                     }
+                 }
+             }
+ 
+             extras.putString("miui.bigIsland.effect.src", "outer_glow")
+             extras.putString("miui.effect.src", "outer_glow")
+ 
+-            val testChannelId = "hyperfocus_test_channel"
+             notificationManager.createNotificationChannel(
+-                NotificationChannel(testChannelId, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
++                NotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID, "HyperFocusApi Test", NotificationManager.IMPORTANCE_HIGH)
+             )
+-            val channel = notificationManager.getNotificationChannel(testChannelId)
++            val channel = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             if (channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                 Log.e("HyperFocusApi", "test channel blocked, importance=${channel?.importance}")
+                 return "测试通知渠道已被关闭，请在系统通知设置中恢复该渠道"
+             }
+ 
+-            val notification = Notification.Builder(this, testChannelId)
++            val notification = Notification.Builder(this, HYPERFOCUS_TEST_CHANNEL_ID)
+                 .setContentTitle(baseTitleText.ifBlank { courseName })
+                 .setContentText(baseContentText.ifBlank { "查看课表" })
+                 .setSmallIcon(R.mipmap.ic_launcher)
+                 .setOngoing(true)
+                 .setAutoCancel(false)
+                 .addExtras(extras)
+                 .build()
+ 
+             notificationManager.notify(10001, notification)
+             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+@@ -1306,21 +1331,21 @@ class MainActivity : FlutterActivity() {
+                 context = applicationContext,
+                 category = "send_test_focus_failed",
+                 message = DiagnosticLogMessages.LIVE_UPDATE_SERVICE_START_FAILED,
+                 throwable = e,
+                 dedupeKey = "send_test_focus_failed",
+                 extras = mapOf(
+                     "courseName" to (args?.get("courseName") ?: "高等数学"),
+                     "stage" to (args?.get("stage") ?: "pre"),
+                 )
+             )
+-            "发送异常：${e.message ?: e.javaClass.simpleName}"
++            throw e
+         }
+     }
+ 
+     private fun openNotificationSettings() {
+         try {
+             startActivity(
+                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                     putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                 }
+             )
+@@ -1960,20 +1985,86 @@ class LiveUpdateService : Service() {
+                 "service" to service,
+                 "course" to copyStringKeyMap(snapshot["course"]),
+                 "timing" to copyStringKeyMap(snapshot["timing"]),
+                 "switches" to copyStringKeyMap(snapshot["switches"]),
+                 "display" to copyStringKeyMap(snapshot["display"]),
+                 "notification" to copyStringKeyMap(snapshot["notification"]),
+                 "recentDiagnostics" to recentDiagnostics,
+             )
+         }
+ 
++        fun buildHyperFocusDebugStatus(context: Context): Map<String, Any?> {
++            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
++            val channel = notificationManager.getNotificationChannel(MainActivity.HYPERFOCUS_TEST_CHANNEL_ID)
++            val channelBlocked = channel == null || channel.importance == NotificationManager.IMPORTANCE_NONE
++            val testPrefs = context.getSharedPreferences("hyper_focus_test", Context.MODE_PRIVATE)
++            val hasLastTest = testPrefs.contains("last_stage")
++            val lastStage = testPrefs.getString("last_stage", null)
++            val lastSucceeded = if (testPrefs.contains("last_succeeded")) testPrefs.getBoolean("last_succeeded", false) else null
++            val lastMessage = testPrefs.getString("last_message", null)
++            val lastAtMillis = if (testPrefs.contains("last_at_millis")) testPrefs.getLong("last_at_millis", 0L) else null
++            val templates = loadHyperFocusTemplates(context)
++            val scheduling = LiveUpdateScheduler.buildNextTriggerDebugInfo(context)
++
++            fun templateFlags(stage: String): Map<String, Boolean> = linkedMapOf(
++                "ticker" to (templates["ticker_$stage"]?.isNotBlank() == true),
++                "islandA" to (templates["islandA_$stage"]?.isNotBlank() == true),
++                "islandB" to (templates["islandB_$stage"]?.isNotBlank() == true),
++                "baseTitle" to (templates["baseTitle_$stage"]?.isNotBlank() == true),
++                "baseContent" to (templates["baseContent_$stage"]?.isNotBlank() == true),
++                "baseSubcontent" to (templates["baseSubcontent_$stage"]?.isNotBlank() == true),
++                "hintTitle" to (templates["hintTitle_$stage"]?.isNotBlank() == true),
++            )
++
++            val schedulingSummary = linkedMapOf<String, Any?>(
++                "schedulerReady" to (scheduling["nextTriggerAtMillis"] != null),
++                "nextTriggerCourseName" to scheduling["nextCourseName"],
++                "nextTriggerStage" to scheduling["nextTriggerStage"],
++                "nextTriggerAtMillis" to scheduling["nextTriggerAtMillis"],
++            )
++
++            return linkedMapOf(
++                "generatedAtMillis" to System.currentTimeMillis(),
++                "summary" to linkedMapOf(
++                    "hasNotificationPermission" to hasNotificationPermissionCompat(context),
++                    "testChannelBlocked" to channelBlocked,
++                    "templatesLoaded" to templates.isNotEmpty(),
++                    "schedulerReady" to schedulingSummary["schedulerReady"],
++                    "nextTriggerCourseName" to schedulingSummary["nextTriggerCourseName"],
++                    "nextTriggerStage" to schedulingSummary["nextTriggerStage"],
++                    "nextTriggerAtMillis" to schedulingSummary["nextTriggerAtMillis"],
++                    "hasLastTestResult" to hasLastTest,
++                    "lastTestStage" to lastStage,
++                    "lastTestSucceeded" to lastSucceeded,
++                    "lastTestMessage" to lastMessage,
++                    "lastTestAtMillis" to lastAtMillis,
++                ),
++                "environment" to buildEnvironmentSnapshot(context),
++                "scheduling" to scheduling,
++                "templates" to linkedMapOf(
++                    "pre" to templateFlags("pre"),
++                    "active" to templateFlags("active"),
++                    "post" to templateFlags("post"),
++                ),
++                "test" to linkedMapOf(
++                    "lastStage" to lastStage,
++                    "lastSucceeded" to lastSucceeded,
++                    "lastMessage" to lastMessage,
++                    "lastAtMillis" to lastAtMillis,
++                ),
++                "recentDiagnostics" to linkedMapOf(
++                    "enabled" to UmengDiagnosticReporter.isLiveDiagnosticsEnabled(context),
++                    "tail" to UmengDiagnosticReporter.readLiveDiagnosticsTail(context),
++                ),
++            )
++        }
++
+         private fun copyStringKeyMap(value: Any?): LinkedHashMap<String, Any?> {
+             val source = value as? Map<*, *> ?: return linkedMapOf()
+             val result = linkedMapOf<String, Any?>()
+             source.forEach { (key, item) ->
+                 if (key is String) {
+                     result[key] = item
+                 }
+             }
+             return result
+         }

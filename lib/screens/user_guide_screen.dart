@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
 
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -193,6 +192,11 @@ class _UserGuideScreenState extends State<UserGuideScreen>
     }
   }
 
+  String normalizeLocaleTagForDropdown(String? tag) {
+    if (tag == null || tag.isEmpty) return '';
+    return tag.replaceAll('_', '-');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -362,6 +366,15 @@ class _UserGuideScreenState extends State<UserGuideScreen>
   }
 
   Future<void> _runWelcomeAction(Future<bool> Function() action) async {
+    if (widget.requirePrivacyConsent && !_privacyChecked) {
+      // Must accept privacy before import/restore can complete onboarding.
+      await _pageController.animateToPage(
+        1,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
     final imported = await action();
     if (imported && mounted) {
       Navigator.of(context).pop(GuideAction.importCourses);

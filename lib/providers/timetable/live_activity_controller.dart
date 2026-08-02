@@ -4,11 +4,23 @@ String _liveResolveRealTime(
   TimetableProvider host,
   Course course,
   bool isStart,
-) => LiveActivityLogic.resolveRealTime(
-  course,
-  isStart,
-  host._resolveSectionsForCourse(course),
-);
+) {
+  // Diagnostic fixtures intentionally carry temporary free-form clocks. They
+  // must exercise the production selection path without mutating a user's
+  // active time scheme.
+  if (_isLiveTestingFixture(course)) {
+    return isStart ? course.startTime : course.endTime;
+  }
+  // Live always resolves against the calendar day being evaluated so date
+  // rules (e.g. summer timetable) apply for today without being baked into
+  // persisted Course clocks.
+  final onDate = DateTime.now();
+  return LiveActivityLogic.resolveRealTime(
+    course,
+    isStart,
+    host._resolveSectionsForCourse(course, onDate: onDate),
+  );
+}
 
 DateTime _liveApplyTimeCorrection(TimetableProvider host, DateTime dateTime) {
   final correctionSeconds = host._settings.liveTimeCorrectionSeconds;
@@ -225,6 +237,8 @@ LiveActivityCourseSelection? _liveGetActivityCourseSelection(
             ? null
             : host.resolveCourseDisplayName(nextCourse),
         stage: stage,
+        currentStartAt: startTime,
+        currentEndAt: endTime,
       );
     }
   }
@@ -243,6 +257,11 @@ LiveActivityCourseSelection? _liveGetActivityCourseSelection(
     if (startTime == null || !startTime.isAfter(currentTime)) {
       continue;
     }
+    final endTime = _liveBuildCorrectedCourseDateTime(
+      host,
+      currentTime,
+      _liveResolveRealTime(host, course, false),
+    );
     final blockedUntil = _liveResolveBeforeClassBlockedUntil(
       host,
       todayCourses,
@@ -260,6 +279,8 @@ LiveActivityCourseSelection? _liveGetActivityCourseSelection(
           ? null
           : host.resolveCourseDisplayName(nextCourse),
       stage: LiveActivityStage.beforeClass,
+      currentStartAt: startTime,
+      currentEndAt: endTime,
     );
   }
 
@@ -290,6 +311,7 @@ LiveActivityCourseSelection? _liveGetTestActivityCourseSelection(
 
   Course? bestCourse;
   DateTime? bestStartTime;
+  DateTime? bestEndTime;
   int? bestWeek;
 
   for (final course in host._courses) {
@@ -317,6 +339,11 @@ LiveActivityCourseSelection? _liveGetTestActivityCourseSelection(
       if (bestStartTime == null || candidateStart.isBefore(bestStartTime)) {
         bestCourse = course;
         bestStartTime = candidateStart;
+        bestEndTime = _liveBuildCorrectedCourseDateTime(
+          host,
+          candidateDate,
+          _liveResolveRealTime(host, course, false),
+        );
         bestWeek = week;
       }
       break;
@@ -352,6 +379,8 @@ LiveActivityCourseSelection? _liveGetTestActivityCourseSelection(
         ? null
         : host.resolveCourseDisplayName(nextCourse),
     stage: fallbackStage,
+    currentStartAt: bestStartTime,
+    currentEndAt: bestEndTime,
   );
 }
 
@@ -365,7 +394,9 @@ HomeWidgetSnapshot? _liveBuildHomeWidgetSnapshot(
   }
 
   final currentTime = now ?? DateTime.now();
-  final targetWeek = host._calculateWeekForDate(currentTime);
+  // Must use calendar week (no semesterWeekCount clamp). Clamping to the last
+  // teaching week after the term ends would revive endWeek=N courses forever.
+  final targetWeek = host._calculateCalendarWeekForDate(currentTime);
   final originalTodayCount = host
       .getCoursesForDay(currentTime.weekday, week: targetWeek)
       .length;
@@ -378,7 +409,7 @@ HomeWidgetSnapshot? _liveBuildHomeWidgetSnapshot(
             .toList(growable: false);
 
   final tomorrow = currentTime.add(const Duration(days: 1));
-  final tomorrowWeek = host._calculateWeekForDate(tomorrow);
+  final tomorrowWeek = host._calculateCalendarWeekForDate(tomorrow);
   final tomorrowIsHoliday = host.isHoliday(tomorrow);
   final tomorrowCourses = tomorrowIsHoliday
       ? const <Course>[]
@@ -488,7 +519,10 @@ Future<void> _liveUpdateActivityBody(
       DateTime.now(),
       _liveResolveRealTime(host, displayCourse, false),
     )?.millisecondsSinceEpoch;
-    final sections = host._resolveSectionsForCourse(displayCourse);
+    final sections = host._resolveSectionsForCourse(
+      displayCourse,
+      onDate: DateTime.now(),
+    );
     final progressMilestones = LiveActivityLogic.buildLiveProgressMilestones(
       displayCourse,
       sections,
@@ -558,12 +592,7 @@ Future<void> _liveUpdateActivityBody(
       hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
       hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
-      hfIconAEnabled: settings.hfIconAEnabled,
       hfStatusTextColor: settings.hfStatusTextColor,
-      hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
-      hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
-      hfOutEffectExpandEnabled: settings.hfOutEffectExpandEnabled,
-      hfOutEffectExpandColor: settings.hfOutEffectExpandColor,
     );
   } else {
     host._currentLiveCourseId = null;
@@ -646,7 +675,7 @@ Future<void> _liveSyncHomeWidgetSnapshot(TimetableProvider host) async {
     return;
   }
 
-  final snapshotSignature = jsonEncode(snapshot.toJson());
+  final snapshotSignature = jsonEncode(snapshot.toDedupJson());
   if (host._lastHomeWidgetSnapshotSignature != snapshotSignature) {
     final synced = await host._homeWidgetService.syncSnapshot(snapshot);
     if (synced) {

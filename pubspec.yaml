@@ -1,7 +1,7 @@
 name: university_timetable
 description: 轻屿课表应用 - 支持小米超级岛
 publish_to: 'none'
-version: 2.0.5-2+114
+version: 2.0.5-5+117
 repository: https://github.com/Mutx163/mikcb
 homepage: https://github.com/Mutx163/mikcb
 issue_tracker: https://github.com/Mutx163/mikcb/issues
@@ -18,7 +18,7 @@ dependencies:
   provider: ^6.1.1
   shared_preferences: ^2.2.2
   intl: ^0.20.2
-  uuid: ^4.2.1
+  uuid: ^4.6.0
   cupertino_icons: ^1.0.8
   file_picker: ^11.0.2
   http: ^1.2.2
@@ -31,10 +31,9 @@ dependencies:
   open_filex: ^4.7.0
   flutter_markdown: ^0.7.7+1
   flutter_secure_storage: ^10.3.1
-  webview_flutter: 4.11.0
+  webview_flutter: 4.14.1
   azlistview: ^2.0.0
   animations: ^2.0.11
-  flex_color_picker: ^3.7.0
   table_parser: ^1.0.1
   qr_flutter: ^4.1.0
   fl_chart: ^1.2.0
@@ -43,6 +42,15 @@ dependencies:
   fast_gbk: ^1.0.0
   flutter_svg: ^2.3.0
   image: ^4.8.0
+  flutter_miuix:
+    git:
+      url: https://github.com/Mutx163/flutter_miuix.git
+      ref: ef5c1312d7aab00670a2539ff67bc3b88086f795
+  liquid_glass_renderer: ^0.2.0-dev.4
+  flutter_blackbox: ^0.7.0
+  fountain_codes: ^1.0.0
+  mobile_scanner: ^7.4.0
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
@@ -57,6 +65,7 @@ flutter:
     - assets/branding/
     - assets/donate/
     - assets/holidays/
+    - assets/hyperfocus/
     - docs/releases/
     - assets/lan_edit/
     - assets/templates/

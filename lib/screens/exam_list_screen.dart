@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/enum_localizations.dart';
@@ -21,9 +20,9 @@ class ExamListScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     final upcomingExams = exams.where((e) => !e.isExpired).toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      ..sort(Exam.compareByStart);
     final pastExams = exams.where((e) => e.isExpired).toList()
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+      ..sort((a, b) => Exam.compareByStart(b, a));
     final todayExamCount = upcomingExams.where((e) => e.daysUntil == 0).length;
 
     return HyperosSubpage(
@@ -295,7 +294,6 @@ class _ExamOverviewCard extends StatelessWidget {
         : secondaryText;
 
     return HyperosAdaptiveCard(
-      preferredRadius: HyperosTokens.cardRadius,
       color: HyperosColors.card(context),
       child: HyperosPressableRow(
         onTap: onTap,

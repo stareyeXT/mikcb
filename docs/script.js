@@ -1,3 +1,28 @@
+/** 官网文案：优先 I18n，回退中文默认值（无 i18n 脚本时仍可用）。 */
+function t(key, fallback, vars) {
+  if (window.I18n && typeof window.I18n.t === "function") {
+    const translated = window.I18n.t(key, vars);
+    if (translated && translated !== key) {
+      return translated;
+    }
+  }
+  if (vars && typeof fallback === "string") {
+    return Object.keys(vars).reduce(
+      (text, name) => text.replaceAll(`{${name}}`, String(vars[name])),
+      fallback
+    );
+  }
+  return fallback ?? key;
+}
+
+function currentUiLocale() {
+  return window.I18n?.getLocale?.() || document.documentElement.lang || "zh-CN";
+}
+
+function isChineseUiLocale() {
+  return /^zh(?:-|$)/i.test(currentUiLocale());
+}
+
 if ("IntersectionObserver" in window) {
   const observer = new IntersectionObserver(
     (entries) => {
@@ -23,6 +48,8 @@ if ("IntersectionObserver" in window) {
 }
 
 const scrollRestoreStorageKey = "mikcb-docs-scroll-restore";
+const navigationEntry = performance.getEntriesByType?.("navigation")?.[0];
+const isReloadNavigation = navigationEntry?.type === "reload";
 
 function getCurrentPageKey() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -43,14 +70,21 @@ function saveScrollPosition() {
 }
 
 function restoreScrollPositionOnReload() {
-  const navigationEntry = performance.getEntriesByType?.("navigation")?.[0];
-  if (navigationEntry?.type !== "reload") {
+  if (!isReloadNavigation) {
     return;
   }
+
+  const finishRestore = () => {
+    document.documentElement.removeAttribute("data-scroll-restoring");
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "auto";
+    }
+  };
 
   try {
     const raw = window.sessionStorage?.getItem(scrollRestoreStorageKey);
     if (!raw) {
+      finishRestore();
       return;
     }
 
@@ -60,6 +94,7 @@ function restoreScrollPositionOnReload() {
       saved.page !== getCurrentPageKey() ||
       typeof saved.scrollY !== "number"
     ) {
+      finishRestore();
       return;
     }
 
@@ -73,16 +108,16 @@ function restoreScrollPositionOnReload() {
       restore();
       window.setTimeout(() => {
         restore();
-        document.documentElement.removeAttribute("data-scroll-restoring");
+        finishRestore();
       }, 80);
     });
   } catch (error) {
-    document.documentElement.removeAttribute("data-scroll-restoring");
+    finishRestore();
   }
 }
 
 if ("scrollRestoration" in window.history) {
-  window.history.scrollRestoration = "manual";
+  window.history.scrollRestoration = isReloadNavigation ? "manual" : "auto";
 }
 
 restoreScrollPositionOnReload();
@@ -101,11 +136,34 @@ const isDoNotTrackEnabled =
   navigator.doNotTrack === "1" ||
   window.doNotTrack === "1" ||
   navigator.msDoNotTrack === "1";
-const canSendAnalytics = isGoogleAnalyticsEnabled && !isDoNotTrackEnabled;
+const analyticsConsentStorageKey = "mikcb_analytics_consent";
+
+function hasAnalyticsConsent() {
+  try {
+    return localStorage.getItem(analyticsConsentStorageKey) === "granted";
+  } catch (error) {
+    return false;
+  }
+}
+
+function canSendAnalytics() {
+  return (
+    isGoogleAnalyticsEnabled && !isDoNotTrackEnabled && hasAnalyticsConsent()
+  );
+}
 let googleAnalyticsSetupPromise = null;
+let hasConfiguredGoogleAnalytics = false;
+
+function grantAnalyticsConsent() {
+  try {
+    localStorage.setItem(analyticsConsentStorageKey, "granted");
+  } catch (error) {
+    // Ignore storage failures and still try to enable analytics for this page.
+  }
+}
 
 function ensureGoogleAnalytics() {
-  if (!canSendAnalytics) {
+  if (!canSendAnalytics()) {
     return Promise.resolve(false);
   }
 
@@ -122,8 +180,13 @@ function ensureGoogleAnalytics() {
     }
 
     const finishSetup = () => {
-      window.gtag("js", new Date());
-      window.gtag("config", googleAnalyticsMeasurementId);
+      if (!hasConfiguredGoogleAnalytics) {
+        window.gtag("js", new Date());
+        window.gtag("config", googleAnalyticsMeasurementId, {
+          anonymize_ip: true,
+        });
+        hasConfiguredGoogleAnalytics = true;
+      }
       resolve(true);
     };
 
@@ -211,7 +274,7 @@ function isSafeExternalUrl(url) {
 }
 
 function trackGoogleAnalyticsEvent(eventName, params = {}, onComplete) {
-  if (!canSendAnalytics) {
+  if (!canSendAnalytics()) {
     onComplete?.();
     return;
   }
@@ -488,6 +551,14 @@ const yearEl = document.getElementById("year");
 if (yearEl) {
   yearEl.textContent = String(new Date().getFullYear());
 }
+const footerCopyEl = document.getElementById("footer-copy");
+if (footerCopyEl && !footerCopyEl.getAttribute("data-i18n")) {
+  footerCopyEl.textContent = t(
+    "footer.copy",
+    `Copyright © ${new Date().getFullYear()} 轻屿课表`,
+    { year: new Date().getFullYear() }
+  );
+}
 
 const navToggle = document.querySelector(".nav-toggle");
 const navMenu = document.getElementById("nav-menu");
@@ -531,6 +602,8 @@ if (navToggle && navMenu) {
     }
   });
 
+  window.addEventListener("pageshow", closeNavMenu);
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeNavMenu();
@@ -538,13 +611,21 @@ if (navToggle && navMenu) {
   });
 }
 
-if ("IntersectionObserver" in window && navSectionLinks.length) {
+if (navSectionLinks.length) {
   const sections = navSectionLinks
     .map((link) => ({
       link,
       section: document.querySelector(link.getAttribute("href")),
     }))
-    .filter((item) => item.section);
+    .filter((item) => item.section)
+    .sort((left, right) => {
+      if (left.section === right.section) {
+        return 0;
+      }
+      return left.section.compareDocumentPosition(right.section) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? -1
+        : 1;
+    });
 
   const setActiveNavLink = (targetId) => {
     navSectionLinks.forEach((link) => {
@@ -558,31 +639,64 @@ if ("IntersectionObserver" in window && navSectionLinks.length) {
     });
   };
 
-  const sectionObserver = new IntersectionObserver(
-    (entries) => {
-      const visibleEntry = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-      if (visibleEntry?.target?.id) {
-        setActiveNavLink(visibleEntry.target.id);
-      }
-    },
-    {
-      rootMargin: "-35% 0px -45% 0px",
-      threshold: [0.2, 0.45, 0.7],
+  let scrollSpyFrame = 0;
+  const updateActiveNavFromScroll = () => {
+    scrollSpyFrame = 0;
+    if (!sections.length) {
+      return;
     }
-  );
 
-  sections.forEach((item) => {
-    sectionObserver.observe(item.section);
-  });
+    const navBottom = document.querySelector(".global-nav")?.getBoundingClientRect().bottom || 0;
+    const marker = Math.max(navBottom + 24, Math.min(window.innerHeight * 0.35, 300));
+    let activeId = "";
+    sections.forEach((item) => {
+      if (item.section.getBoundingClientRect().top <= marker) {
+        activeId = item.section.id;
+      }
+    });
+    setActiveNavLink(activeId);
+  };
 
-  const initialHash = window.location.hash.replace(/^#/, "");
-  if (initialHash) {
-    setActiveNavLink(initialHash);
-  } else if (sections[0]?.section?.id) {
-    setActiveNavLink(sections[0].section.id);
-  }
+  const scheduleScrollSpy = () => {
+    if (scrollSpyFrame) {
+      return;
+    }
+    scrollSpyFrame = window.requestAnimationFrame(updateActiveNavFromScroll);
+  };
+
+  window.addEventListener("scroll", scheduleScrollSpy, { passive: true });
+  window.addEventListener("resize", scheduleScrollSpy);
+
+  const syncActiveNavFromLocation = () => {
+    const targetId = window.location.hash.replace(/^#/, "");
+    if (targetId && document.getElementById(targetId)) {
+      setActiveNavLink(targetId);
+      if (sections.some((item) => item.section?.id === targetId)) {
+        window.setTimeout(() => {
+          const target = document.getElementById(targetId);
+          if (!target) {
+            return;
+          }
+          const rect = target.getBoundingClientRect();
+          if (rect.top < 0 || rect.top > 140) {
+            const root = document.documentElement;
+            const previousBehavior = root.style.scrollBehavior;
+            root.style.scrollBehavior = "auto";
+            target.scrollIntoView({ block: "start", behavior: "auto" });
+            root.style.scrollBehavior = previousBehavior;
+          }
+        }, 0);
+      }
+    } else if (sections[0]?.section?.id) {
+      updateActiveNavFromScroll();
+    }
+  };
+
+  syncActiveNavFromLocation();
+  updateActiveNavFromScroll();
+  window.addEventListener("hashchange", syncActiveNavFromLocation);
+  window.addEventListener("pageshow", syncActiveNavFromLocation);
+  window.addEventListener("load", syncActiveNavFromLocation);
 }
 
 const repoApiUrl = "https://api.github.com/repos/Mutx163/mikcb";
@@ -591,23 +705,26 @@ const releaseFeedApiUrl = "./releases/feed.json";
 const fallbackReleasePage = "https://github.com/Mutx163/mikcb/releases";
 const defaultMirrorPrefix = "https://ghfast.top/";
 const globalMirrorProbeKey = "mikcb-docs-fastest-mirror:__global__";
-const mirrorCandidates = [
-  {
-    key: "ghfast",
-    label: "默认镜像",
-    prefix: "https://ghfast.top/",
-  },
-  {
-    key: "ghproxy_cn",
-    label: "备用镜像 1",
-    prefix: "https://ghproxy.cn/",
-  },
-  {
-    key: "gh_llkk",
-    label: "备用镜像 2",
-    prefix: "https://gh.llkk.cc/",
-  },
-];
+function getMirrorCandidates() {
+  return [
+    {
+      key: "ghfast",
+      label: t("js.defaultMirror", "默认镜像"),
+      prefix: "https://ghfast.top/",
+    },
+    {
+      key: "ghproxy_cn",
+      label: t("js.backupMirror1", "备用镜像 1"),
+      prefix: "https://ghproxy.cn/",
+    },
+    {
+      key: "gh_llkk",
+      label: t("js.backupMirror2", "备用镜像 2"),
+      prefix: "https://gh.llkk.cc/",
+    },
+  ];
+}
+const mirrorCandidates = getMirrorCandidates();
 
 const releaseModal = document.getElementById("release-modal");
 const releaseOpenButtons = document.querySelectorAll(".release-open-button");
@@ -647,20 +764,24 @@ const mirrorProbeCache = new Map();
 const mirrorProbePromises = new Map();
 
 function normalizeVersion(raw) {
-  return String(raw || "").trim().replace(/^[vV]/, "") || "未知版本";
+  return (
+    String(raw || "")
+      .trim()
+      .replace(/^[vV]/, "") || t("js.unknownVersion", "未知版本")
+  );
 }
 
 function formatDateTime(raw) {
   if (!raw) {
-    return "未知";
+    return t("js.unknown", "未知");
   }
 
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) {
-    return "未知";
+    return t("js.unknown", "未知");
   }
 
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(currentUiLocale(), {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -721,6 +842,13 @@ function extractLatestVersionSection(rawBody) {
 }
 
 function buildReleaseDescription(rawBody, releaseHints = []) {
+  if (rawBody && !isChineseUiLocale()) {
+    return t(
+      "js.releaseNotesSourceLanguage",
+      "完整版本说明目前以简体中文发布，可前往 Release 页面查看。"
+    );
+  }
+
   const normalizedHints = releaseHints
     .map((item) => cleanReleaseLine(item).toLowerCase())
     .filter(Boolean);
@@ -746,7 +874,7 @@ function buildReleaseDescription(rawBody, releaseHints = []) {
     });
 
   if (!lines.length) {
-    return "当前弹窗提供 GitHub 原版与镜像下载入口，方便直接下载安装。";
+    return t("js.releaseBodyFallback", "当前弹窗提供 GitHub 原版与镜像下载入口，方便直接下载安装。");
   }
 
   const preview = lines.slice(0, 3).join(" · ");
@@ -797,7 +925,7 @@ function normalizeReleaseRecord(release, channelLabel) {
       ) || release.assets[0]
     : null;
   return {
-    channelLabel: release.prerelease ? "预发布" : channelLabel,
+    channelLabel: release.prerelease ? t("js.channelPrerelease", "预发布") : channelLabel,
     version,
     title,
     publishedAt: formatDateTime(release.published_at || release.updated_at),
@@ -838,7 +966,7 @@ function normalizeCompactReleaseRecord(release, channelLabel) {
   const downloadUrl = release.downloadUrl || release.browser_download_url || releaseUrl;
 
   return {
-    channelLabel: String(release.channelLabel || channelLabel),
+    channelLabel,
     version,
     title,
     publishedAt: formatDateTime(
@@ -858,8 +986,8 @@ function normalizeStoredReleasePayload(payload) {
   if (Array.isArray(payload)) {
     const grouped = pickReleaseGroup(payload);
     return {
-      stable: normalizeReleaseRecord(grouped.stable, "正式版"),
-      prerelease: normalizeReleaseRecord(grouped.prerelease, "预发布"),
+      stable: normalizeReleaseRecord(grouped.stable, t("js.channelStable", "正式版")),
+      prerelease: normalizeReleaseRecord(grouped.prerelease, t("js.channelPrerelease", "预发布")),
       releaseCount: payload.length,
     };
   }
@@ -869,24 +997,40 @@ function normalizeStoredReleasePayload(payload) {
   }
 
   return {
-    stable: normalizeCompactReleaseRecord(payload.stable, "正式版"),
-    prerelease: normalizeCompactReleaseRecord(payload.prerelease, "预发布"),
+    stable: normalizeCompactReleaseRecord(payload.stable, t("js.channelStable", "正式版")),
+    prerelease: normalizeCompactReleaseRecord(payload.prerelease, t("js.channelPrerelease", "预发布")),
     releaseCount: Number(payload.releaseCount || 0) || 0,
   };
 }
 
 function formatCompactCount(value) {
   const number = Number(value) || 0;
-  if (number >= 10000) {
-    return `${(number / 10000).toFixed(number >= 100000 ? 0 : 1)} 万`;
+  try {
+    return new Intl.NumberFormat(currentUiLocale(), {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(number);
+  } catch {
+    if (number >= 10000) {
+      return `${(number / 10000).toFixed(number >= 100000 ? 0 : 1)} 万`;
+    }
+    if (number >= 1000) {
+      return `${(number / 1000).toFixed(number >= 10000 ? 0 : 1)}k`;
+    }
+    return String(number);
   }
-  if (number >= 1000) {
-    return `${(number / 1000).toFixed(number >= 10000 ? 0 : 1)}k`;
-  }
-  return String(number);
 }
 
 function extractReleaseHighlights(rawBody, fallbackDescription) {
+  if (rawBody && !isChineseUiLocale()) {
+    return [
+      t(
+        "js.releaseNotesSourceLanguage",
+        "完整版本说明目前以简体中文发布，可前往 Release 页面查看。"
+      ),
+    ];
+  }
+
   const lines = extractLatestVersionSection(rawBody)
     .split(/\r?\n/)
     .map((line) => line.replace(/^[-*]\s*/, "").trim())
@@ -897,7 +1041,7 @@ function extractReleaseHighlights(rawBody, fallbackDescription) {
   if (lines.length) {
     return lines.slice(0, 3);
   }
-  return [fallbackDescription || "最近版本更新内容会显示在这里。"];
+  return [fallbackDescription || t("js.highlightFallback", "最近版本更新内容会显示在这里。")];
 }
 
 function renderLatestStableHighlights(releaseData) {
@@ -939,21 +1083,21 @@ function formatReleaseDate(raw) {
 function normalizeChangeType(type) {
   const label = String(type || "").trim();
   if (/新增|feature|new/i.test(label)) {
-    return { label: "新增", className: "chip-new" };
+    return { label: t("js.chipNew", "新增"), className: "chip-new" };
   }
   if (/修复|fix/i.test(label)) {
-    return { label: "修复", className: "chip-fix" };
+    return { label: t("js.chipFix", "修复"), className: "chip-fix" };
   }
   if (/测试|test/i.test(label)) {
-    return { label: "测试", className: "chip-test" };
+    return { label: t("js.chipTest", "测试"), className: "chip-test" };
   }
   if (/移除|删除|remove/i.test(label)) {
-    return { label: "移除", className: "chip-remove" };
+    return { label: t("js.chipRemove", "移除"), className: "chip-remove" };
   }
   if (/调整|change|adjust/i.test(label)) {
-    return { label: "调整", className: "chip-change" };
+    return { label: t("js.chipChange", "调整"), className: "chip-change" };
   }
-  return { label: "优化", className: "chip-opt" };
+  return { label: t("js.chipOpt", "优化"), className: "chip-opt" };
 }
 
 function stripRepeatedChangePrefix(text, typeLabel) {
@@ -981,9 +1125,15 @@ function renderReleaseTimeline(feed) {
     releaseTimeline.innerHTML =
       '<article class="tl-item reveal is-visible" data-spotlight>' +
       '<div class="tl-node"><span class="tl-dot tl-dot-live"></span></div>' +
-      '<div class="tl-card"><header class="tl-head"><h3>暂时无法读取更新日志</h3>' +
-      '<span class="tl-badge">稍后重试</span></header>' +
-      '<p class="tl-status">可以先打开 GitHub Releases 查看完整更新内容。</p></div></article>';
+      '<div class="tl-card"><header class="tl-head"><h3>' +
+      escapeHtml(t("js.timelineEmptyTitle", "暂时无法读取更新日志")) +
+      '</h3>' +
+      '<span class="tl-badge">' +
+      escapeHtml(t("js.timelineEmptyBadge", "稍后重试")) +
+      '</span></header>' +
+      '<p class="tl-status">' +
+      escapeHtml(t("js.timelineEmptyStatus", "可以先打开 GitHub Releases 查看完整更新内容。")) +
+      '</p></div></article>';
     return;
   }
 
@@ -991,10 +1141,14 @@ function renderReleaseTimeline(feed) {
     .map((release, index) => {
       const version = normalizeVersion(release.version || release.tagName || release.title);
       const dateLabel = formatReleaseDate(release.publishedAt);
-      const changes = Array.isArray(release.highlights) ? release.highlights.slice(0, 5) : [];
+      const showSourceReleaseText = isChineseUiLocale();
+      const changes =
+        showSourceReleaseText && Array.isArray(release.highlights)
+          ? release.highlights.slice(0, 5)
+          : [];
       const isLatest = index === 0;
       const isMajor = /^2\.0$/.test(version);
-      const channelLabel = release.prerelease ? "预发布" : "正式版";
+      const channelLabel = release.prerelease ? t("js.channelPrerelease", "预发布") : t("js.channelStable", "正式版");
       const badgeClass = isLatest
         ? "tl-badge-new"
         : release.prerelease
@@ -1004,7 +1158,7 @@ function renderReleaseTimeline(feed) {
             : "";
       const dotClass = isLatest ? "tl-dot-live" : isMajor ? "tl-dot-major" : "";
       const cardClass = isMajor ? " tl-card-major" : "";
-      const badgeText = isLatest ? `最新 · ${channelLabel}` : channelLabel;
+      const badgeText = isLatest ? t("js.timelineLatest", "最新 · {channel}", { channel: channelLabel }) : channelLabel;
       const listHtml = changes.length
         ? changes
             .map((item) => {
@@ -1014,8 +1168,13 @@ function renderReleaseTimeline(feed) {
               )}</li>`;
             })
             .join("")
-        : `<li><i class="chip chip-opt">更新</i>${escapeHtml(
-            release.description || "查看 Release 页面了解更多"
+        : `<li><i class="chip chip-opt">${escapeHtml(t("js.chipUpdate", "更新"))}</i>${escapeHtml(
+            showSourceReleaseText
+              ? release.description || t("js.timelineMore", "查看 Release 页面了解更多")
+              : t(
+                  "js.releaseNotesSourceLanguage",
+                  "完整版本说明目前以简体中文发布，可前往 Release 页面查看。"
+                )
           )}</li>`;
 
       return (
@@ -1034,17 +1193,26 @@ function renderReleaseTimeline(feed) {
     .join("");
 }
 
+let releaseTimelineFeedPromise;
+
 async function loadReleaseTimeline() {
   if (!releaseTimeline) {
     return;
   }
   try {
-    const response = await fetch(releaseFeedApiUrl, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    if (!releaseTimelineFeedPromise) {
+      releaseTimelineFeedPromise = fetch(releaseFeedApiUrl, { cache: "no-store" }).then(
+        (response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.json();
+        }
+      );
     }
-    renderReleaseTimeline(await response.json());
+    renderReleaseTimeline(await releaseTimelineFeedPromise);
   } catch (error) {
+    releaseTimelineFeedPromise = undefined;
     renderReleaseTimeline({ releases: [] });
   }
 }
@@ -1068,16 +1236,23 @@ function renderTrustSignals({
 }
 
 async function loadTrustSignals(releases = 0) {
+  if (!heroStars && !trustStars && !trustReleases) {
+    return;
+  }
+
+  const releaseCount = Array.isArray(releases)
+    ? releases.length
+    : Number(releases || 0) || 0;
+  if (trustReleases && releaseCount > 0) {
+    trustReleases.textContent = formatCompactCount(releaseCount);
+  }
+
   if (trustSignalsLoaded) {
     return;
   }
   if (trustSignalsPromise) {
     return trustSignalsPromise;
   }
-
-  const releaseCount = Array.isArray(releases)
-    ? releases.length
-    : Number(releases || 0) || 0;
 
   trustSignalsPromise = (async () => {
     let stars = 0;
@@ -1174,7 +1349,7 @@ function setMirrorButtonLoading(button, isLoading) {
     button.dataset.originalLabel = button.textContent.trim();
   }
 
-  button.textContent = isLoading ? "准备中..." : button.dataset.originalLabel;
+  button.textContent = isLoading ? t("js.preparing", "准备中...") : button.dataset.originalLabel;
   button.setAttribute("aria-busy", isLoading ? "true" : "false");
   button.style.pointerEvents = isLoading ? "none" : "";
   button.style.opacity = isLoading ? "0.72" : "";
@@ -1213,7 +1388,7 @@ function renderReleaseData(channel = activeReleaseChannel) {
   }
 
   activeReleaseChannel = channel;
-  releaseDialogTitle.textContent = "下载轻屿课表";
+  releaseDialogTitle.textContent = t("js.downloadTitle", "下载轻屿课表");
   if (releaseDialog) {
     releaseDialog.dataset.releaseChannel = channel;
   }
@@ -1231,7 +1406,7 @@ function getMirrorCandidateByPrefix(prefix) {
   return (
     mirrorCandidates.find((candidate) => candidate.prefix === prefix) || {
       key: "unknown",
-      label: "未知镜像",
+      label: t("js.unknownMirror", "未知镜像"),
       prefix,
     }
   );
@@ -1393,9 +1568,9 @@ async function startMirrorDownload(button, channel = "stable") {
     ui_label: getElementLabel(button),
   });
   try {
-    updateMirrorPrewarmState("正在准备下载...");
+    updateMirrorPrewarmState(t("js.preparingDownload", "正在准备下载..."));
     targetUrl = (await ensureReleaseDownloadUrl(channel)) || fallbackReleasePage;
-    updateMirrorPrewarmState("正在连接下载线路...");
+    updateMirrorPrewarmState(t("js.connectingRoute", "正在连接下载线路..."));
     const bestPrefix = await resolveBestMirrorPrefix(targetUrl);
     const finalUrl = buildMirrorUrl(targetUrl, bestPrefix);
     const mirrorCandidate = getMirrorCandidateByPrefix(bestPrefix);
@@ -1422,7 +1597,7 @@ async function startMirrorDownload(button, channel = "stable") {
       }
     );
     triggerDownload(finalUrl);
-    updateMirrorPrewarmState("已开始下载，可切换 GitHub 原版。");
+    updateMirrorPrewarmState(t("js.downloadStarted", "已开始下载，可切换 GitHub 原版。"));
   } catch (error) {
     const fallbackUrl = buildMirrorUrl(targetUrl, defaultMirrorPrefix);
     const mirrorCandidate = getMirrorCandidateByPrefix(defaultMirrorPrefix);
@@ -1449,7 +1624,7 @@ async function startMirrorDownload(button, channel = "stable") {
       }
     );
     triggerDownload(fallbackUrl);
-    updateMirrorPrewarmState("已切到默认线路，可改用 GitHub 原版。");
+    updateMirrorPrewarmState(t("js.fallbackRoute", "已切到默认线路，可改用 GitHub 原版。"));
   } finally {
     window.setTimeout(() => {
       setMirrorButtonLoading(button, false);
@@ -1476,49 +1651,51 @@ async function prewarmReleaseDownloads() {
     return;
   }
 
-  updateMirrorPrewarmState("正在测速国内下载线路，稍后点下载会更快响应。");
+  updateMirrorPrewarmState(t("js.probingRoutes", "正在测速国内下载线路，稍后点下载会更快响应。"));
   try {
     await Promise.all(warmTargets.map((item) => prewarmMirrorForRelease(item)));
-    updateMirrorPrewarmState("下载线路已就绪。");
+    updateMirrorPrewarmState(t("js.routesReady", "下载线路已就绪。"));
   } catch (error) {
-    updateMirrorPrewarmState("国内下载会自动回退可用线路。");
+    updateMirrorPrewarmState(t("js.routesFallback", "国内下载会自动回退可用线路。"));
   }
 }
 
 function setReleaseLoadingState() {
-  releaseDialogTitle.textContent = "下载轻屿课表";
+  releaseDialogTitle.textContent = t("js.downloadTitle", "下载轻屿课表");
   if (releaseDialog) {
     releaseDialog.dataset.releaseChannel = "stable";
   }
-  releaseDescription.textContent = "正在读取版本信息...";
+  releaseDescription.textContent = t("js.loadingVersion", "正在读取版本信息...");
   activeReleaseChannel = "stable";
-  releaseChannel.textContent = "正式版";
-  releaseVersion.textContent = "读取中";
-  releasePublishedAt.textContent = "读取中";
+  releaseChannel.textContent = t("js.channelStable", "正式版");
+  releaseVersion.textContent = t("modal.reading", "读取中");
+  releasePublishedAt.textContent = t("modal.reading", "读取中");
   releaseGithubDownload.href = fallbackReleasePage;
   releaseMirrorDownload.href = fallbackReleasePage;
   releasePageLink.href = fallbackReleasePage;
   updateReleaseChannelTabs();
-  updateMirrorPrewarmState("正在准备下载线路...");
+  updateMirrorPrewarmState(t("js.preparingRoutes", "正在准备下载线路..."));
 }
 
 function setReleaseErrorState() {
-  releaseDialogTitle.textContent = "暂时无法读取最新版本";
+  releaseDialogTitle.textContent = t("js.errorTitle", "暂时无法读取最新版本");
   if (releaseDialog) {
     releaseDialog.dataset.releaseChannel = "stable";
   }
-  releaseDescription.textContent =
-    "你仍然可以直接打开 GitHub Releases 页面，或者使用镜像入口进行下载。";
-  releaseChannel.textContent = "正式版";
-  releaseVersion.textContent = "未知";
-  releasePublishedAt.textContent = "未知";
+  releaseDescription.textContent = t(
+    "js.errorDesc",
+    "你仍然可以直接打开 GitHub Releases 页面，或者使用镜像入口进行下载。"
+  );
+  releaseChannel.textContent = t("js.channelStable", "正式版");
+  releaseVersion.textContent = t("js.unknown", "未知");
+  releasePublishedAt.textContent = t("js.unknown", "未知");
   releaseGithubDownload.href = fallbackReleasePage;
   releaseMirrorDownload.href = buildMirrorUrl(fallbackReleasePage);
   releasePageLink.href = fallbackReleasePage;
   prereleaseReleaseData = null;
   activeReleaseChannel = "stable";
   updateReleaseChannelTabs();
-  updateMirrorPrewarmState("当前会直接尝试可用下载线路。");
+  updateMirrorPrewarmState(t("js.errorNote", "当前会直接尝试可用下载线路。"));
 }
 
 const releaseCacheTtlMs = 15 * 1000;
@@ -1611,7 +1788,7 @@ async function loadLatestRelease() {
         prerelease: normalizedPayload.prerelease,
         releaseCount: normalizedPayload.releaseCount,
         loadSource: "network",
-        successMessage: "已读取最新版本信息。",
+        successMessage: t("js.releaseLoaded", "已读取最新版本信息。"),
       });
     } catch (error) {
       trackStructuredEvent("release_data_load", {
@@ -1622,7 +1799,10 @@ async function loadLatestRelease() {
       setReleaseErrorState();
       renderLatestStableHighlights({
         rawBody: "",
-        description: "暂时无法读取最近更新，仍可直接打开 Releases 查看详情。",
+        description: t(
+          "js.highlightFallback",
+          "暂时无法读取最近更新，仍可直接打开 Releases 查看详情。"
+        ),
       });
       void loadTrustSignals(0);
       return null;
@@ -1634,7 +1814,6 @@ async function loadLatestRelease() {
   return releaseLoadPromise;
 }
 
-void loadTrustSignals([]);
 void loadReleaseTimeline();
 
 function openReleaseModal(triggerContext = {}) {
@@ -1747,6 +1926,22 @@ releaseGithubDownload?.addEventListener("click", (event) => {
 
 bindGeneralAnalytics();
 
+let schoolsDataPromise;
+
+function loadSchoolsData() {
+  if (!schoolsDataPromise) {
+    schoolsDataPromise = fetch("./schools.json", { cache: "no-store" }).then(
+      (response) => {
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+        return response.json();
+      }
+    );
+  }
+  return schoolsDataPromise;
+}
+
 async function initHeroSchoolCount() {
   const countEl = document.getElementById("hero-school-count");
   if (!countEl) {
@@ -1754,11 +1949,7 @@ async function initHeroSchoolCount() {
   }
 
   try {
-    const response = await fetch("./schools.json", { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("HTTP " + response.status);
-    }
-    const payload = await response.json();
+    const payload = await loadSchoolsData();
     const schoolCount = Number(payload?.counts?.schools);
     if (Number.isFinite(schoolCount) && schoolCount > 0) {
       countEl.textContent = String(schoolCount);
@@ -1806,6 +1997,7 @@ function initSchoolsPage() {
   const emptyEl = document.getElementById("schools-empty");
   const updatedEl = document.getElementById("schools-updated");
   const indexBarEl = document.getElementById("schools-index-bar");
+  const scrollEl = listEl.closest(".schools-list-scroll");
   const searchEl = document.getElementById("schools-search");
   const genericToggleEl = document.getElementById("schools-show-generic");
   const statCountEl = document.getElementById("schools-stat-count");
@@ -1830,7 +2022,7 @@ function initSchoolsPage() {
     if (Number.isNaN(date.getTime())) {
       return "";
     }
-    return date.toLocaleString("zh-CN", {
+    return date.toLocaleString(currentUiLocale(), {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -1863,7 +2055,9 @@ function initSchoolsPage() {
     const initial = escapeHtml(school.initial || "?");
     const name = escapeHtml(school.name);
     const subtitle =
-      school.category === "generic" ? "通用教务适配" : "网页登录导入";
+      school.category === "generic"
+        ? t("schools.rowGeneric", "通用教务适配")
+        : t("schools.rowSchool", "网页登录导入");
 
     return (
       '<article class="feature-item compact">' +
@@ -1928,11 +2122,11 @@ function initSchoolsPage() {
 
     const sections = [];
     if (generic.length) {
-      sections.push(renderGroup("通用教务", generic, "generic"));
+      sections.push(renderGroup(t("schools.genericGroup", "通用教务"), generic, "generic"));
     }
 
     [...groups.keys()]
-      .sort((left, right) => left.localeCompare(right, "zh-CN"))
+      .sort((left, right) => left.localeCompare(right, currentUiLocale()))
       .forEach((tag) => {
         sections.push(renderGroup(tag, groups.get(tag), tag));
       });
@@ -1946,7 +2140,7 @@ function initSchoolsPage() {
     }
 
     const tags = [...groups.keys()].sort((left, right) =>
-      left.localeCompare(right, "zh-CN")
+      left.localeCompare(right, currentUiLocale())
     );
     indexBarEl.hidden = false;
     indexBarEl.innerHTML = tags
@@ -1969,28 +2163,114 @@ function initSchoolsPage() {
 
   async function loadSchools() {
     try {
-      const response = await fetch("./schools.json", { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("HTTP " + response.status);
-      }
-      const payload = await response.json();
+      const payload = await loadSchoolsData();
       allSchools = Array.isArray(payload?.schools) ? payload.schools : [];
       updateStats(payload?.counts);
 
       const updatedLabel = formatUpdatedAt(payload?.updatedAt);
-      updatedEl.textContent = updatedLabel ? "列表更新于 " + updatedLabel : "";
+      updatedEl.textContent = updatedLabel
+          ? t("schools.updatedAt", "列表更新于 {time}", { time: updatedLabel })
+          : "";
 
       renderList();
     } catch (error) {
       listEl.innerHTML =
-        '<p class="schools-status">无法加载学校列表，请稍后刷新页面。</p>';
+        '<p class="schools-status">' +
+        t("schools.loadError", "无法加载学校列表，请稍后刷新页面。") +
+        "</p>";
       updatedEl.textContent = "";
     }
   }
 
   searchEl.addEventListener("input", renderList);
   genericToggleEl.addEventListener("change", renderList);
+  indexBarEl.addEventListener("click", (event) => {
+    const link = event.target instanceof Element
+      ? event.target.closest("a[href^='#schools-group-']")
+      : null;
+    if (!link || !scrollEl) {
+      return;
+    }
+    const target = document.getElementById(link.getAttribute("href").slice(1));
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    const targetTop =
+      target.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
+    scrollEl.scrollTo({
+      top: targetTop,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  });
+  window.__mikcbRerenderSchools = renderList;
   loadSchools();
 }
 
 initSchoolsPage();
+
+
+function refreshDynamicI18n() {
+  const nextCandidates = getMirrorCandidates();
+  nextCandidates.forEach((candidate, index) => {
+    if (mirrorCandidates[index]) {
+      mirrorCandidates[index].label = candidate.label;
+    }
+  });
+
+  // Reset download button cached labels so loading text uses the new locale.
+  document.querySelectorAll(".release-action-link, #release-mirror-download").forEach((button) => {
+    if (button.dataset.originalLabel) {
+      delete button.dataset.originalLabel;
+    }
+  });
+
+  if (stableReleaseData) {
+    stableReleaseData.channelLabel = t("js.channelStable", "正式版");
+    stableReleaseData.description = buildReleaseDescription(
+      stableReleaseData.rawBody,
+      [stableReleaseData.title, stableReleaseData.version, `v${stableReleaseData.version}`]
+    );
+    renderLatestStableHighlights(stableReleaseData);
+  }
+  if (prereleaseReleaseData) {
+    prereleaseReleaseData.channelLabel = t("js.channelPrerelease", "预发布");
+    prereleaseReleaseData.description = buildReleaseDescription(
+      prereleaseReleaseData.rawBody,
+      [
+        prereleaseReleaseData.title,
+        prereleaseReleaseData.version,
+        `v${prereleaseReleaseData.version}`,
+      ]
+    );
+  }
+  if (stableReleaseData) {
+    renderReleaseData(activeReleaseChannel);
+  }
+  if (releaseTimeline) {
+    void loadReleaseTimeline();
+  }
+  if (typeof window.__mikcbRerenderSchools === "function") {
+    window.__mikcbRerenderSchools();
+  }
+}
+
+function bindI18nRefresh() {
+  if (!window.I18n || typeof window.I18n.onChange !== "function") {
+    return;
+  }
+  window.I18n.onChange(() => {
+    refreshDynamicI18n();
+  });
+}
+
+if (window.I18n?.ready) {
+  void window.I18n.ready.then(() => {
+    bindI18nRefresh();
+    refreshDynamicI18n();
+  });
+} else {
+  bindI18nRefresh();
+}

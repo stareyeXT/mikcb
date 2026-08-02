@@ -359,6 +359,13 @@ abstract final class HyperosMiuixTopAppBar {
   static const smallCenterHeight = 50.0;
   static const largeTitleBottomPadding = 4.0;
   static const subtitleBottomPadding = 8.0;
+
+  /// App-side addition (not from upstream Kotlin): extra breathing room
+  /// between the expanded large title and the first content row. Upstream
+  /// rests content at largeTitleBottomPadding + list top padding (8dp
+  /// visible); design review wanted double that, so the page shell inset
+  /// and the frost threshold both add this on top.
+  static const largeTitleContentGap = 8.0;
 }
 
 // =============================================================================
@@ -462,7 +469,7 @@ abstract final class HyperosMiuixSnackbar {
   static const enterMs = 220;
   static const exitMs = 180;
   static const enterScale = 0.96;
-  static const durationShortMs = 2500;
+  static const durationShortMs = 2000;
   static const durationLongMs = 10000;
 }
 
@@ -523,6 +530,37 @@ abstract final class HyperosMiuixDialog {
   static const backGestureResetMs = 150;
   static const backProgressScaleDelta = 0.2;
   static const minBottomCornerRadius = 32.0;
+}
+
+// =============================================================================
+// Sheet / dialog content insets (app-wide floating panel padding)
+// =============================================================================
+
+/// Content padding inside a floating **sheet** card (pickers, forms, menus).
+///
+/// Horizontal and vertical are both 16 — matches [HyperosMiuixBasicComponent]
+/// and the default [HyperosSheet] / [HyperosSheetFrame] padding.
+///
+/// Do **not** invent a third horizontal value (12 / 20 / 10) on sheet shells;
+/// use this token (or omit `padding` to take the default).
+abstract final class HyperosSheetContentInsets {
+  static const double horizontal = 16.0;
+  static const double vertical = 16.0;
+
+  /// Default sheet body padding: 16 on all sides.
+  static const EdgeInsets content = EdgeInsets.all(horizontal);
+}
+
+/// Content padding inside a floating **dialog** card (confirm / alert).
+///
+/// Horizontal and vertical are both 24 — matches [HyperosMiuixDialog]
+/// `insideMargin*` from Miuix `DialogDefaults`.
+abstract final class HyperosDialogContentInsets {
+  static const double horizontal = HyperosMiuixDialog.insideMarginHorizontal;
+  static const double vertical = HyperosMiuixDialog.insideMarginVertical;
+
+  /// Default dialog body padding: 24 on all sides.
+  static const EdgeInsets content = EdgeInsets.all(horizontal);
 }
 
 // =============================================================================

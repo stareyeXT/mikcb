@@ -1,0 +1,151 @@
+diff --git a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+index acc00f9..f9950ea 100644
+--- a/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/mutx163/qingyu/MainActivity.kt
+@@ -111,20 +111,21 @@ class MainActivity : FlutterActivity() {
+         val fileName: String,
+         val textContent: String? = null,
+         val filePath: String? = null,
+     )
+ 
+     private var pendingExternalImport: PendingExternalImport? = null
+     private var pendingOpenLanEdit = false
+     private var pendingDebugRoute: Map<String, Any?>? = null
+     private var flutterChannel: MethodChannel? = null
+     private var lanEditChannel: MethodChannel? = null
++    private var testFocusDismissRunnable: Runnable? = null
+ 
+     override fun onCreate(savedInstanceState: Bundle?) {
+         // Fix: when launched via ACTION_SEND / ACTION_VIEW from another app (e.g.
+         // a file manager), the caller may NOT set FLAG_ACTIVITY_NEW_TASK, which
+         // causes our Activity to run inside the caller's task.  The Recents
+         // screen then shows the caller's label & icon instead of ours.
+         // Detect this situation (not task root + external intent) and redirect
+         // into our own task before proceeding.
+         if (!isTaskRoot && intent != null &&
+             (intent.action == Intent.ACTION_SEND ||
+@@ -1378,23 +1379,27 @@ class MainActivity : FlutterActivity() {
+                 .setContentTitle(baseTitleText.ifBlank { courseName })
+                 .setContentText(baseContentText.ifBlank { "查看课表" })
+                 .setSmallIcon(R.mipmap.ic_launcher)
+                 .setOngoing(true)
+                 .setAutoCancel(false)
+                 .addExtras(extras)
+                 .build()
+ 
+             notificationManager.notify(10001, notification)
+             if (timerTarget > 0L && timerTarget > now) {
+-                Handler(Looper.getMainLooper()).postDelayed({
+-                    notificationManager.cancel(10001)
+-                }, timerTarget - now)
++                val runnable = Runnable {
++                    (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
++                        .cancel(10001)
++                }
++                testFocusDismissRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
++                testFocusDismissRunnable = runnable
++                Handler(Looper.getMainLooper()).postDelayed(runnable, timerTarget - now)
+             }
+             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+             val activeIds = notificationManager.activeNotifications.map { it.id }
+             val testChannelState = notificationManager.getNotificationChannel(HYPERFOCUS_TEST_CHANNEL_ID)
+             val liveChannelState = notificationManager.getNotificationChannel("live_update_channel")
+             Log.d(
+                 "HyperFocusApi",
+                 "post-inspect: activeIds=$activeIds testChannel=${testChannelState?.importance} liveChannel=${liveChannelState?.importance}",
+             )
+             val activeContainsTest = activeIds.contains(10001)
+@@ -2002,20 +2007,22 @@ class MainActivity : FlutterActivity() {
+ 
+     private fun buildCourseTimeMillis(timeText: String): Long? {
+         val parts = timeText.split(":")
+         if (parts.size != 2) {
+             return null
+         }
+ 
+         val hour = parts[0].toIntOrNull() ?: return null
+         val minute = parts[1].toIntOrNull() ?: return null
+ 
++        if (hour !in 0..23 || minute !in 0..59) return null
++
+         return Calendar.getInstance().apply {
+             set(Calendar.HOUR_OF_DAY, hour)
+             set(Calendar.MINUTE, minute)
+             set(Calendar.SECOND, 0)
+             set(Calendar.MILLISECOND, 0)
+         }.timeInMillis
+     }
+ }
+ 
+ internal fun liveShouldMirrorStatusIntoMiuiFocusHint(
+@@ -4293,20 +4300,22 @@ class LiveUpdateService : Service() {
+ 
+     private fun buildCourseTimeMillis(timeText: String): Long? {
+         val parts = timeText.split(":")
+         if (parts.size != 2) {
+             return null
+         }
+ 
+         val hour = parts[0].toIntOrNull() ?: return null
+         val minute = parts[1].toIntOrNull() ?: return null
+ 
++        if (hour !in 0..23 || minute !in 0..59) return null
++
+         return Calendar.getInstance().apply {
+             set(Calendar.HOUR_OF_DAY, hour)
+             set(Calendar.MINUTE, minute)
+             set(Calendar.SECOND, 0)
+             set(Calendar.MILLISECOND, 0)
+         }.timeInMillis
+     }
+ 
+     private fun formatCountdownDuration(
+         durationMillis: Long,
+diff --git a/lib/screens/live_settings_subpages.dart b/lib/screens/live_settings_subpages.dart
+index e576857..0702812 100644
+--- a/lib/screens/live_settings_subpages.dart
++++ b/lib/screens/live_settings_subpages.dart
+@@ -1703,20 +1703,21 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
+ 
+   Future<void> _openVariableMultiSelect(String key, List<String> selected) async {
+     final result = await showHyperosSheet<List<String>>(
+       context: context,
+       builder: (sheetContext) => _VariableMultiSelectSheet(
+         variables: _availableVariables,
+         initial: selected,
+       ),
+     );
+     if (result == null) return;
++    if (!mounted) return;
+     setState(() {
+       _controllers[key]?.text = result.join(',');
+     });
+   }
+ 
+   @override
+   void dispose() {
+     for (final c in _controllers.values) {
+       c.dispose();
+     }
+@@ -1970,20 +1971,21 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
+ 
+   Future<void> _openVariableMultiSelect(String key, List<String> selected) async {
+     final result = await showHyperosSheet<List<String>>(
+       context: context,
+       builder: (sheetContext) => _VariableMultiSelectSheet(
+         variables: _availableVariables,
+         initial: selected,
+       ),
+     );
+     if (result == null) return;
++    if (!mounted) return;
+     setState(() {
+       _controllers[key]?.text = result.join(',');
+     });
+   }
+ 
+   @override
+   void dispose() {
+     for (final c in _controllers.values) {
+       c.dispose();
+     }

@@ -1,0 +1,113 @@
+diff --git a/lib/screens/timetable_settings_screen.dart b/lib/screens/timetable_settings_screen.dart
+index c5db775..2883385 100644
+--- a/lib/screens/timetable_settings_screen.dart
++++ b/lib/screens/timetable_settings_screen.dart
+@@ -1824,56 +1824,20 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
+                 await HyperosNavigation.push(
+                   context,
+                   builder: (_) => const HyperFocusExpandedIslandScreen(),
+                 );
+                 if (!mounted) return;
+                 setState(() {
+                   _draft = context.read<TimetableProvider>().settings;
+                 });
+               },
+             ),
+-            HyperosListTile(
+-              icon: Icons.image_outlined,
+-              title: '岛视觉',
+-              details: '岛标签图、Logo、字号、偏移、展开图标',
+-              onTap: () async {
+-                await HyperosNavigation.push(
+-                  context,
+-                  builder: (_) => LiveDisplaySettingsScreen(
+-                    title: '岛视觉（课前）',
+-                    forDuringEnd: false,
+-                  ),
+-                );
+-                if (!mounted) return;
+-                setState(() {
+-                  _draft = context.read<TimetableProvider>().settings;
+-                });
+-              },
+-            ),
+-            HyperosListTile(
+-              icon: Icons.image_outlined,
+-              title: '岛视觉（课中/课后）',
+-              details: '岛标签图、Logo、字号、偏移、展开图标',
+-              onTap: () async {
+-                await HyperosNavigation.push(
+-                  context,
+-                  builder: (_) => LiveDisplaySettingsScreen(
+-                    title: '岛视觉（课中/课后）',
+-                    forDuringEnd: true,
+-                  ),
+-                );
+-                if (!mounted) return;
+-                setState(() {
+-                  _draft = context.read<TimetableProvider>().settings;
+-                });
+-              },
+-            ),
+           ],
+         ),
+         const HyperosSectionGap(),
+         HyperosSectionLabel(text: '消失时间'),
+         HyperosListGroup(
+           children: [
+             HyperosListTile(
+               icon: Icons.timer_outlined,
+               title: '岛消失时间',
+               details: '按课前/课中/课后配置状态栏岛消失时间',
+@@ -3417,43 +3381,49 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
+         title: l10n.liveTestingRawDataTitle,
+         entries: const {},
+         trailingJson: _debugStatus == null
+             ? ''
+             : const JsonEncoder.withIndent('  ').convert(_debugStatus),
+       ),
+       _HyperFocusTestingSection.localLogs => _buildLocalLogsSection(context),
+     };
+   }
+ 
++  String _ellipsize(String? value, {int max = 24}) {
++    final v = value?.trim() ?? '';
++    if (v.length <= max) return v;
++    return '${v.substring(0, max)}…';
++  }
++
+   Widget _buildDebugSection({
+     required BuildContext context,
+     required String title,
+     required Map<String, String> entries,
+     String trailingJson = '',
+   }) {
+     return Column(
+       mainAxisSize: MainAxisSize.min,
+       children: [
+         HyperosSectionLabel(text: title),
+         HyperosListGroup(
+           children: [
+             for (final entry in entries.entries)
+               HyperosListTile(
+                 icon: Icons.label_outline,
+                 title: entry.key,
+-                details: entry.value,
++                details: _ellipsize(entry.value),
+               ),
+             if (trailingJson.isNotEmpty)
+               HyperosListTile(
+                 icon: Icons.data_object,
+                 title: 'JSON',
+-                details: trailingJson,
++                details: _ellipsize(trailingJson, max: 60),
+               ),
+           ],
+         ),
+         const HyperosSectionGap(),
+       ],
+     );
+   }
+ 
+   Widget _buildLocalLogsSection(BuildContext context) {
+     final l10n = AppLocalizations.of(context)!;
