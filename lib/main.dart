@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_miuix/miuix.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/service_message_localizer.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -296,7 +297,24 @@ class MyApp extends StatelessWidget {
                                 backgroundColor: Colors.transparent,
                                 resizeToAvoidBottomInset: false,
                                 body: DebugTuningOverlayHost(
-                                  child: MiuixFontWeightScope(child: child!),
+                                  child: Builder(
+                                    builder: (context) {
+                                      // HyperosColors reads the palette from
+                                      // MiuixTheme.of(context); without an
+                                      // explicit provider it falls back to the
+                                      // light scheme even in dark mode. Match
+                                      // the Material brightness so dark mode
+                                      // gets the dark palette.
+                                      return MiuixTheme(
+                                        data: MiuixThemeData.of(
+                                          Theme.of(context).brightness,
+                                        ),
+                                        child: MiuixFontWeightScope(
+                                          child: child!,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
