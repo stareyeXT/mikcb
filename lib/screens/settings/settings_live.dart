@@ -34,8 +34,56 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
     );
   }
 
+  void _onEngineChanged(SuperIslandEngine engine) {
+    final next = _draft.copyWith(superIslandEngine: engine);
+    context.read<TimetableProvider>().updateTimetableSettings(next);
+    setState(() => _draft = next);
+  }
+
   Widget _buildLiveSettingsSection(BuildContext context, int index) {
     final l10n = AppLocalizations.of(context)!;
+    return Column(
+      children: [
+        _buildEngineSelector(),
+        const HyperosSectionGap(),
+        if (_draft.superIslandEngine == SuperIslandEngine.builtIn)
+          _buildLiveUpdatesSettings(context, l10n)
+        else
+          _buildHyperFocusSettings(context, l10n),
+      ],
+    );
+  }
+
+  Widget _buildEngineSelector() {
+    return HyperosSettingsBlock(
+      title: '超级岛引擎',
+      child: HyperosListGroup(
+        children: [
+          HyperosRadioTile<SuperIslandEngine>(
+            title: 'Live Updates',
+            value: SuperIslandEngine.builtIn,
+            groupValue: _draft.superIslandEngine,
+            onChanged: (v) {
+              if (v != null) _onEngineChanged(v);
+            },
+          ),
+          HyperosRadioTile<SuperIslandEngine>(
+            title: '小米超级岛',
+            value: SuperIslandEngine.hyperFocusApi,
+            groupValue: _draft.superIslandEngine,
+            onChanged: (v) {
+              if (v != null) _onEngineChanged(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveUpdatesSettings(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
     final beforeClassSummary = _liveDisplaySummary(
       context,
       _draft.beforeClassDisplaySettings,
@@ -127,6 +175,130 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
               _draft = context.read<TimetableProvider>().settings;
             });
           },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHyperFocusSettings(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return Column(
+      children: [
+        HyperosSectionLabel(text: '提醒'),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.alarm_outlined,
+              title: l10n.liveReminderTimingTitle,
+              details:
+                  '课前: ${_draft.liveEnableBeforeClass ? "开" : "关"} 课中: ${_draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd ? "开" : "关"}',
+              onTap: () async {
+                await HyperosNavigation.push(
+                  context,
+                  builder: (_) => const HyperFocusTimingScreen(),
+                );
+                if (!mounted) return;
+                setState(() {
+                  _draft = context.read<TimetableProvider>().settings;
+                });
+              },
+            ),
+          ],
+        ),
+        const HyperosSectionGap(),
+        HyperosSectionLabel(text: '显示自定义'),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.brightness_4_outlined,
+              title: '状态栏岛自定义',
+              details: '岛A/岛B/息屏文字（课前/课中/课后）',
+              onTap: () async {
+                await HyperosNavigation.push(
+                  context,
+                  builder: (_) => const HyperFocusStatusIslandScreen(),
+                );
+                if (!mounted) return;
+                setState(() {
+                  _draft = context.read<TimetableProvider>().settings;
+                });
+              },
+            ),
+            HyperosListTile(
+              icon: Icons.space_dashboard_outlined,
+              title: '展开态自定义',
+              details: '主要标题/次要文本/前置文本/主要小文本',
+              onTap: () async {
+                await HyperosNavigation.push(
+                  context,
+                  builder: (_) => const HyperFocusExpandedIslandScreen(),
+                );
+                if (!mounted) return;
+                setState(() {
+                  _draft = context.read<TimetableProvider>().settings;
+                });
+              },
+            ),
+          ],
+        ),
+        const HyperosSectionGap(),
+        HyperosSectionLabel(text: '消失时间'),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.timer_outlined,
+              title: '岛消失时间',
+              details: '按课前/课中/课后配置状态栏岛消失时间',
+              onTap: () async {
+                await HyperosNavigation.push(
+                  context,
+                  builder: (_) => const HyperFocusIslandTimeoutScreen(),
+                );
+                if (!mounted) return;
+                setState(() {
+                  _draft = context.read<TimetableProvider>().settings;
+                });
+              },
+            ),
+          ],
+        ),
+        const HyperosSectionGap(),
+        HyperosSectionLabel(text: '工具'),
+        HyperosListGroup(
+          children: [
+            HyperosListTile(
+              icon: Icons.science_outlined,
+              title: '测试',
+              details: l10n.hfTestingEntryDetails,
+              onTap: () async {
+                await HyperosNavigation.push(
+                  context,
+                  builder: (_) => const _HyperFocusTestingSettingsScreen(),
+                );
+                if (!mounted) return;
+                setState(() {
+                  _draft = context.read<TimetableProvider>().settings;
+                });
+              },
+            ),
+            HyperosListTile(
+              icon: Icons.bug_report_outlined,
+              title: l10n.liveSelfCheckTitle,
+              details: l10n.liveSelfCheckSubtitle,
+              onTap: () async {
+                await HyperosNavigation.push(
+                  context,
+                  builder: (_) => const _LiveTestingSettingsScreen(),
+                );
+                if (!mounted) return;
+                setState(() {
+                  _draft = context.read<TimetableProvider>().settings;
+                });
+              },
+            ),
+          ],
         ),
       ],
     );
