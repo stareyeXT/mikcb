@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-02T19:32:47.705Z",
+  "generatedAt": "2026-08-03T03:52:50.386Z",
   "releaseCount": 1,
   "releases": [
     {
@@ -8,19 +8,19 @@
       "title": "Master Latest APK",
       "prerelease": true,
       "publishedAt": "2026-07-20T13:37:22Z",
-      "description": "版本：2.0.5-2-master.3.af1ebe2 · 提交：af1ebe29375614334dd15130e0a34de3d9d0ef39 · 构建：3",
+      "description": "版本：2.0.5-5-master.4.30964a3 · 提交：30964a38c5a5c6b1d8a3bc2ab1994ea7fdb7bcc6 · 构建：4",
       "highlights": [
         {
           "type": "优化",
-          "text": "版本：2.0.5-2-master.3.af1ebe2"
+          "text": "版本：2.0.5-5-master.4.30964a3"
         },
         {
           "type": "优化",
-          "text": "提交：af1ebe29375614334dd15130e0a34de3d9d0ef39"
+          "text": "提交：30964a38c5a5c6b1d8a3bc2ab1994ea7fdb7bcc6"
         },
         {
           "type": "优化",
-          "text": "构建：3"
+          "text": "构建：4"
         }
       ],
       "releaseUrl": "https://github.com/stareyeXT/mikcb/releases/tag/master-latest",
