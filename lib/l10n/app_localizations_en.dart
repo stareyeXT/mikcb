@@ -59,7 +59,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fontModeLabel => 'Font';
 
   @override
-  String get fontModeSystem => 'App Default (Inter)';
+  String get fontModeSystem => 'App Default';
 
   @override
   String get fontModeSansSerif => 'System Sans';
@@ -1318,6 +1318,76 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get qrTransferSessionMismatch =>
       'Detected a different transfer; make sure you are pointing at one stream only';
+
+  @override
+  String get qrTransferChecksumFailed =>
+      'Transfer verification failed. Please restart.';
+
+  @override
+  String get qrTransferRawLengthMismatch =>
+      'Received data length verification failed. Please restart.';
+
+  @override
+  String get qrTransferDecompressionFailed =>
+      'Could not decompress the received data. Please restart.';
+
+  @override
+  String get qrTransferPlaintextWarning =>
+      'QR transfer is plaintext. Nearby cameras may read it. Review the source before importing; nothing is overwritten without your confirmation.';
+
+  @override
+  String get qrTransferResourceLimit =>
+      'Received data exceeded the QR transfer resource limit. Restart and use a smaller backup.';
+
+  @override
+  String get qrTransferSessionExpired =>
+      'QR transfer timed out. Restart and keep the camera pointed at one screen.';
+
+  @override
+  String get qrTransferFullBackupWarning =>
+      'This full backup will replace the data on this device after confirmation.';
+
+  @override
+  String get qrTransferImportFullBackup => 'Import Full Backup';
+
+  @override
+  String get qrTransferDecodeFailed =>
+      'Could not decode the QR transfer. Please restart.';
+
+  @override
+  String get qrTransferRestart => 'Restart';
+
+  @override
+  String get qrTransferSampleFps => 'Sample FPS';
+
+  @override
+  String get qrTransferDecodeFps => 'Decode FPS';
+
+  @override
+  String get qrTransferReceiveSpeed => 'Receive Speed';
+
+  @override
+  String get qrTransferElapsed => 'Elapsed';
+
+  @override
+  String get qrTransferNewFrames => 'New Frames';
+
+  @override
+  String get qrTransferDuplicateFrames => 'Duplicate Frames';
+
+  @override
+  String get qrTransferBlockSize => 'Block Size';
+
+  @override
+  String get qrTransferBlockCount => 'Block Count';
+
+  @override
+  String get qrTransferFileData => 'File Data';
+
+  @override
+  String qrTransferFileDataDetail(String rawSize, String compressedSize) {
+    return 'Original $rawSize · Compressed $compressedSize';
+  }
 
   @override
   String get fullExportTitle => 'Export';
@@ -3301,10 +3371,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homePagePickImageAction => 'Choose image';
 
   @override
+  String get homePageSwitchImageAction => 'Switch photo';
+
+  @override
   String get homePageClearImageAction => 'Clear image';
 
   @override
   String get homePageImageNotSelected => 'Not selected';
+
+  @override
+  String get wallpaperPositionPickerTitle => 'Adjust wallpaper position';
+
+  @override
+  String get wallpaperPositionPickerResetTooltip => 'Reset to center';
+
+  @override
+  String get wallpaperPositionPickerDragHint =>
+      'Drag the wallpaper to adjust its position';
+
+  @override
+  String get wallpaperPositionPickerSwitchWallpaper => 'Change wallpaper';
+
+  @override
+  String get wallpaperPositionPickerDone => 'Done';
+
+  @override
+  String get wallpaperPositionPickerExit => 'Exit';
 
   @override
   String get appearanceTextColorsSectionTitle => 'Text colors';
@@ -5212,15 +5304,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get switchTimetableTitle => 'Switch timetable';
-
-  @override
-  String get switchTimetableSubtitleEmpty =>
-      'Tap a timetable below to switch the current view immediately';
-
-  @override
-  String switchTimetableSubtitleCurrent(String name) {
-    return 'Current: $name. Tap a timetable below to switch immediately';
-  }
 
   @override
   String get todayTimetableTitle => 'Today\'s Timetable';
@@ -9610,9 +9693,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get courseCardSurfaceStyleTranslucent => 'Translucent';
 
   @override
-  String get courseCardSurfaceStyleLiquidGlass => 'Liquid Glass';
-
-  @override
   String get courseCardSurfaceStyleGaussian => 'Gaussian Blur';
 
   @override
@@ -9726,18 +9806,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectEndTimeTitle => 'Select End Time';
 
   @override
-  String get weekdayInkContrastTitle => 'Text Contrast Enhancement';
+  String get weekdayInkContrastTitle => 'Low Text Contrast';
 
   @override
   String get weekdayInkContrastBodyDark =>
-      'Enhance course text contrast in dark mode';
+      'Your weekday bar text color has too little contrast against the dark wallpaper, so it is temporarily using automatic white to stay readable. You can change or reset it under \"Timetable Page → Text Colors\".';
 
   @override
   String get weekdayInkContrastBodyLight =>
-      'Enhance course text contrast in light mode';
+      'Your weekday bar text color has too little contrast against the light wallpaper, so it is temporarily using automatic black to stay readable. You can change or reset it under \"Timetable Page → Text Colors\".';
 
   @override
-  String get keepCurrentColorAction => 'Keep Current Color';
+  String get gotItAction => 'Got it';
 
   @override
   String get settingsTimetableSectionTitle => 'Timetable';
@@ -9800,4 +9880,257 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get debugUiOverlayToggleTitle => 'Debug UI Overlay';
+
+  @override
+  String get scheduleRepeatSectionTitle => 'Repeat';
+
+  @override
+  String get scheduleRepeatNone => 'Does not repeat';
+
+  @override
+  String get scheduleRepeatDaily => 'Every day';
+
+  @override
+  String get scheduleRepeatWeekly => 'Every week';
+
+  @override
+  String get scheduleRepeatEndDateLabel => 'Repeat until';
+
+  @override
+  String get scheduleRepeatEndDateHint =>
+      'Recurring schedules need an end date';
+
+  @override
+  String get scheduleRepeatWeeklyHint =>
+      'Repeats on the weekday of the start date';
+
+  @override
+  String get scheduleReminderSectionTitle => 'Schedule reminder';
+
+  @override
+  String get scheduleReminderOff => 'No reminder';
+
+  @override
+  String scheduleReminderMinutes(int minutes) {
+    return '$minutes minutes before';
+  }
+
+  @override
+  String get scheduleReminderPermissionMissing =>
+      'Notifications are off. The schedule will save, but its reminder may not be delivered';
+
+  @override
+  String get scheduleReminderPermissionAction =>
+      'Check notification permission';
+
+  @override
+  String get scheduleEnabledTitle => 'Enable schedule';
+
+  @override
+  String get scheduleDisabledSubtitle => 'Paused; reminders are disabled';
+
+  @override
+  String get scheduleEditScopeTitle => 'Edit scope';
+
+  @override
+  String get scheduleEditScopeThis => 'This occurrence only';
+
+  @override
+  String get scheduleEditScopeAll => 'All repeated occurrences';
+
+  @override
+  String get scheduleDeleteScopeTitle => 'Delete scope';
+
+  @override
+  String get scheduleDeleteScopeThis => 'Delete this occurrence only';
+
+  @override
+  String get scheduleDeleteScopeAll => 'Delete all repeated occurrences';
+
+  @override
+  String get scheduleOccurrenceEditHint =>
+      'You are editing one occurrence of this recurring schedule';
+
+  @override
+  String get scheduleRepeatEndRequired =>
+      'Choose an end date for the recurring schedule';
+
+  @override
+  String get homeMenuTasksTitle => 'Tasks';
+
+  @override
+  String get taskListTitle => 'Tasks';
+
+  @override
+  String get addTask => 'Add Task';
+
+  @override
+  String get editTask => 'Edit Task';
+
+  @override
+  String get saveTask => 'Save Task';
+
+  @override
+  String get taskTitleLabel => 'Task title';
+
+  @override
+  String get taskTitleHint => 'e.g. Finish chapter 3 exercises';
+
+  @override
+  String get taskTitleRequired => 'Enter a task title';
+
+  @override
+  String get taskNoteLabel => 'Note';
+
+  @override
+  String get taskNoteHint => 'Optional details';
+
+  @override
+  String get taskDueDateLabel => 'Due date';
+
+  @override
+  String get taskNoDueDate => 'No due date';
+
+  @override
+  String get taskCourseLabel => 'Course';
+
+  @override
+  String get taskCourseFilter => 'Course filter';
+
+  @override
+  String get taskAllCourses => 'All courses';
+
+  @override
+  String get taskNoCourse => 'No linked course';
+
+  @override
+  String get taskAllFilter => 'All';
+
+  @override
+  String get taskTodayFilter => 'Today';
+
+  @override
+  String get taskWeekFilter => 'This week';
+
+  @override
+  String get taskOverdueSection => 'Overdue';
+
+  @override
+  String get taskCompletedSection => 'Completed';
+
+  @override
+  String get taskNoTasks => 'No tasks yet';
+
+  @override
+  String get taskNoTasksForToday => 'No tasks due today';
+
+  @override
+  String get taskNoTasksForWeek => 'No tasks due this week';
+
+  @override
+  String get taskNoTasksForCourse => 'No tasks for this course';
+
+  @override
+  String get taskDelete => 'Delete task';
+
+  @override
+  String get taskDeleteConfirm => 'Delete this task?';
+
+  @override
+  String get taskHomeworkDefaultTitle => 'Homework';
+
+  @override
+  String get taskAddFromCourse => 'Add task';
+
+  @override
+  String get taskViewCourse => 'View course';
+
+  @override
+  String get taskSaved => 'Task saved';
+
+  @override
+  String get taskUpdated => 'Task updated';
+
+  @override
+  String get taskDeleted => 'Task deleted';
+
+  @override
+  String get icsExportSectionTitle => 'Calendar export';
+
+  @override
+  String get icsExportSectionSubtitle =>
+      'Choose courses, exams, and schedules to share as an ICS calendar';
+
+  @override
+  String get icsExportTitle => 'Export calendar';
+
+  @override
+  String get icsExportProfileLabel => 'Timetable profile';
+
+  @override
+  String get icsExportProfileSelectTitle => 'Choose timetable profile';
+
+  @override
+  String get icsExportDateRangeTitle => 'Date range';
+
+  @override
+  String get icsExportStartDate => 'Start date';
+
+  @override
+  String get icsExportEndDate => 'End date';
+
+  @override
+  String get icsExportTypesTitle => 'Calendar content';
+
+  @override
+  String get icsExportCourses => 'Courses';
+
+  @override
+  String get icsExportExams => 'Exams';
+
+  @override
+  String get icsExportSchedules => 'Schedules';
+
+  @override
+  String get icsExportButton => 'Export and share';
+
+  @override
+  String get icsExportSharing => 'Preparing calendar…';
+
+  @override
+  String get icsExportNoProfiles =>
+      'No timetable profile is available for export';
+
+  @override
+  String get icsExportDateRangeInvalid =>
+      'Choose an end date on or after the start date';
+
+  @override
+  String get icsExportNoSelection =>
+      'Select at least one calendar content type';
+
+  @override
+  String get icsExportSemesterStartRequired =>
+      'Set a semester start date before exporting courses';
+
+  @override
+  String get icsExportNoEvents =>
+      'No calendar events were found in the selected date range';
+
+  @override
+  String get icsExportCancelled => 'Calendar sharing was cancelled';
+
+  @override
+  String get icsExportFailed => 'Calendar export failed. Try again later';
+
+  @override
+  String icsExportShared(int count) {
+    return 'Exported and shared $count calendar events';
+  }
+
+  @override
+  String get icsExportShareText => 'Calendar file from Qingyu Timetable';
+
+  @override
+  String get icsExportShareSubject => 'Qingyu Timetable calendar';
 }

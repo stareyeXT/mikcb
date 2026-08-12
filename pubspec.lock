@@ -229,10 +229,10 @@ packages:
     dependency: "direct main"
     description:
       name: file_picker
-      sha256: f13a03000d942e476bc1ff0a736d2e9de711d2f89a95cd4c1d88f861c3348387
+      sha256: "29cc1fdb20613876cc7afc529738c1c0f11a9ca159b010edad0c566ac330847e"
       url: "https://pub.dev"
     source: hosted
-    version: "11.0.2"
+    version: "11.0.3"
   file_selector_linux:
     dependency: transitive
     description:
@@ -319,8 +319,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: ef5c1312d7aab00670a2539ff67bc3b88086f795
-      resolved-ref: ef5c1312d7aab00670a2539ff67bc3b88086f795
+      ref: "8d72a94a72ca4580b43ef2b5872ded3021815ccd"
+      resolved-ref: "8d72a94a72ca4580b43ef2b5872ded3021815ccd"
       url: "https://github.com/Mutx163/flutter_miuix.git"
     source: git
     version: "1.0.10"
@@ -706,10 +706,10 @@ packages:
     dependency: "direct main"
     description:
       name: package_info_plus
-      sha256: "16eee997588c60225bda0488b6dcfac69280a6b7a3cf02c741895dd370a02968"
+      sha256: "468c26b4254ab01979fa5e4a98cb343ea3631b9acee6f21028997419a80e1a20"
       url: "https://pub.dev"
     source: hosted
-    version: "8.3.1"
+    version: "9.0.1"
   package_info_plus_platform_interface:
     dependency: transitive
     description:
@@ -831,7 +831,7 @@ packages:
     source: hosted
     version: "2.2.0"
   qr:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: qr
       sha256: "5a1d2586170e172b8a8c8470bbbffd5eb0cd38a66c0d77155ea138d3af3a4445"
@@ -1253,4 +1253,4 @@ packages:
     version: "3.1.3"
 sdks:
   dart: ">=3.12.2 <4.0.0"
-  flutter: ">=3.44.0"
+  flutter: ">=3.44.2"

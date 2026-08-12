@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/course.dart';
 import '../models/exam.dart';
@@ -24,6 +25,7 @@ import '../models/timetable_settings.dart';
 import '../providers/timetable/couple_timetable_logic.dart';
 import '../providers/timetable_provider.dart';
 import '../services/app_update_service.dart';
+import '../services/support_creator_service.dart';
 import '../utils/app_toast.dart';
 import '../utils/hex_color.dart';
 import '../utils/course_color_palette.dart';
@@ -34,8 +36,9 @@ import '../widgets/course_followup_sheets.dart';
 import '../widgets/course_note_sheet.dart';
 import '../widgets/course_card.dart';
 import '../widgets/course_surface.dart';
-import '../widgets/course_card_liquid_glass_host.dart';
+import '../widgets/course_grid_surface_host.dart';
 import '../widgets/home_top_menu.dart';
+import '../widgets/home_update_prompt.dart';
 import '../widgets/preblurred_wallpaper_glass.dart';
 import '../widgets/profile_quick_switch_sheet.dart';
 import '../widgets/week_selector_picker_sheet.dart';
@@ -43,12 +46,14 @@ import '../widgets/app_boot_branding.dart';
 import 'add_course_screen.dart';
 import 'add_exam_screen.dart';
 import 'add_schedule_item_screen.dart';
+import 'add_task_screen.dart';
 import 'about_screen.dart';
 import 'course_import_screen.dart';
 import 'course_overview_screen.dart';
 import 'course_statistics_screen.dart';
 import 'exam_list_screen.dart';
 import 'support_creator_screen.dart';
+import 'task_list_screen.dart';
 import 'timetable_profiles_screen.dart';
 import 'timetable_settings_screen.dart';
 
@@ -158,6 +163,12 @@ class _TimetableScreenState extends State<TimetableScreen>
   /// whole semester.
   PageController? _dayViewPageController;
   final Set<PageController> _pendingDayViewControllerDisposals = {};
+
+  /// Recently disposed controllers are retained only as short-lived tombstones.
+  /// A stale replacement frame can still call [_ensureDayViewPageController]
+  /// before the old render tree detaches; two post-frame hops are enough to
+  /// cover that race without growing for the lifetime of the screen.
+  final Set<PageController> _disposedDayViewControllers = {};
   bool _isSyncingWeekPage = false;
   bool _isSyncingDayViewPage = false;
   int? _pendingSyncedWeek;
@@ -169,7 +180,14 @@ class _TimetableScreenState extends State<TimetableScreen>
   late final ValueNotifier<int> _visibleWeekListenable;
   final GlobalKey _timetableSurfaceKey = GlobalKey();
   final AppUpdateService _updateService = AppUpdateService();
+  final SupportCreatorService _supportCreatorService = SupportCreatorService();
+  final HomeUpdatePromptController _updatePromptController =
+      HomeUpdatePromptController();
   bool _hasAvailableUpdate = false;
+  bool _isUpdatePromptVisible = false;
+  bool _hasPresentedUpdatePrompt = false;
+  AppUpdateDownloadController? _homeDownloadController;
+  StreamSubscription<SystemDownloadProgress>? _systemDownloadSubscription;
   bool? _lastUpdateCheckIncludePrerelease;
   bool _isCheckingForUpdate = false;
   TimetableProvider? _lastSyncedProvider;
@@ -221,6 +239,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   int? _dayViewTransitionSourceDayOfWeek;
   double _dayViewAnchorFraction = 0.5;
   bool _isDaySwipeAnimating = false;
+
   bool _coupleOverlayEnabled = false;
   bool _sharedFreeSegmentsExpanded = false;
   static const int _sharedFreeVisibleSegmentLimit = 2;
@@ -241,12 +260,18 @@ class _TimetableScreenState extends State<TimetableScreen>
   VoidCallback? _homePullQuickImportCancel;
   double? _wallpaperTopLuminance;
 
+  /// Luminance of the wallpaper band the weekday/date chrome bar sits over.
+  /// The status/title strip can be bright while the band below (where the
+  /// weekday bar lives) is dark, so the weekday ink must not reuse the top
+  /// sample.
+  double? _wallpaperWeekdayLuminance;
+
   /// Luminance of the wallpaper band the day-view cards sit over. The top
   /// band can be dark while mid-screen is bright (or vice versa), so card ink
   /// must not reuse the chrome sample.
   double? _wallpaperBodyLuminance;
-  String? _wallpaperLuminanceSamplePath;
-  String? _wallpaperLuminanceRequestedPath;
+  String? _wallpaperLuminanceSampleKey;
+  String? _wallpaperLuminanceRequestedKey;
   bool _wallpaperLuminanceFileExists = false;
 
   /// Last "custom weekday ink is unreadable" combination already warned about
@@ -305,10 +330,16 @@ class _TimetableScreenState extends State<TimetableScreen>
     _weekPageController.dispose();
     _dayViewExpandController.dispose();
     _visibleWeekListenable.dispose();
+    _homeDownloadController?.cancel();
+    _systemDownloadSubscription?.cancel();
+    _updatePromptController.dispose();
     _dayAgendaProgressTick.dispose();
     _dayAgendaProgressTimer?.cancel();
     _dayHeaderPreview.dispose();
-    _dayViewPageController?.dispose();
+    final dayViewController = _dayViewPageController;
+    if (dayViewController != null) {
+      dayViewController.dispose();
+    }
     for (final controller in _pendingDayViewControllerDisposals) {
       controller.dispose();
     }
@@ -347,16 +378,15 @@ class _TimetableScreenState extends State<TimetableScreen>
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final darkFallback = colorScheme.surface;
         final settings = provider.settings;
-        final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+        final viewportSize = MediaQuery.sizeOf(context);
+        final hasBackdrop = hasHomePageBackdropImage(settings);
         final statusBarShowsBackdrop = homePageRegionShowsBackdrop(
           settings,
           HomePageBackgroundScope.statusBar,
-          isDark: isDark,
         );
         final timetableShowsBackdrop = homePageRegionShowsBackdrop(
           settings,
           HomePageBackgroundScope.timetable,
-          isDark: isDark,
         );
         final pageBackgroundColor = resolveHomePageBackgroundColor(
           settings: settings,
@@ -378,7 +408,6 @@ class _TimetableScreenState extends State<TimetableScreen>
         final headerShowsBackdrop = homePageRegionShowsBackdrop(
           settings,
           HomePageBackgroundScope.header,
-          isDark: isDark,
         );
         final headerUsesFrostedChrome =
             hasBackdrop &&
@@ -389,19 +418,21 @@ class _TimetableScreenState extends State<TimetableScreen>
         final scaffoldBackgroundColor = timetableShowsBackdrop
             ? Colors.transparent
             : timetableBackground.color;
-        // Status-bar icon polarity: with wallpaper showing through the status
-        // bar the backdrop reads dark (dim mask / frosted chrome), otherwise
-        // follow the opaque page background. The page's own background is
-        // transparent over wallpaper, so the shell cannot derive this itself.
-        final systemOverlayBackground = statusBarShowsBackdrop
-            ? (hasBackdrop
-                  ? (headerUsesFrostedChrome
-                        ? const Color(0xFF1A1A1A)
-                        : Colors.black)
-                  : pageBackgroundColor)
-            : pageBackgroundColor;
+        // The page's own background is transparent over wallpaper, so derive
+        // status-bar icon polarity from the sampled top band when available.
+        final systemOverlayBackground = resolveHomePageStatusBarBackground(
+          pageBackground: pageBackgroundColor,
+          statusBarShowsBackdrop: statusBarShowsBackdrop,
+          hasBackdrop: hasBackdrop,
+          isDark: isDark,
+          usesFrostedChrome: headerUsesFrostedChrome,
+          wallpaperTopLuminance: _wallpaperTopLuminance,
+        );
 
-        _scheduleWallpaperLuminanceSampleIfNeeded(settings);
+        _scheduleWallpaperLuminanceSampleIfNeeded(
+          settings,
+          viewportSize: viewportSize,
+        );
         // After the sample lands: a hand-picked weekday ink can be invisible
         // over this wallpaper — never silently override it, explain instead.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -410,7 +441,10 @@ class _TimetableScreenState extends State<TimetableScreen>
           }
         });
         final chromeForeground = _resolveHomeChromeForeground(
-          hasBackdrop: hasBackdrop,
+          // Only flip by wallpaper luminance when the header band actually
+          // shows the wallpaper / frosted glass; with the scope toggled off it
+          // paints the opaque page background and must use the theme ink.
+          headerShowsWallpaper: headerUsesFrostedChrome,
           themeForeground: foruiTheme.colors.foreground,
         );
         final chromeMutedForeground = hasBackdrop
@@ -432,13 +466,10 @@ class _TimetableScreenState extends State<TimetableScreen>
         final backdropBlurOn =
             hasBackdrop && HyperosBlurredHeader.backdropBlurEnabled(context);
         final cardStyle = settings.courseCardSurfaceStyle;
-        // Liquid AND gaussian cards both sample the bitmap now — gaussian's
-        // live BackdropFilter collapsed to transparent inside the day-view
-        // open/close Opacity ramp (see CourseSurface._buildGaussian).
+        // Gaussian cards sample the cached bitmap instead of a live
+        // BackdropFilter while the day-view shell is animating.
         final useCoursePreblur =
-            backdropBlurOn &&
-            (cardStyle == CourseCardSurfaceStyle.liquidGlass ||
-                cardStyle == CourseCardSurfaceStyle.gaussian);
+            backdropBlurOn && cardStyle == CourseCardSurfaceStyle.gaussian;
         // The day-view summary card is drawn from this same bitmap whenever
         // the chrome band has glass — regardless of the course-card style.
         // Without it the card's PreblurredWallpaperAlignedFill paints nothing
@@ -452,12 +483,13 @@ class _TimetableScreenState extends State<TimetableScreen>
           if (backdropBlurOn && cardStyle == CourseCardSurfaceStyle.gaussian) {
             return HyperosBlurredHeader.blurSigmaOf(context);
           }
-          if (useCoursePreblur ||
-              appearance.glassMode == FrostedGlassMode.liquidGlass) {
-            return ((appearance.liquidGlassTuning ?? LiquidGlassTuning.defaults)
-                        .blur *
-                    0.45)
-                .clamp(2.0, 8.0);
+          // Preserve the global liquid-glass chrome path. Course cards no
+          // longer use liquid glass, but page chrome still may use it and the
+          // cached summary backdrop must match that tuning.
+          if (appearance.glassMode == FrostedGlassMode.liquidGlass) {
+            return (appearance.liquidGlassTuning ?? LiquidGlassTuning.defaults)
+                .blur
+                .clamp(2.0, 24.0);
           }
           // Gaussian chrome: match the band's BackdropFilter sigma so the
           // summary card's stand-in frost reads like the band above it.
@@ -472,9 +504,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                       controller: _weekPageController,
                       pageCount: settings.semesterWeekCount,
                       settings: settings,
-                      isDark: isDark,
                     )
-                  : homePageBackdropLayer(settings: settings, isDark: isDark),
+                  : homePageBackdropLayer(settings: settings),
             if (hasBackdrop && !statusBarShowsBackdrop)
               HomePageStatusBarBackdropMask(color: pageBackgroundColor),
             // Single continuous glass for title + weekday (no time-column blur).
@@ -928,15 +959,19 @@ class _TimetableScreenState extends State<TimetableScreen>
     final visibleDays = _visibleDayNumbers(settings);
     final count = visibleDays.length;
     final week = (page ~/ count) + 1;
-    return _DayViewPageTarget(
-      week: week,
-      dayOfWeek: visibleDays[page % count],
-    );
+    return _DayViewPageTarget(week: week, dayOfWeek: visibleDays[page % count]);
   }
 
   PageController _ensureDayViewPageController(TimetableSettings settings) {
     final existing = _dayViewPageController;
-    if (existing != null && existing.hasClients) {
+    // Never hand out a controller that is pending disposal: the pre-blur
+    // fill (and the PageView) would latch onto it, and once the deferred
+    // disposal runs a stale LayoutBuilder rebuild can hit the disposed
+    // controller and throw.
+    if (existing != null &&
+        existing.hasClients &&
+        !_pendingDayViewControllerDisposals.contains(existing) &&
+        !_disposedDayViewControllers.contains(existing)) {
       return existing;
     }
     final fresh = _createDayViewPageController(settings);
@@ -983,13 +1018,59 @@ class _TimetableScreenState extends State<TimetableScreen>
     }
   }
 
+  void _rememberDisposedDayViewController(PageController controller) {
+    if (!_disposedDayViewControllers.add(controller)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _disposedDayViewControllers.remove(controller);
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _disposedDayViewControllers.remove(controller);
+      });
+    });
+  }
+
   void _disposeDayViewControllerAfterReplacement(PageController controller) {
     if (!_pendingDayViewControllerDisposals.add(controller)) {
       return;
     }
 
-    // Two post-frame hops allow the replacement widget tree to build and let
-    // AnimatedBuilder detach its listener before the controller is disposed.
+    // The replacement widget tree builds and detaches over a couple of
+    // frames. Disposal waits until nothing can reach the controller any
+    // more: the field was swapped (no future build will hand it out) and no
+    // live PageView still holds it. The pre-blur fill re-latches its
+    // listener in the same build that swaps the field, so this ordering
+    // guarantees the listener is detached before dispose — otherwise a
+    // stale LayoutBuilder rebuild can hit the disposed controller and throw
+    // (a PageController used after being disposed).
+    void retryDispose() {
+      if (!mounted) {
+        if (_pendingDayViewControllerDisposals.remove(controller)) {
+          controller.dispose();
+        }
+        return;
+      }
+      if (_dayViewPageController == controller || controller.hasClients) {
+        if (controller.hasClients) {
+          // A PageView still holds this controller: force a rebuild so the
+          // next _ensureDayViewPageController swaps in a fresh controller
+          // and the old one detaches, then re-check next frame.
+          setState(() {});
+        }
+        _pendingDayViewControllerDisposals.add(controller);
+        WidgetsBinding.instance.addPostFrameCallback((_) => retryDispose());
+        WidgetsBinding.instance.scheduleFrame();
+        return;
+      }
+      if (_pendingDayViewControllerDisposals.remove(controller)) {
+        _rememberDisposedDayViewController(controller);
+        controller.dispose();
+      }
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         if (_pendingDayViewControllerDisposals.remove(controller)) {
@@ -997,11 +1078,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         }
         return;
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_pendingDayViewControllerDisposals.remove(controller)) {
-          controller.dispose();
-        }
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => retryDispose());
       WidgetsBinding.instance.scheduleFrame();
     });
     WidgetsBinding.instance.scheduleFrame();
@@ -1168,19 +1245,20 @@ class _TimetableScreenState extends State<TimetableScreen>
         'day=${target.dayOfWeek}',
       );
     }
-    // Midpoint preview: recolour the weekday header the moment the pager
-    // crosses a page midpoint (matching the indicator), via the scoped
-    // notifier — no full-State rebuild while the fling is still running.
-    _dayHeaderPreview.value = (target.week, target.dayOfWeek);
     if (_selectedWeekForDayView == target.week &&
         _selectedDayOfWeek == target.dayOfWeek) {
       return;
     }
-    // onPageChanged fires mid-fling (page midpoint crossing). Committing state
-    // here rebuilt the whole home screen + persisted settings while the pager
-    // was still animating — that was the ~50-frame hitch on every day switch.
-    // Same model as the week pager: haptic now, commit on ScrollEnd
-    // (_settleDayViewPage).
+    // Midpoint preview: recolour the weekday header the moment the pager
+    // crosses a page midpoint (matching the indicator), via the scoped
+    // notifier — no full-State rebuild while the fling is still running.
+    // Committing the selection here instead (setState + persist + week-page
+    // jump) rebuilt the whole home screen on *every* page crossing — a single
+    // real-device swipe crosses 30+ pages and each rebuild re-samples the
+    // wallpaper blur, which starved the main thread into an ANR. The actual
+    // selection commit stays on ScrollEnd (_settleDayViewPage), which now
+    // re-checks until the pager is truly stationary.
+    _dayHeaderPreview.value = (target.week, target.dayOfWeek);
     _maybeSelectionClick(settings);
   }
 
@@ -1204,6 +1282,19 @@ class _TimetableScreenState extends State<TimetableScreen>
     }
     final controller = _dayViewPageController;
     if (controller == null || !controller.hasClients) {
+      return;
+    }
+    // A ScrollEnd fires at the end of *every* activity, including the frame
+    // where a new gesture begins (the previous drag's end is dispatched
+    // before this drag's first move). Under fake-async test frames the snap
+    // spring can still be running at that point (page=0.9988, not 1.0), so a
+    // stale end would commit the old page again and the panel lags the real
+    // content by one day. Rather than dropping this commit opportunity
+    // entirely (which would lose the fix for consecutive quick swipes),
+    // re-check on the next frame until the pager is truly stationary; the
+    // commit then lands on the page the content actually shows.
+    if (controller.position.isScrollingNotifier.value) {
+      _scheduleDayViewSettleRetry(provider, settings);
       return;
     }
     final page = controller.page?.round();
@@ -1235,6 +1326,35 @@ class _TimetableScreenState extends State<TimetableScreen>
     if (target.week != _visibleWeek && !_isSyncingWeekPage) {
       unawaited(_jumpToWeek(provider, target.week, animatePage: false));
     }
+  }
+
+  /// Re-checks the day pager on the next frame after a ScrollEnd arrived while
+  /// the pager was still scrolling (a stale end interleaved with the next
+  /// gesture). Once the pager is truly stationary the selection is committed
+  /// to the page the content actually shows; if a fresh gesture owns the
+  /// pager we wait for its own ScrollEnd instead of polling forever.
+  void _scheduleDayViewSettleRetry(
+    TimetableProvider provider,
+    TimetableSettings settings,
+  ) {
+    if (!mounted || !_isDayView) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isDayView) {
+        return;
+      }
+      final controller = _dayViewPageController;
+      if (controller == null || !controller.hasClients) {
+        return;
+      }
+      if (controller.position.isScrollingNotifier.value) {
+        // Still mid-flight (snap spring running, or a new drag already owns
+        // the pager): the next ScrollEnd will retry again.
+        return;
+      }
+      _settleDayViewPage(provider, settings);
+    });
   }
 
   /// Weekday-bar drag → day-pager bridge. The bar acts as a visible-day-count
@@ -1317,102 +1437,167 @@ class _TimetableScreenState extends State<TimetableScreen>
     return vx;
   }
 
-  /// Schedules wallpaper top-band luminance sampling without sync I/O in build.
+  /// Schedules wallpaper luminance sampling without sync I/O in build.
   ///
-  /// File existence is checked asynchronously; results are cached per path so
-  /// rebuilds only re-sample when the backdrop path changes.
-  ///
-  /// Runs in **both** themes: a light wallpaper under a dark theme needs dark
-  /// ink just as much as a dark wallpaper under a light theme does. Gating this
-  /// on `isDark` left white-on-white chrome text on light wallpapers.
-  void _scheduleWallpaperLuminanceSampleIfNeeded(TimetableSettings settings) {
+  /// File existence is checked asynchronously; results are cached per path,
+  /// viewport and wallpaper alignment so a cover crop change cannot keep using
+  /// a sample from an off-screen part of the image.
+  void _scheduleWallpaperLuminanceSampleIfNeeded(
+    TimetableSettings settings, {
+    required Size viewportSize,
+  }) {
     final path = resolveHomePageBackdropImagePath(settings);
     if (path == null || path.isEmpty) {
       if (_wallpaperTopLuminance != null ||
-          _wallpaperLuminanceSamplePath != null ||
-          _wallpaperLuminanceRequestedPath != null) {
+          _wallpaperWeekdayLuminance != null ||
+          _wallpaperBodyLuminance != null ||
+          _wallpaperLuminanceSampleKey != null ||
+          _wallpaperLuminanceRequestedKey != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) {
             return;
           }
           setState(() {
             _wallpaperTopLuminance = null;
+            _wallpaperWeekdayLuminance = null;
             _wallpaperBodyLuminance = null;
-            _wallpaperLuminanceSamplePath = null;
-            _wallpaperLuminanceRequestedPath = null;
+            _wallpaperLuminanceSampleKey = null;
+            _wallpaperLuminanceRequestedKey = null;
             _wallpaperLuminanceFileExists = false;
           });
         });
       }
       return;
     }
-    // Same path already requested: either missing file or sample finished/in-flight.
-    if (_wallpaperLuminanceRequestedPath == path &&
-        (_wallpaperLuminanceSamplePath == path ||
+    final key = _wallpaperLuminanceKey(
+      path: path,
+      viewportSize: viewportSize,
+      alignX: settings.homePageWallpaperAlignX,
+      alignY: settings.homePageWallpaperAlignY,
+    );
+    if (_wallpaperLuminanceRequestedKey == key &&
+        (_wallpaperLuminanceSampleKey == key ||
             !_wallpaperLuminanceFileExists)) {
       return;
     }
-    unawaited(_ensureWallpaperLuminanceForPath(path));
+    unawaited(
+      _ensureWallpaperLuminanceForPath(
+        path,
+        viewportSize: viewportSize,
+        alignX: settings.homePageWallpaperAlignX,
+        alignY: settings.homePageWallpaperAlignY,
+        key: key,
+      ),
+    );
   }
 
-  Future<void> _ensureWallpaperLuminanceForPath(String path) async {
-    if (_wallpaperLuminanceRequestedPath == path &&
-        _wallpaperLuminanceSamplePath == path &&
+  String _wallpaperLuminanceKey({
+    required String path,
+    required Size viewportSize,
+    required double alignX,
+    required double alignY,
+  }) {
+    return '$path|${viewportSize.width}x${viewportSize.height}|'
+        '${alignX.clamp(-1.0, 1.0)}|${alignY.clamp(-1.0, 1.0)}';
+  }
+
+  Future<void> _ensureWallpaperLuminanceForPath(
+    String path, {
+    required Size viewportSize,
+    required double alignX,
+    required double alignY,
+    required String key,
+  }) async {
+    if (_wallpaperLuminanceRequestedKey == key &&
+        _wallpaperLuminanceSampleKey == key &&
         _wallpaperTopLuminance != null) {
       return;
     }
-    _wallpaperLuminanceRequestedPath = path;
+    _wallpaperLuminanceRequestedKey = key;
     final fileExists = await File(path).exists();
-    if (!mounted || _wallpaperLuminanceRequestedPath != path) {
+    if (!mounted || _wallpaperLuminanceRequestedKey != key) {
       return;
     }
     if (!fileExists) {
       if (_wallpaperTopLuminance != null ||
-          _wallpaperLuminanceSamplePath != null ||
+          _wallpaperWeekdayLuminance != null ||
+          _wallpaperBodyLuminance != null ||
+          _wallpaperLuminanceSampleKey != null ||
           _wallpaperLuminanceFileExists) {
         setState(() {
           _wallpaperTopLuminance = null;
+          _wallpaperWeekdayLuminance = null;
           _wallpaperBodyLuminance = null;
-          _wallpaperLuminanceSamplePath = null;
+          _wallpaperLuminanceSampleKey = null;
           _wallpaperLuminanceFileExists = false;
         });
       }
       return;
     }
     _wallpaperLuminanceFileExists = true;
-    _wallpaperLuminanceSamplePath = path;
-    await _loadWallpaperTopLuminance(path);
+    _wallpaperLuminanceSampleKey = key;
+    await _loadWallpaperLuminance(
+      path,
+      viewportSize: viewportSize,
+      alignX: alignX,
+      alignY: alignY,
+      key: key,
+    );
   }
 
-  Future<void> _loadWallpaperTopLuminance(String path) async {
-    final bands = await sampleHomePageWallpaperLuminanceBands(path);
-    if (!mounted || _wallpaperLuminanceSamplePath != path) {
+  Future<void> _loadWallpaperLuminance(
+    String path, {
+    required Size viewportSize,
+    required double alignX,
+    required double alignY,
+    required String key,
+  }) async {
+    final bands = await sampleHomePageWallpaperLuminanceBands(
+      path,
+      viewportSize: viewportSize,
+      alignX: alignX,
+      alignY: alignY,
+    );
+    if (!mounted || _wallpaperLuminanceSampleKey != key) {
       return;
     }
     if (_wallpaperTopLuminance == bands?.top &&
+        _wallpaperWeekdayLuminance == bands?.weekday &&
         _wallpaperBodyLuminance == bands?.body) {
       return;
     }
     setState(() {
       _wallpaperTopLuminance = bands?.top;
+      _wallpaperWeekdayLuminance = bands?.weekday;
       _wallpaperBodyLuminance = bands?.body;
     });
   }
 
+  /// Luminance used by both weekday rendering and the contrast explainer.
+  /// When the weekday glass band is enabled, its scrim follows the header/top
+  /// sample, so the warning must judge the same effective backdrop as the UI.
+  double? _weekdayInkLuminance(TimetableSettings settings) {
+    return settings.homePageWeekdayBarBlurEnabled
+        ? _wallpaperTopLuminance
+        : _wallpaperWeekdayLuminance ?? _wallpaperTopLuminance;
+  }
+
   /// One-shot heads-up when a hand-picked weekday-bar ink has too little
-  /// contrast against the current wallpaper. Custom colours are respected by
-  /// design (never auto-flipped), so without this the user only sees the ink
-  /// vanish and has no idea why. Offers restoring the default (auto B/W).
+  /// contrast against the current wallpaper. The ink is temporarily auto-flipped
+  /// for readability ([homePageOverWallpaperInk]); this explains why the custom
+  /// colour is not showing and offers restoring the default (auto B/W).
   void _maybeWarnWeekdayInkContrast(
     TimetableProvider provider,
     TimetableSettings settings,
   ) {
-    final luminance = _wallpaperTopLuminance;
+    // Judge custom ink against the band actually behind the weekday bar, not
+    // the status/title strip above it.
+    final luminance = _weekdayInkLuminance(settings);
     if (luminance == null || _weekdayInkWarningShowing) {
       return;
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (!hasHomePageBackdropImage(settings, isDark: isDark)) {
+    if (!hasHomePageBackdropImage(settings)) {
       return;
     }
     final configuredHex = isDark
@@ -1422,7 +1607,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         ? TimetableSettings.defaultWeekdayBarFontColorDark
         : TimetableSettings.defaultWeekdayBarFontColorLight;
     // Default ink already auto-flips with the wallpaper; only a custom pick
-    // can go invisible.
+    // can go invisible (and trigger the temporary auto flip).
     if (homePageInkUsesBuiltInDefault(configuredHex, defaultHex)) {
       return;
     }
@@ -1430,12 +1615,9 @@ class _TimetableScreenState extends State<TimetableScreen>
     if (ink == null) {
       return;
     }
-    final inkLuminance = ink.computeLuminance();
-    final hi = math.max(inkLuminance, luminance);
-    final lo = math.min(inkLuminance, luminance);
-    // ~WCAG ratio against the sampled top band; photos are busy, so anything
+    // ~WCAG ratio against the sampled band; photos are busy, so anything
     // above 3:1 is left alone — this only catches "nearly invisible".
-    if ((hi + 0.05) / (lo + 0.05) >= 3.0) {
+    if (homePageInkHasSufficientContrast(ink, luminance)) {
       return;
     }
     final signature =
@@ -1491,7 +1673,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         ),
         actions: [
           HyperosDialogAction(
-            label: l10n.keepCurrentColorAction,
+            label: l10n.gotItAction,
             onPressed: () => Navigator.pop(context),
           ),
           HyperosDialogAction(
@@ -1519,10 +1701,10 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   Color _resolveHomeChromeForeground({
-    required bool hasBackdrop,
+    required bool headerShowsWallpaper,
     required Color themeForeground,
   }) {
-    if (!hasBackdrop) {
+    if (!headerShowsWallpaper) {
       return themeForeground;
     }
     return homePageChromeForegroundForLuminance(
@@ -1626,11 +1808,35 @@ class _TimetableScreenState extends State<TimetableScreen>
   }) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
-    final subtleBorder = context.theme.colors.border;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final hasBackdrop = hasHomePageBackdropImage(settings);
+    // Opaque/no-wallpaper chrome still needs a separator, but a full 1dp
+    // ThemeData outline lands as a dark multi-physical-pixel band on dense
+    // Android screens. Keep the wallpaper path's existing border untouched
+    // and use the lighter HyperOS divider token only for the fallback.
+    final subtleBorder = hasBackdrop
+        ? context.theme.colors.border
+        : HyperosColors.dividerLine(context);
+    final dividerWidth = hasBackdrop ? 1.0 : 0.5;
+    // Only flip by wallpaper luminance when this band actually shows the
+    // wallpaper / frosted glass; with the scope toggled off it paints the
+    // opaque page background and must use the theme / configured ink.
+    final weekdayChromeOverWallpaper =
+        hasBackdrop &&
+        (homePageRegionShowsBackdrop(
+              settings,
+              HomePageBackgroundScope.weekdayBar,
+            ) ||
+            settings.homePageWeekdayBarBlurEnabled);
+    // Judge ink from the band actually behind the weekday bar, not the
+    // status/title strip above it — the two can differ on the same photo.
+    // With the weekday glass band on, follow the band's scrim polarity (the
+    // scrim derives from the top sample) so ink and wash never fight.
+    final weekdayLuminance = settings.homePageWeekdayBarBlurEnabled
+        ? _wallpaperTopLuminance
+        : _wallpaperWeekdayLuminance ?? _wallpaperTopLuminance;
     // Week label sits in the weekday chrome band: auto-invert default black/white
-    // over a dark wallpaper (same rule as the title logo), keep user custom ink.
+    // over a dark wallpaper; unreadable custom ink follows the same fallback.
     final weekLabelColor = homePageOverWallpaperInk(
       configuredHex: isDark
           ? settings.weekdayBarFontColorDark
@@ -1639,8 +1845,8 @@ class _TimetableScreenState extends State<TimetableScreen>
           ? TimetableSettings.defaultWeekdayBarFontColorDark
           : TimetableSettings.defaultWeekdayBarFontColorLight,
       themeFallback: colorScheme.onSurface,
-      hasBackdrop: hasBackdrop,
-      wallpaperLuminance: _wallpaperTopLuminance,
+      hasBackdrop: weekdayChromeOverWallpaper,
+      wallpaperLuminance: weekdayLuminance,
     );
     final weekLabelMutedColor = homePageOverWallpaperMutedInk(weekLabelColor);
     final canReturnToCurrentWeek = _canReturnToCurrentWeek(settings, week);
@@ -1720,7 +1926,11 @@ class _TimetableScreenState extends State<TimetableScreen>
                 Row(
                   children: visibleDays
                       .map((dayOfWeek) {
-                        final date = _dateForWeekDay(settings, rowWeek, dayOfWeek);
+                        final date = _dateForWeekDay(
+                          settings,
+                          rowWeek,
+                          dayOfWeek,
+                        );
                         final isToday =
                             date != null && _isSameDate(date, DateTime.now());
                         final isSelected = _isSelectedDay(rowWeek, dayOfWeek);
@@ -1730,21 +1940,26 @@ class _TimetableScreenState extends State<TimetableScreen>
                         final configuredAccentHex = isDark
                             ? settings.weekdayBarAccentColorDark
                             : settings.weekdayBarAccentColorLight;
-                        // Default weekday ink flips with wallpaper luminance;
-                        // user-custom hex is kept. Accent (today/selected) is
-                        // never auto-inverted so a custom blue stays blue.
+                        // Default weekday ink flips with the band behind this
+                        // bar; user-custom hex is kept (auto-flipped only when
+                        // it would be unreadable). Accent (today/selected) gets
+                        // the same readability fallback so the blue "today"
+                        // column never vanishes into the photo.
                         final weekdayColor = homePageOverWallpaperInk(
                           configuredHex: configuredWeekdayHex,
                           defaultHex: isDark
                               ? TimetableSettings.defaultWeekdayBarFontColorDark
-                              : TimetableSettings.defaultWeekdayBarFontColorLight,
+                              : TimetableSettings
+                                    .defaultWeekdayBarFontColorLight,
                           themeFallback: colorScheme.onSurface,
-                          hasBackdrop: hasBackdrop,
-                          wallpaperLuminance: _wallpaperTopLuminance,
+                          hasBackdrop: weekdayChromeOverWallpaper,
+                          wallpaperLuminance: weekdayLuminance,
                         );
                         final accentColor = homePageOverWallpaperAccent(
                           configuredHex: configuredAccentHex,
                           themeFallback: colorScheme.primary,
+                          hasBackdrop: weekdayChromeOverWallpaper,
+                          wallpaperLuminance: weekdayLuminance,
                         );
                         final labelColor = (isSelected || isToday)
                             ? accentColor
@@ -1760,11 +1975,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              key: ValueKey('weekday-header-$rowWeek-$dayOfWeek'),
-                              borderRadius: BorderRadius.circular(14),
-                              onTapDown: (details) => _captureDayViewAnchor(
-                                details.globalPosition,
+                              key: ValueKey(
+                                'weekday-header-$rowWeek-$dayOfWeek',
                               ),
+                              borderRadius: BorderRadius.circular(14),
+                              onTapDown: (details) =>
+                                  _captureDayViewAnchor(details.globalPosition),
                               onTap: () => _toggleDayView(
                                 week: rowWeek,
                                 dayOfWeek: dayOfWeek,
@@ -1773,8 +1989,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
                                 curve: Curves.easeOutCubic,
-                                margin: const EdgeInsets.symmetric(horizontal: 1),
-                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 1,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   border: Border(
                                     bottom: BorderSide(
@@ -1836,6 +2056,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                     settings: settings,
                     week: rowWeek,
                     visibleDays: visibleDays,
+                    wallpaperOverChrome: weekdayChromeOverWallpaper,
+                    wallpaperLuminance: weekdayLuminance,
                   ),
               ],
             ),
@@ -1862,66 +2084,37 @@ class _TimetableScreenState extends State<TimetableScreen>
       decoration: hideBottomBorder
           ? null
           : BoxDecoration(
-              border: Border(bottom: BorderSide(color: subtleBorder, width: 1)),
+              border: Border(
+                bottom: BorderSide(color: subtleBorder, width: dividerWidth),
+              ),
             ),
       child: _isDayView && _dayViewPageController != null
           ? AnimatedBuilder(
-              animation: _dayViewPageController!,
+              animation: Listenable.merge([
+                _dayViewPageController!,
+                _dayHeaderPreview,
+              ]),
               builder: (context, _) {
-                // The whole bar (week label + day row + indicator) is one row
-                // per week. Within a week it stays put (the indicator follows
-                // the pager); only during the cross-week transition does the
-                // outgoing week slide out and the next week slide in — glued
-                // to the pager's position, like the week view's per-page
-                // header moving under the finger.
+                // Keep exactly one weekday row mounted. Switch it at the page
+                // midpoint so it follows onPageChanged while the finger is
+                // still down; retaining an outgoing row leaves stale weekday
+                // hit targets in the tree during a cross-week drag.
                 final rawPage = dayViewPagerPage();
                 final count = visibleDays.length;
                 final totalWeeks = settings.semesterWeekCount;
-                final weekIndex =
-                    (rawPage / count).floor().clamp(0, totalWeeks - 1);
-                final inWeekPos = rawPage - weekIndex * count;
-                final isCrossing = inWeekPos >= count - 1;
-                final progress = isCrossing
-                    ? (inWeekPos - (count - 1)).clamp(0.0, 1.0)
-                    : 0.0;
-                final weekRow = weekIndex + 1;
-                final nextWeek = weekRow + 1;
-                final extrasOnOutgoing = !isCrossing || progress < 0.5;
+                final previewWeek = _dayHeaderPreview.value?.$1;
+                final selectedWeek = _selectedWeekForDayView;
+                final maxPage = math.max(0, totalWeeks * count - 1);
+                final page = rawPage.round().clamp(0, maxPage);
+                final weekRow =
+                    previewWeek ?? selectedWeek ?? page ~/ count + 1;
                 return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final barWidth = constraints.maxWidth;
-                    return ClipRect(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (isCrossing)
-                            Transform.translate(
-                              offset: Offset(-progress * barWidth, 0),
-                              child: SizedBox(
-                                width: barWidth,
-                                child: fullWeekRowFor(
-                                  weekRow,
-                                  showExtras: extrasOnOutgoing,
-                                ),
-                              ),
-                            ),
-                          if (isCrossing)
-                            Transform.translate(
-                              offset: Offset((1 - progress) * barWidth, 0),
-                              child: SizedBox(
-                                width: barWidth,
-                                child: fullWeekRowFor(
-                                  nextWeek,
-                                  showExtras: !extrasOnOutgoing,
-                                ),
-                              ),
-                            ),
-                          if (!isCrossing)
-                            fullWeekRowFor(weekRow, showExtras: true),
-                        ],
-                      ),
-                    );
-                  },
+                  builder: (context, constraints) => ClipRect(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [fullWeekRowFor(weekRow, showExtras: true)],
+                    ),
+                  ),
                 );
               },
             )
@@ -1933,6 +2126,8 @@ class _TimetableScreenState extends State<TimetableScreen>
     required TimetableSettings settings,
     required int week,
     required List<int> visibleDays,
+    required bool wallpaperOverChrome,
+    required double? wallpaperLuminance,
   }) {
     final controller = _dayViewPageController;
     if (!_shouldShowDayViewOverlay ||
@@ -1955,6 +2150,8 @@ class _TimetableScreenState extends State<TimetableScreen>
           ? settings.weekdayBarAccentColorDark
           : settings.weekdayBarAccentColorLight,
       themeFallback: colorScheme.primary,
+      hasBackdrop: wallpaperOverChrome,
+      wallpaperLuminance: wallpaperLuminance,
     );
 
     return IgnorePointer(
@@ -1974,8 +2171,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                   : controller.initialPage.toDouble();
               // Weekday position within the bar's week: the pager is
               // globally continuous, so subtract the week's page offset.
-              final rawDayPosition =
-                  rawPage - (week - 1) * visibleDays.length;
+              final rawDayPosition = rawPage - (week - 1) * visibleDays.length;
               final maxDayIndex = (visibleDays.length - 1).toDouble();
               final clampedDayPosition = rawDayPosition
                   .clamp(0.0, maxDayIndex)
@@ -2085,7 +2281,7 @@ class _TimetableScreenState extends State<TimetableScreen>
               }),
             ),
           ),
-          _wrapCourseGridLiquidGlassHost(
+          _wrapCourseGridSurfaceHost(
             settings: settings,
             child: Row(
               children: visibleDays.asMap().entries.map((entry) {
@@ -2425,9 +2621,10 @@ class _TimetableScreenState extends State<TimetableScreen>
       children: [
         NotificationListener<ScrollNotification>(
           onNotification: (notification) {
-            if (notification is ScrollEndNotification &&
-                notification.metrics.axis == Axis.horizontal) {
-              _finalizeWeekPageSettled(provider);
+            if (notification.metrics.axis == Axis.horizontal) {
+              if (notification is ScrollEndNotification) {
+                _finalizeWeekPageSettled(provider);
+              }
             }
             return false;
           },
@@ -2504,7 +2701,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     int week,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final hasBackdrop = hasHomePageBackdropImage(settings);
     // Day view keeps the same weekday chrome as the week view: the panel below
     // now shows the wallpaper, so an opaque non-blurred bar would read as a
     // seam across the top of the glass.
@@ -2532,7 +2729,6 @@ class _TimetableScreenState extends State<TimetableScreen>
     final weekdayShowsBackdrop = homePageRegionShowsBackdrop(
       settings,
       HomePageBackgroundScope.weekdayBar,
-      isDark: isDark,
     );
     final timeColumnWidth = _resolveTimeColumnWidth(settings);
     final pageChromeFallback = Theme.of(context).colorScheme.surface;
@@ -2559,7 +2755,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         children: [
           weekdayHeader,
           // Original chrome↔grid clearance (same token as frosted seam overlap).
-          // Keeps liquid/gaussian glass from sitting flush on the first course row.
+          // Keeps gaussian cards from sitting flush on the first course row.
           if (weekdayChromeBlurEnabled)
             const SizedBox(height: homePageFrostedRegionSeamOverlap),
           Expanded(
@@ -2870,11 +3066,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                       // Same as the week pager: keep neighbours pre-built so a
                       // swipe never hits an itemBuilder spike mid-gesture.
                       allowImplicitScrolling: true,
-                      onPageChanged: (page) => _handleDayViewPageChanged(
-                        provider,
-                        settings,
-                        page,
-                      ),
+                      onPageChanged: (page) =>
+                          _handleDayViewPageChanged(provider, settings, page),
                       itemBuilder: (context, page) {
                         // 1 Hz progress heartbeat rebuilds only this page's
                         // content (ongoing badges / progress), not the State.
@@ -2909,6 +3102,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     required int page,
   }) {
     final target = _dayViewTargetForPage(settings, page);
+    if (kDebugMode) {
+      debugPrint(
+        '[DayView] build page=$page -> week=${target.week} '
+        'day=${target.dayOfWeek}',
+      );
+    }
     final selectedDate = _dateForWeekDay(
       settings,
       target.week,
@@ -2966,6 +3165,12 @@ class _TimetableScreenState extends State<TimetableScreen>
         .where((item) => item.isScheduleItem)
         .map((item) => item.scheduleItem!)
         .toList(growable: false);
+    if (kDebugMode) {
+      debugPrint(
+        '[DayView] page=$page items: courses=${displayItems.length} '
+        'agenda=${agendaItems.length} schedule=${scheduleItems.length}',
+      );
+    }
     final isActivePage =
         target.week == _selectedWeekForDayView &&
         target.dayOfWeek == _selectedDayOfWeek;
@@ -3034,7 +3239,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     return normalizedToday.add(Duration(days: dayDelta));
   }
 
-  List<ScheduleItem> _getScheduleItemsForWeekDay({
+  List<ScheduleItemInstance> _getScheduleItemsForWeekDay({
     required TimetableProvider provider,
     required TimetableSettings settings,
     required int week,
@@ -3046,13 +3251,14 @@ class _TimetableScreenState extends State<TimetableScreen>
       week: week,
       dayOfWeek: dayOfWeek,
     );
-    return provider.getScheduleItemsForDate(targetDate);
+    return provider.getScheduleItemInstancesForDate(targetDate);
   }
 
   _DayAgendaItem _buildScheduleAgendaItemForDate({
-    required ScheduleItem item,
+    required ScheduleItemInstance instance,
     required DateTime targetDate,
   }) {
+    final item = instance.effectiveItem;
     final normalizedTargetDate = DateTime(
       targetDate.year,
       targetDate.month,
@@ -3064,6 +3270,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     final continuesToNextDay = item.endDate.isAfter(normalizedTargetDate);
     return _DayAgendaItem.schedule(
       item,
+      instance: instance,
       startTime: continuesFromPreviousDay ? '00:00' : item.startTime,
       endTime: continuesToNextDay ? '23:59' : item.endTime,
       continuesFromPreviousDay: continuesFromPreviousDay,
@@ -3092,8 +3299,10 @@ class _TimetableScreenState extends State<TimetableScreen>
         week: week,
         dayOfWeek: dayOfWeek,
       ).map(
-        (item) =>
-            _buildScheduleAgendaItemForDate(item: item, targetDate: targetDate),
+        (instance) => _buildScheduleAgendaItemForDate(
+          instance: instance,
+          targetDate: targetDate,
+        ),
       ),
       ...provider.exams
           .where((e) => !e.isExpired && _isSameDate(e.dateTime, targetDate))
@@ -3188,7 +3397,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         : Icons.arrow_back_rounded;
 
     final isDark = theme.brightness == Brightness.dark;
-    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final hasBackdrop = hasHomePageBackdropImage(settings);
     // Same ink path as weekday chrome (auto-contrast + keep custom hex), but
     // judged from the card-region wallpaper band — the top band can be dark
     // (white chrome ink) while mid-screen is bright: white-on-white here.
@@ -3720,10 +3929,11 @@ class _TimetableScreenState extends State<TimetableScreen>
   }) {
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final hasBackdrop = hasHomePageBackdropImage(settings);
     final colorScheme = Theme.of(context).colorScheme;
     // Same wallpaper auto-contrast as weekday / time-axis chrome: default ink
-    // flips black↔white over dark photos; user-custom hex is kept as-is.
+    // flips black↔white over dark photos; user-custom hex is kept as-is. The
+    // empty state sits mid-screen, so judge from the card-region band.
     final titleColor = homePageOverWallpaperInk(
       configuredHex: isDark
           ? settings.weekdayBarFontColorDark
@@ -3733,7 +3943,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           : TimetableSettings.defaultWeekdayBarFontColorLight,
       themeFallback: colorScheme.onSurface,
       hasBackdrop: hasBackdrop,
-      wallpaperLuminance: _wallpaperTopLuminance,
+      wallpaperLuminance: _wallpaperBodyLuminance ?? _wallpaperTopLuminance,
     );
     final subtitleColor = homePageOverWallpaperMutedInk(titleColor);
     return Center(
@@ -3811,10 +4021,8 @@ class _TimetableScreenState extends State<TimetableScreen>
         child: _buildDayViewEmptyColumn(week: week, settings: settings),
       );
     }
-    // Same hosting strategy as the week grid (see _wrapCourseGridLiquidGlassHost):
-    // with pre-blurred wallpaper, cards sample the cached bitmap and do not need
-    // a FakeGlass host; without it, CourseGridGlassHost shares one layer so
-    // liquid cards do not each capture the backdrop on their own.
+    // Gaussian cards sample the cached wallpaper bitmap while the day view
+    // moves; the shared host keeps their BackdropFilter capture at grid scope.
     final agendaList = ListView.separated(
       key: PageStorageKey<String>('day-agenda-$week-$dayOfWeek'),
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
@@ -3828,16 +4036,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         return _buildDayAgendaEntry(week: week, settings: settings, item: item);
       },
     );
-    return Builder(
-      builder: (context) {
-        if (settings.courseCardSurfaceStyle ==
-                CourseCardSurfaceStyle.liquidGlass &&
-            PreblurredWallpaperScope.maybeOf(context) != null) {
-          return agendaList;
-        }
-        return CourseGridGlassHost(settings: settings, child: agendaList);
-      },
-    );
+    return CourseGridSurfaceHost(settings: settings, child: agendaList);
   }
 
   Widget _buildDayViewEmptyColumn({
@@ -3932,16 +4131,30 @@ class _TimetableScreenState extends State<TimetableScreen>
     required _DayAgendaItem item,
   }) {
     if (item.isExam) {
+      if (kDebugMode) {
+        debugPrint('[DayView] build agenda entry: exam id=${item.exam?.id}');
+      }
       return _buildExamAgendaEntry(
         item.exam!,
         provider: context.read<TimetableProvider>(),
       );
     }
     if (item.isScheduleItem) {
+      if (kDebugMode) {
+        debugPrint(
+          '[DayView] build agenda entry: schedule id=${item.scheduleItem?.id}',
+        );
+      }
       return _buildScheduleAgendaEntry(item, settings: settings);
     }
 
     final courseItem = item.courseItem!;
+    if (kDebugMode) {
+      debugPrint(
+        '[DayView] build agenda entry: course id=${courseItem.course.id} '
+        'name=${courseItem.course.name}',
+      );
+    }
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -4697,6 +4910,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     required TimetableSettings settings,
   }) {
     final item = agendaItem.scheduleItem!;
+    final sourceItem = agendaItem.scheduleInstance?.item ?? item;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final baseColor = _colorFromHex(item.color, colorScheme.primary);
@@ -4710,7 +4924,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     final ink = _dayAgendaAutoInk(cardColor, settings: settings);
 
     return OpenContainer<void>(
-      key: ValueKey('day-view-schedule-card-${item.id}'),
+      key: ValueKey('day-view-schedule-card-${agendaItem.id}'),
       tappable: false,
       transitionType: ContainerTransitionType.fadeThrough,
       transitionDuration: const Duration(milliseconds: 360),
@@ -4726,7 +4940,10 @@ class _TimetableScreenState extends State<TimetableScreen>
       ),
       openBuilder: (context, _) => ClipRRect(
         borderRadius: BorderRadius.circular(28),
-        child: AddScheduleItemScreen(scheduleItem: item),
+        child: AddScheduleItemScreen(
+          scheduleItem: sourceItem,
+          occurrenceDate: agendaItem.scheduleInstance?.occurrenceDate,
+        ),
       ),
       closedBuilder: (context, openContainer) {
         if (progressInfo != null) {
@@ -5201,12 +5418,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     if (settings == null) {
       return Colors.white;
     }
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final style = settings.courseCardSurfaceStyle;
     final glassOverWallpaper =
-        hasHomePageBackdropImage(settings, isDark: isDark) &&
-        (style == CourseCardSurfaceStyle.gaussian ||
-            style == CourseCardSurfaceStyle.liquidGlass);
+        hasHomePageBackdropImage(settings) &&
+        style == CourseCardSurfaceStyle.gaussian;
     if (!glassOverWallpaper) {
       return Colors.white;
     }
@@ -6045,30 +6260,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     _visibleWeekListenable.value = _pendingSettledWeek!;
   }
 
-  /// One shared FakeGlass layer for all course cards on this week page.
-  Widget _wrapCourseGridLiquidGlassHost({
+  /// One shared backdrop group for gaussian cards on this week page.
+  Widget _wrapCourseGridSurfaceHost({
     required TimetableSettings settings,
     required Widget child,
   }) {
-    if (settings.courseCardSurfaceStyle != CourseCardSurfaceStyle.liquidGlass) {
-      return CourseGridGlassHost(settings: settings, child: child);
-    }
-    // PreblurredWallpaperScope is created *below* this State's own context, so
-    // the lookup has to run from a descendant or it always misses and the host
-    // gets built even when the cards are sampling the pre-blurred bitmap.
-    //
-    // This short-circuit is home-page-only: the settings previews have no
-    // pre-blurred bitmap (it is aligned to the screen, not to a preview box).
-    return Builder(
-      builder: (context) {
-        // When pre-blurred wallpaper is active, cards sample that bitmap and do
-        // not need a FakeGlass host (avoids double frost + scroll cost).
-        if (PreblurredWallpaperScope.maybeOf(context) != null) {
-          return child;
-        }
-        return CourseGridGlassHost(settings: settings, child: child);
-      },
-    );
+    return CourseGridSurfaceHost(settings: settings, child: child);
   }
 
   void _syncWeekPageWithProvider(int week, TimetableSettings settings) {
@@ -6304,6 +6501,24 @@ class _TimetableScreenState extends State<TimetableScreen>
       onReschedule: (target) => _showRescheduleSheet(target, sourceWeek: week),
       onDelete: (target) => _showDeleteCourseOptions(target, week),
       onSuspend: (target) => _showSuspendSheet(target, week),
+      onAddTask: (target) => _openTaskFromCourse(target, week),
+    );
+  }
+
+  Future<void> _openTaskFromCourse(Course course, int week) async {
+    final provider = context.read<TimetableProvider>();
+    final existing = provider
+        .getTasksForCourse(course.id)
+        .where((task) => task.sourceWeek == null || task.sourceWeek == week)
+        .firstOrNull;
+    await Navigator.of(context).push<bool>(
+      HyperosPageRoute<bool>(
+        builder: (_) => AddTaskScreen(
+          task: existing,
+          initialCourse: course,
+          initialWeek: week,
+        ),
+      ),
     );
   }
 
@@ -6691,9 +6906,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     TimetableSettings settings,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasBackdrop = hasHomePageBackdropImage(settings, isDark: isDark);
+    final hasBackdrop = hasHomePageBackdropImage(settings);
     // Same wallpaper auto-contrast as weekday ink; user-custom time-axis hex
-    // is never replaced.
+    // is never replaced. The time column spans the body band (not the
+    // status/title strip), so judge from the card-region sample.
     final timeAxisColor = homePageOverWallpaperInk(
       configuredHex: isDark
           ? settings.timeAxisFontColorDark
@@ -6703,7 +6919,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           : TimetableSettings.defaultTimeAxisFontColorLight,
       themeFallback: isDark ? Colors.white : Colors.grey.shade800,
       hasBackdrop: hasBackdrop,
-      wallpaperLuminance: _wallpaperTopLuminance,
+      wallpaperLuminance: _wallpaperBodyLuminance ?? _wallpaperTopLuminance,
     );
     final timeAxisMutedColor = homePageOverWallpaperMutedInk(timeAxisColor);
     final compactTextStyle = TextStyle(
@@ -6815,6 +7031,8 @@ class _TimetableScreenState extends State<TimetableScreen>
         await _openTopMenuPage(const ExamListScreen());
       case HomeTopMenuAction.importCourses:
         await _openTopMenuPage(const CourseImportScreen());
+      case HomeTopMenuAction.tasks:
+        await _openTopMenuPage(const TaskListScreen());
       case HomeTopMenuAction.settings:
         await _openTopMenuPage(const TimetableSettingsScreen());
       case HomeTopMenuAction.support:
@@ -6900,11 +7118,215 @@ class _TimetableScreenState extends State<TimetableScreen>
       setState(() {
         _hasAvailableUpdate = result.hasUpdate;
       });
+      _scheduleHomeUpdatePrompt(result);
     } catch (_) {
       // Ignore update check failures on home screen; About page provides details.
     } finally {
       _isCheckingForUpdate = false;
     }
+  }
+
+  void _scheduleHomeUpdatePrompt(AppUpdateCheckResult result) {
+    if (!result.hasUpdate ||
+        result.latestRelease == null ||
+        _hasPresentedUpdatePrompt ||
+        _isUpdatePromptVisible) {
+      return;
+    }
+    final release = result.latestRelease!;
+    final provider = context.read<TimetableProvider>();
+    final settings = provider.settings;
+    final channel = AppUpdateDownloadChannelX.fromValue(
+      settings.appUpdateDownloadChannel,
+    );
+    final source = AppUpdateDownloadSourceX.fromValue(
+      settings.appUpdateDownloadSource,
+    );
+    final mirrorPreset = AppUpdateMirrorPresetX.fromValue(
+      settings.appUpdateMirrorPreset,
+    );
+    final mirrorPrefix = resolveAppUpdateMirrorUrlPrefix(
+      preset: mirrorPreset,
+      customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
+    );
+    final effectiveDownloadUrl = _updateService.getEffectiveDownloadUrl(
+      release: release,
+      channel: channel,
+      source: source,
+      mirrorUrlPrefix: mirrorPrefix,
+    );
+    final hasDirectDownload =
+        effectiveDownloadUrl != null && effectiveDownloadUrl.trim().isNotEmpty;
+    final promptDownloadUrl = effectiveDownloadUrl ?? release.releaseUrl;
+    if (promptDownloadUrl.trim().isEmpty) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _hasPresentedUpdatePrompt || _isUpdatePromptVisible) {
+        return;
+      }
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
+      _hasPresentedUpdatePrompt = true;
+      _isUpdatePromptVisible = true;
+      unawaited(
+        _showHomeUpdatePromptAndTrackState(
+          release: release,
+          currentVersion: result.currentVersion,
+          channel: channel,
+          downloadUrl: promptDownloadUrl,
+          hasDirectDownload: hasDirectDownload,
+        ),
+      );
+    });
+  }
+
+  Future<void> _showHomeUpdatePromptAndTrackState({
+    required AppReleaseInfo release,
+    required String currentVersion,
+    required AppUpdateDownloadChannel channel,
+    required String downloadUrl,
+    required bool hasDirectDownload,
+  }) async {
+    try {
+      await showHomeUpdatePrompt(
+        context,
+        release: release,
+        currentVersion: currentVersion,
+        downloadChannel: channel,
+        hasDirectDownload: hasDirectDownload,
+        controller: _updatePromptController,
+        onDownload: () async {
+          if (!hasDirectDownload) {
+            await _openUpdateReleasePage(release.releaseUrl);
+            return false;
+          }
+          return _startHomeUpdateDownload(
+            release: release,
+            channel: channel,
+            downloadUrl: downloadUrl,
+          );
+        },
+        onViewRelease: () => _openUpdateReleasePage(release.releaseUrl),
+        onCancelDownload: _cancelHomeUpdateDownload,
+      );
+    } finally {
+      _isUpdatePromptVisible = false;
+    }
+  }
+
+  Future<bool> _startHomeUpdateDownload({
+    required AppReleaseInfo release,
+    required AppUpdateDownloadChannel channel,
+    required String downloadUrl,
+  }) async {
+    if (channel == AppUpdateDownloadChannel.pgyer) {
+      await _openUpdateReleasePage(downloadUrl);
+      return false;
+    }
+
+    final settings = context.read<TimetableProvider>().settings;
+    if (settings.appUpdateDownloadChannel ==
+        AppUpdateDownloadChannel.pgyer.value) {
+      await _openUpdateReleasePage(downloadUrl);
+      return false;
+    }
+
+    if (_useSystemUpdateDownloader(settings)) {
+      final version = release.version.trim().replaceAll(' ', '_');
+      final downloadId = await _supportCreatorService.enqueueSystemDownload(
+        url: downloadUrl,
+        fileName: version.isEmpty ? 'mikcb_update.apk' : 'mikcb_v$version.apk',
+        title: AppLocalizations.of(context)!.aboutUpdatePackageTitle,
+        description: AppLocalizations.of(
+          context,
+        )!.aboutUpdatePackageDescription,
+      );
+      if (downloadId == null) {
+        return false;
+      }
+      final initialProgress = await _supportCreatorService
+          .querySystemDownloadProgress(downloadId);
+      if (initialProgress != null) {
+        _updatePromptController.beginSystemDownload(
+          downloadId: downloadId,
+          progress: initialProgress,
+        );
+      }
+      _watchSystemUpdateDownload(downloadId);
+      return true;
+    }
+
+    final controller = AppUpdateDownloadController();
+    _homeDownloadController = controller;
+    _updatePromptController.beginInAppDownload();
+    final mirrorPreset = AppUpdateMirrorPresetX.fromValue(
+      settings.appUpdateMirrorPreset,
+    );
+    final mirrorPrefix = resolveAppUpdateMirrorUrlPrefix(
+      preset: mirrorPreset,
+      customUrlPrefix: settings.appUpdateMirrorUrlPrefix,
+    );
+    final error = await _updateService.downloadAndInstallUpdate(
+      downloadUrl,
+      (downloadedBytes, totalBytes) {
+        _updatePromptController.updateInAppProgress(
+          downloadedBytes,
+          totalBytes,
+        );
+      },
+      controller,
+      mirrorUrlPrefix: mirrorPrefix,
+    );
+    if (!mounted) {
+      return true;
+    }
+    _homeDownloadController = null;
+    final wasCancelled = error == AppUpdateService.downloadCancelledMessage;
+    _updatePromptController.finishInAppDownload(
+      success: error == null,
+      cancelled: wasCancelled,
+    );
+    if (wasCancelled) {
+      return true;
+    }
+    return true;
+  }
+
+  bool _useSystemUpdateDownloader(TimetableSettings settings) {
+    return settings.appUpdateUseSystemDownloader;
+  }
+
+  void _watchSystemUpdateDownload(int downloadId) {
+    unawaited(() async {
+      try {
+        await for (final progress
+            in _supportCreatorService.watchSystemDownloadProgress(downloadId)) {
+          if (!mounted) {
+            return;
+          }
+          _updatePromptController.updateSystemDownload(progress);
+        }
+      } catch (_) {
+        // The system queue can briefly disappear while the provider starts;
+        // keep the prompt visible and let the next observation recover.
+      }
+    }());
+  }
+
+  void _cancelHomeUpdateDownload() {
+    _homeDownloadController?.cancel();
+    _updatePromptController.markCancelling();
+  }
+
+  Future<void> _openUpdateReleasePage(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 
@@ -7109,10 +7531,7 @@ class _DayViewPageTarget {
   final int week;
   final int dayOfWeek;
 
-  const _DayViewPageTarget({
-    required this.week,
-    required this.dayOfWeek,
-  });
+  const _DayViewPageTarget({required this.week, required this.dayOfWeek});
 }
 
 class _DayCourseDisplayItem {
@@ -7138,6 +7557,7 @@ class _DayCourseDisplayItem {
 class _DayAgendaItem {
   final _DayCourseDisplayItem? courseItem;
   final ScheduleItem? scheduleItem;
+  final ScheduleItemInstance? scheduleInstance;
   final Exam? exam;
   final String startTime;
   final String endTime;
@@ -7147,6 +7567,7 @@ class _DayAgendaItem {
   const _DayAgendaItem._({
     this.courseItem,
     this.scheduleItem,
+    this.scheduleInstance,
     this.exam,
     required this.startTime,
     required this.endTime,
@@ -7164,6 +7585,7 @@ class _DayAgendaItem {
 
   factory _DayAgendaItem.schedule(
     ScheduleItem item, {
+    ScheduleItemInstance? instance,
     required String startTime,
     required String endTime,
     bool continuesFromPreviousDay = false,
@@ -7171,6 +7593,7 @@ class _DayAgendaItem {
   }) {
     return _DayAgendaItem._(
       scheduleItem: item,
+      scheduleInstance: instance,
       startTime: startTime,
       endTime: endTime,
       continuesFromPreviousDay: continuesFromPreviousDay,
@@ -7189,7 +7612,10 @@ class _DayAgendaItem {
   bool get isScheduleItem => scheduleItem != null;
   bool get isExam => exam != null;
   String get id =>
-      exam?.id ?? (isScheduleItem ? scheduleItem!.id : courseItem!.course.id);
+      exam?.id ??
+      (isScheduleItem
+          ? scheduleInstance?.occurrenceId ?? scheduleItem!.id
+          : courseItem!.course.id);
 }
 
 class _DayAgendaProgressInfo {

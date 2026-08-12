@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
@@ -6,6 +7,7 @@ import '../l10n/service_message_localizer.dart';
 import '../logging/app_debug_log.dart';
 import 'app_update_service.dart';
 import '../utils/async_utils.dart';
+import 'app_http_client.dart';
 
 class SupportDonorEntry {
   final String name;
@@ -60,6 +62,36 @@ class SupportDonorData {
   }
 }
 
+enum SystemDownloadStatus {
+  pending,
+  running,
+  paused,
+  successful,
+  failed,
+  unknown,
+}
+
+class SystemDownloadProgress {
+  final SystemDownloadStatus status;
+  final int downloadedBytes;
+  final int? totalBytes;
+  final int? reason;
+
+  const SystemDownloadProgress({
+    required this.status,
+    required this.downloadedBytes,
+    required this.totalBytes,
+    this.reason,
+  });
+
+  bool get isFinished =>
+      status == SystemDownloadStatus.successful ||
+      status == SystemDownloadStatus.failed;
+}
+
+typedef SystemDownloadProgressReader =
+    Future<SystemDownloadProgress?> Function(int downloadId);
+
 class SupportCreatorService {
   static const MethodChannel _channel = MethodChannel(
     'com.mutx163.qingyu/support',
@@ -70,7 +102,7 @@ class SupportCreatorService {
   final http.Client _client;
 
   SupportCreatorService({http.Client? client})
-    : _client = client ?? http.Client();
+    : _client = client ?? createAppHttpClient();
 
   Future<SupportDonorData> fetchDonors({String? mirrorUrlPrefix}) async {
     final normalizedMirrorPrefix = _normalizeMirrorUrlPrefix(mirrorUrlPrefix);
@@ -127,10 +159,9 @@ class SupportCreatorService {
     final lastError = result.errors.isNotEmpty ? result.errors.last : null;
     appDebugLog('SupportCreator', '全部失败，errors：${result.errors}');
     throw Exception(
-      encodeServiceMessage(
-        'support_donors_load_failed',
-        {'detail': '$lastError'},
-      ),
+      encodeServiceMessage('support_donors_load_failed', {
+        'detail': '$lastError',
+      }),
     );
   }
 
@@ -160,6 +191,52 @@ class SupportCreatorService {
       'title': title,
       'description': description,
     });
+  }
+
+  Future<SystemDownloadProgress?> querySystemDownloadProgress(
+    int downloadId,
+  ) async {
+    final payload = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'getSystemDownloadProgress',
+      {'downloadId': downloadId},
+    );
+    if (payload == null) {
+      return null;
+    }
+
+    final status = switch (payload['status'] as String?) {
+      'pending' => SystemDownloadStatus.pending,
+      'running' => SystemDownloadStatus.running,
+      'paused' => SystemDownloadStatus.paused,
+      'successful' => SystemDownloadStatus.successful,
+      'failed' => SystemDownloadStatus.failed,
+      _ => SystemDownloadStatus.unknown,
+    };
+    final downloadedBytes = (payload['downloadedBytes'] as num?)?.toInt() ?? 0;
+    final rawTotalBytes = (payload['totalBytes'] as num?)?.toInt() ?? -1;
+    return SystemDownloadProgress(
+      status: status,
+      downloadedBytes: downloadedBytes,
+      totalBytes: rawTotalBytes > 0 ? rawTotalBytes : null,
+      reason: (payload['reason'] as num?)?.toInt(),
+    );
+  }
+
+  Stream<SystemDownloadProgress> watchSystemDownloadProgress(
+    int downloadId, {
+    Duration interval = const Duration(milliseconds: 350),
+  }) async* {
+    while (true) {
+      final progress = await querySystemDownloadProgress(downloadId);
+      if (progress == null) {
+        return;
+      }
+      yield progress;
+      if (progress.isFinished) {
+        return;
+      }
+      await Future<void>.delayed(interval);
+    }
   }
 
   String? _normalizeMirrorUrlPrefix(String? prefix) {

@@ -203,7 +203,7 @@ abstract class AppLocalizations {
   /// No description provided for @fontModeSystem.
   ///
   /// In zh, this message translates to:
-  /// **'应用默认（Inter）'**
+  /// **'应用默认'**
   String get fontModeSystem;
 
   /// No description provided for @fontModeSansSerif.
@@ -2359,6 +2359,126 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'检测到不同传输内容，请确认只对准一份数据'**
   String get qrTransferSessionMismatch;
+
+  /// No description provided for @qrTransferChecksumFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'传输校验失败，请重新开始'**
+  String get qrTransferChecksumFailed;
+
+  /// No description provided for @qrTransferRawLengthMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'接收数据长度校验失败，请重新开始'**
+  String get qrTransferRawLengthMismatch;
+
+  /// No description provided for @qrTransferDecompressionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据解压失败，请重新开始'**
+  String get qrTransferDecompressionFailed;
+
+  /// No description provided for @qrTransferPlaintextWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码传输是明文，附近摄像头可能读取内容。请确认来源，未经确认不会覆盖数据。'**
+  String get qrTransferPlaintextWarning;
+
+  /// No description provided for @qrTransferResourceLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'接收数据超过二维码传输资源上限，请重新开始并使用更小的备份。'**
+  String get qrTransferResourceLimit;
+
+  /// No description provided for @qrTransferSessionExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码传输已超时，请重新开始并只对准一台设备。'**
+  String get qrTransferSessionExpired;
+
+  /// No description provided for @qrTransferFullBackupWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认后，该完整备份会替换本设备上的数据。'**
+  String get qrTransferFullBackupWarning;
+
+  /// No description provided for @qrTransferImportFullBackup.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入完整备份'**
+  String get qrTransferImportFullBackup;
+
+  /// No description provided for @qrTransferDecodeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码数据解码失败，请重新开始'**
+  String get qrTransferDecodeFailed;
+
+  /// No description provided for @qrTransferRestart.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新开始'**
+  String get qrTransferRestart;
+
+  /// No description provided for @qrTransferSampleFps.
+  ///
+  /// In zh, this message translates to:
+  /// **'采样帧率'**
+  String get qrTransferSampleFps;
+
+  /// No description provided for @qrTransferDecodeFps.
+  ///
+  /// In zh, this message translates to:
+  /// **'解码帧率'**
+  String get qrTransferDecodeFps;
+
+  /// No description provided for @qrTransferReceiveSpeed.
+  ///
+  /// In zh, this message translates to:
+  /// **'接收速度'**
+  String get qrTransferReceiveSpeed;
+
+  /// No description provided for @qrTransferElapsed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已用时间'**
+  String get qrTransferElapsed;
+
+  /// No description provided for @qrTransferNewFrames.
+  ///
+  /// In zh, this message translates to:
+  /// **'新增帧'**
+  String get qrTransferNewFrames;
+
+  /// No description provided for @qrTransferDuplicateFrames.
+  ///
+  /// In zh, this message translates to:
+  /// **'重复帧'**
+  String get qrTransferDuplicateFrames;
+
+  /// No description provided for @qrTransferBlockSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'单块大小'**
+  String get qrTransferBlockSize;
+
+  /// No description provided for @qrTransferBlockCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据块数'**
+  String get qrTransferBlockCount;
+
+  /// No description provided for @qrTransferFileData.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件数据'**
+  String get qrTransferFileData;
+
+  /// No description provided for @qrTransferFileDataDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'原始 {rawSize} · 压缩 {compressedSize}'**
+  String qrTransferFileDataDetail(String rawSize, String compressedSize);
 
   /// No description provided for @fullExportTitle.
   ///
@@ -5727,6 +5847,12 @@ abstract class AppLocalizations {
   /// **'选择图片'**
   String get homePagePickImageAction;
 
+  /// No description provided for @homePageSwitchImageAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换照片'**
+  String get homePageSwitchImageAction;
+
   /// No description provided for @homePageClearImageAction.
   ///
   /// In zh, this message translates to:
@@ -5738,6 +5864,42 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'未选择'**
   String get homePageImageNotSelected;
+
+  /// No description provided for @wallpaperPositionPickerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'调整壁纸显示位置'**
+  String get wallpaperPositionPickerTitle;
+
+  /// No description provided for @wallpaperPositionPickerResetTooltip.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置居中'**
+  String get wallpaperPositionPickerResetTooltip;
+
+  /// No description provided for @wallpaperPositionPickerDragHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖动壁纸调整位置'**
+  String get wallpaperPositionPickerDragHint;
+
+  /// No description provided for @wallpaperPositionPickerSwitchWallpaper.
+  ///
+  /// In zh, this message translates to:
+  /// **'换壁纸'**
+  String get wallpaperPositionPickerSwitchWallpaper;
+
+  /// No description provided for @wallpaperPositionPickerDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成'**
+  String get wallpaperPositionPickerDone;
+
+  /// No description provided for @wallpaperPositionPickerExit.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出'**
+  String get wallpaperPositionPickerExit;
 
   /// No description provided for @appearanceTextColorsSectionTitle.
   ///
@@ -8988,18 +9150,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'切换课表'**
   String get switchTimetableTitle;
-
-  /// No description provided for @switchTimetableSubtitleEmpty.
-  ///
-  /// In zh, this message translates to:
-  /// **'点击下面的课表，立即切换当前视图'**
-  String get switchTimetableSubtitleEmpty;
-
-  /// No description provided for @switchTimetableSubtitleCurrent.
-  ///
-  /// In zh, this message translates to:
-  /// **'当前：{name}，点击下面的课表立即切换'**
-  String switchTimetableSubtitleCurrent(String name);
 
   /// No description provided for @todayTimetableTitle.
   ///
@@ -16411,12 +16561,6 @@ abstract class AppLocalizations {
   /// **'半透明'**
   String get courseCardSurfaceStyleTranslucent;
 
-  /// No description provided for @courseCardSurfaceStyleLiquidGlass.
-  ///
-  /// In zh, this message translates to:
-  /// **'液态玻璃'**
-  String get courseCardSurfaceStyleLiquidGlass;
-
   /// No description provided for @courseCardSurfaceStyleGaussian.
   ///
   /// In zh, this message translates to:
@@ -16642,26 +16786,26 @@ abstract class AppLocalizations {
   /// No description provided for @weekdayInkContrastTitle.
   ///
   /// In zh, this message translates to:
-  /// **'文字对比度增强'**
+  /// **'文字对比度不足'**
   String get weekdayInkContrastTitle;
 
   /// No description provided for @weekdayInkContrastBodyDark.
   ///
   /// In zh, this message translates to:
-  /// **'深色模式下增强课程文字对比度'**
+  /// **'你的信息栏文字颜色在深色壁纸上对比度不足，已临时切换为自动白色保证可读。可在「课表页面 → 文字颜色」中更换颜色或恢复默认。'**
   String get weekdayInkContrastBodyDark;
 
   /// No description provided for @weekdayInkContrastBodyLight.
   ///
   /// In zh, this message translates to:
-  /// **'浅色模式下增强课程文字对比度'**
+  /// **'你的信息栏文字颜色在浅色壁纸上对比度不足，已临时切换为自动黑色保证可读。可在「课表页面 → 文字颜色」中更换颜色或恢复默认。'**
   String get weekdayInkContrastBodyLight;
 
-  /// No description provided for @keepCurrentColorAction.
+  /// No description provided for @gotItAction.
   ///
   /// In zh, this message translates to:
-  /// **'保留当前颜色'**
-  String get keepCurrentColorAction;
+  /// **'知道了'**
+  String get gotItAction;
 
   /// No description provided for @settingsTimetableSectionTitle.
   ///
@@ -16782,6 +16926,480 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'调试 UI 叠层'**
   String get debugUiOverlayToggleTitle;
+
+  /// No description provided for @scheduleRepeatSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'重复设置'**
+  String get scheduleRepeatSectionTitle;
+
+  /// No description provided for @scheduleRepeatNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'不重复'**
+  String get scheduleRepeatNone;
+
+  /// No description provided for @scheduleRepeatDaily.
+  ///
+  /// In zh, this message translates to:
+  /// **'每天'**
+  String get scheduleRepeatDaily;
+
+  /// No description provided for @scheduleRepeatWeekly.
+  ///
+  /// In zh, this message translates to:
+  /// **'每周'**
+  String get scheduleRepeatWeekly;
+
+  /// No description provided for @scheduleRepeatEndDateLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'重复结束日期'**
+  String get scheduleRepeatEndDateLabel;
+
+  /// No description provided for @scheduleRepeatEndDateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'重复日程需要设置结束日期'**
+  String get scheduleRepeatEndDateHint;
+
+  /// No description provided for @scheduleRepeatWeeklyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'按开始日期对应的星期重复'**
+  String get scheduleRepeatWeeklyHint;
+
+  /// No description provided for @scheduleReminderSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程提醒'**
+  String get scheduleReminderSectionTitle;
+
+  /// No description provided for @scheduleReminderOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'不提醒'**
+  String get scheduleReminderOff;
+
+  /// No description provided for @scheduleReminderMinutes.
+  ///
+  /// In zh, this message translates to:
+  /// **'提前 {minutes} 分钟'**
+  String scheduleReminderMinutes(int minutes);
+
+  /// No description provided for @scheduleReminderPermissionMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知权限未开启，日程仍会保存，但提醒可能无法送达'**
+  String get scheduleReminderPermissionMissing;
+
+  /// No description provided for @scheduleReminderPermissionAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查通知权限'**
+  String get scheduleReminderPermissionAction;
+
+  /// No description provided for @scheduleEnabledTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'启用日程'**
+  String get scheduleEnabledTitle;
+
+  /// No description provided for @scheduleDisabledSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已暂停，不会显示提醒'**
+  String get scheduleDisabledSubtitle;
+
+  /// No description provided for @scheduleEditScopeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑范围'**
+  String get scheduleEditScopeTitle;
+
+  /// No description provided for @scheduleEditScopeThis.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅本次'**
+  String get scheduleEditScopeThis;
+
+  /// No description provided for @scheduleEditScopeAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部重复日程'**
+  String get scheduleEditScopeAll;
+
+  /// No description provided for @scheduleDeleteScopeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除范围'**
+  String get scheduleDeleteScopeTitle;
+
+  /// No description provided for @scheduleDeleteScopeThis.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅删除本次'**
+  String get scheduleDeleteScopeThis;
+
+  /// No description provided for @scheduleDeleteScopeAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除全部重复日程'**
+  String get scheduleDeleteScopeAll;
+
+  /// No description provided for @scheduleOccurrenceEditHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'你正在编辑这条重复日程的一次实例'**
+  String get scheduleOccurrenceEditHint;
+
+  /// No description provided for @scheduleRepeatEndRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择重复结束日期'**
+  String get scheduleRepeatEndRequired;
+
+  /// No description provided for @homeMenuTasksTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务清单'**
+  String get homeMenuTasksTitle;
+
+  /// No description provided for @taskListTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务清单'**
+  String get taskListTitle;
+
+  /// No description provided for @addTask.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加任务'**
+  String get addTask;
+
+  /// No description provided for @editTask.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑任务'**
+  String get editTask;
+
+  /// No description provided for @saveTask.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存任务'**
+  String get saveTask;
+
+  /// No description provided for @taskTitleLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务标题'**
+  String get taskTitleLabel;
+
+  /// No description provided for @taskTitleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：完成第三章习题'**
+  String get taskTitleHint;
+
+  /// No description provided for @taskTitleRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入任务标题'**
+  String get taskTitleRequired;
+
+  /// No description provided for @taskNoteLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'备注'**
+  String get taskNoteLabel;
+
+  /// No description provided for @taskNoteHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'补充说明（可选）'**
+  String get taskNoteHint;
+
+  /// No description provided for @taskDueDateLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'截止日期'**
+  String get taskDueDateLabel;
+
+  /// No description provided for @taskNoDueDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'无截止日期'**
+  String get taskNoDueDate;
+
+  /// No description provided for @taskCourseLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源课程'**
+  String get taskCourseLabel;
+
+  /// No description provided for @taskCourseFilter.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程筛选'**
+  String get taskCourseFilter;
+
+  /// No description provided for @taskAllCourses.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部课程'**
+  String get taskAllCourses;
+
+  /// No description provided for @taskNoCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'无关联课程'**
+  String get taskNoCourse;
+
+  /// No description provided for @taskAllFilter.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get taskAllFilter;
+
+  /// No description provided for @taskTodayFilter.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日'**
+  String get taskTodayFilter;
+
+  /// No description provided for @taskWeekFilter.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周'**
+  String get taskWeekFilter;
+
+  /// No description provided for @taskOverdueSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'已逾期'**
+  String get taskOverdueSection;
+
+  /// No description provided for @taskCompletedSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'已完成'**
+  String get taskCompletedSection;
+
+  /// No description provided for @taskNoTasks.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有任务'**
+  String get taskNoTasks;
+
+  /// No description provided for @taskNoTasksForToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今日没有待办任务'**
+  String get taskNoTasksForToday;
+
+  /// No description provided for @taskNoTasksForWeek.
+  ///
+  /// In zh, this message translates to:
+  /// **'本周没有待办任务'**
+  String get taskNoTasksForWeek;
+
+  /// No description provided for @taskNoTasksForCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个课程暂无任务'**
+  String get taskNoTasksForCourse;
+
+  /// No description provided for @taskDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除任务'**
+  String get taskDelete;
+
+  /// No description provided for @taskDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定删除这个任务吗？'**
+  String get taskDeleteConfirm;
+
+  /// No description provided for @taskHomeworkDefaultTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程作业'**
+  String get taskHomeworkDefaultTitle;
+
+  /// No description provided for @taskAddFromCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加任务'**
+  String get taskAddFromCourse;
+
+  /// No description provided for @taskViewCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看课程'**
+  String get taskViewCourse;
+
+  /// No description provided for @taskSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务已保存'**
+  String get taskSaved;
+
+  /// No description provided for @taskUpdated.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务已更新'**
+  String get taskUpdated;
+
+  /// No description provided for @taskDeleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务已删除'**
+  String get taskDeleted;
+
+  /// No description provided for @icsExportSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出日历'**
+  String get icsExportSectionTitle;
+
+  /// No description provided for @icsExportSectionSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择课程、考试和日程，生成 ICS 日历并分享'**
+  String get icsExportSectionSubtitle;
+
+  /// No description provided for @icsExportTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出日历'**
+  String get icsExportTitle;
+
+  /// No description provided for @icsExportProfileLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'课表'**
+  String get icsExportProfileLabel;
+
+  /// No description provided for @icsExportProfileSelectTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择课表'**
+  String get icsExportProfileSelectTitle;
+
+  /// No description provided for @icsExportDateRangeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'日期范围'**
+  String get icsExportDateRangeTitle;
+
+  /// No description provided for @icsExportStartDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始日期'**
+  String get icsExportStartDate;
+
+  /// No description provided for @icsExportEndDate.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束日期'**
+  String get icsExportEndDate;
+
+  /// No description provided for @icsExportTypesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'日历内容'**
+  String get icsExportTypesTitle;
+
+  /// No description provided for @icsExportCourses.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程'**
+  String get icsExportCourses;
+
+  /// No description provided for @icsExportExams.
+  ///
+  /// In zh, this message translates to:
+  /// **'考试'**
+  String get icsExportExams;
+
+  /// No description provided for @icsExportSchedules.
+  ///
+  /// In zh, this message translates to:
+  /// **'日程'**
+  String get icsExportSchedules;
+
+  /// No description provided for @icsExportButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出并分享'**
+  String get icsExportButton;
+
+  /// No description provided for @icsExportSharing.
+  ///
+  /// In zh, this message translates to:
+  /// **'准备日历…'**
+  String get icsExportSharing;
+
+  /// No description provided for @icsExportNoProfiles.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无可导出的课表'**
+  String get icsExportNoProfiles;
+
+  /// No description provided for @icsExportDateRangeInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择不早于开始日期的结束日期'**
+  String get icsExportDateRangeInvalid;
+
+  /// No description provided for @icsExportNoSelection.
+  ///
+  /// In zh, this message translates to:
+  /// **'至少选择一种日历内容'**
+  String get icsExportNoSelection;
+
+  /// No description provided for @icsExportSemesterStartRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出课程前，请先设置学期开始日期'**
+  String get icsExportSemesterStartRequired;
+
+  /// No description provided for @icsExportNoEvents.
+  ///
+  /// In zh, this message translates to:
+  /// **'所选日期范围内没有日历事件'**
+  String get icsExportNoEvents;
+
+  /// No description provided for @icsExportCancelled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已取消分享日历'**
+  String get icsExportCancelled;
+
+  /// No description provided for @icsExportFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'日历导出失败，请稍后重试'**
+  String get icsExportFailed;
+
+  /// No description provided for @icsExportShared.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出并分享 {count} 个日历事件'**
+  String icsExportShared(int count);
+
+  /// No description provided for @icsExportShareText.
+  ///
+  /// In zh, this message translates to:
+  /// **'这是来自轻屿课表的日历文件'**
+  String get icsExportShareText;
+
+  /// No description provided for @icsExportShareSubject.
+  ///
+  /// In zh, this message translates to:
+  /// **'轻屿课表日历'**
+  String get icsExportShareSubject;
 }
 
 class _AppLocalizationsDelegate

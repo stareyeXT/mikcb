@@ -18,8 +18,6 @@ export 'hyperos_page_collaborators.dart'
         hyperosIsIncomingRouteSettled,
         hyperosIsRouteTransitioning;
 
-
-
 /// Root settings page without a back button (HyperOS settings home pattern).
 class HyperosRootPage extends StatelessWidget {
   const HyperosRootPage({
@@ -89,8 +87,7 @@ class HyperosRootPage extends StatelessWidget {
           : HyperosRootHeader(
               title: title,
               suffixes: suffixes ?? const [],
-              padding:
-                  headerPadding ?? const EdgeInsets.fromLTRB(8, 0, 8, 2),
+              padding: headerPadding ?? const EdgeInsets.fromLTRB(8, 0, 8, 2),
             ),
       child: child,
     );
@@ -249,13 +246,6 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
   /// applied it one frame late, which read as visible stutter.
   final ValueNotifier<double> _collapseInsetDelta = ValueNotifier<double>(0);
 
-  /// Pixels at the moment the finger released into the overscroll spring.
-  /// Used to release the parked-title inset proportionally across the whole
-  /// spring travel instead of pinning content dead once pixels drop below
-  /// the expansion (which stopped ~700px/s motion instantly — visible jolt).
-  double? _springReleasePixels;
-  double _lastDragPixels = 0;
-
   /// setState guarded against build/layout/paint phases. Post-frame callbacks
   /// run at the end of the current frame; see the note below about not
   /// calling [SchedulerBinding.scheduleFrame] here.
@@ -272,6 +262,7 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
     // Post-frame callbacks already run at the end of the current frame.
     final phase = SchedulerBinding.instance.schedulerPhase;
     if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.transientCallbacks ||
         phase == SchedulerPhase.postFrameCallbacks) {
       setState(() {});
       return;
@@ -392,16 +383,20 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
         notification.metrics.axis,
       );
       _routeBlurGate.tryEnableBlurOnUserScroll();
-      debugPrint('[SNAP] _handleBodyScrollForBlur '
-          '${notification.runtimeType} '
-          'pixels=${notification.metrics.pixels.toStringAsFixed(1)} '
-          'useCollapsible=$_useCollapsibleTopAppBar');
       if (_useCollapsibleTopAppBar) {
         _collapsibleScrollBehavior.handleScroll(notification);
         // Keep the inset delta fresh before the frost check below reads it.
         _syncCollapseInsetDelta(notification);
       }
-      _headerFrost.syncHeaderFrostForScroll(notification.metrics.pixels);
+      if (!_collapsibleScrollBehavior.isSnapInProgress &&
+          !_collapsibleScrollBehavior.isSnapCooldown) {
+        _headerFrost.syncHeaderFrostForScroll(notification.metrics.pixels);
+      } else if (notification is ScrollEndNotification) {
+        // The snap completion callback may run before this final notification
+        // reaches the page shell. Resync once the scroll activity is settled,
+        // while keeping the frost state stable during the snap itself.
+        _headerFrost.scheduleResyncHeaderFrostAfterLayout();
+      }
     }
     return false;
   }
@@ -463,35 +458,21 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
     if (expansion > 0 && state.heightOffset.isFinite) {
       if (notification is ScrollStartNotification) {
         _insetFollowsGesture = _collapseInsetDelta.value > -expansion + 1.0;
-        _springReleasePixels = null;
       }
-      final isDragFrame =
-          notification is ScrollUpdateNotification &&
-          notification.dragDetails != null;
       final isBallisticFrame =
           notification is ScrollUpdateNotification &&
           notification.dragDetails == null;
-      if (isDragFrame) {
-        _lastDragPixels = pixels;
-        _springReleasePixels = null;
-      } else if (isBallisticFrame) {
-        // First spring frame: remember the release depth.
-        _springReleasePixels ??= _lastDragPixels > pixels
-            ? _lastDragPixels
-            : pixels;
-      }
-      final releasePixels = _springReleasePixels;
+      final shortPageSpringProgress = _collapsibleScrollBehavior
+          .shortPageSpringProgressForPixels(metrics.pixels);
       if (_insetFollowsGesture &&
           isBallisticFrame &&
           state.heightOffset <= -expansion + 0.01 &&
-          releasePixels != null &&
-          releasePixels > expansion) {
+          shortPageSpringProgress != null) {
         // Fully collapsed spring-back from deep overscroll: release the
         // parked inset proportionally over the whole spring travel so the
         // content decelerates with the spring and lands exactly as it
         // settles — instead of freezing dead the instant pixels < expansion.
-        final progress = (pixels / releasePixels).clamp(0.0, 1.0);
-        delta = -expansion * (1.0 - progress);
+        delta = -expansion * shortPageSpringProgress;
       } else {
         final scrolled = _insetFollowsGesture
             ? pixels.clamp(0.0, expansion)
@@ -510,6 +491,7 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
     // ("Build scheduled during frame").
     final phase = SchedulerBinding.instance.schedulerPhase;
     if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.transientCallbacks ||
         phase == SchedulerPhase.postFrameCallbacks) {
       _collapseInsetDelta.value = delta;
     } else {
@@ -560,13 +542,13 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
   Widget _buildHeaderContent() {
     if (_useCollapsibleTopAppBar) {
       return HyperosCollapsibleTopAppBar(
-          key: _collapsibleBarKey,
-          title: widget.collapsibleTitle!,
-          color: Colors.transparent,
-          scrollBehavior: _collapsibleScrollBehavior,
-          navigationIcon: widget.collapsibleNavigationIcon,
-          actions: widget.collapsibleActions,
-          bottomContent: widget.headerExtension,
+        key: _collapsibleBarKey,
+        title: widget.collapsibleTitle!,
+        color: Colors.transparent,
+        scrollBehavior: _collapsibleScrollBehavior,
+        navigationIcon: widget.collapsibleNavigationIcon,
+        actions: widget.collapsibleActions,
+        bottomContent: widget.headerExtension,
       );
     }
     if (widget.headerExtension == null) {
@@ -605,39 +587,35 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
       child: blurredHeader,
     );
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: widget.systemOverlayStyle ??
+      value:
+          widget.systemOverlayStyle ??
           HyperosColors.systemOverlayForBackground(pageBackground),
       child: Scaffold(
         resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
         backgroundColor: pageBackground,
         body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(
-              top: MediaQuery.paddingOf(context).top + 44,
+          fit: StackFit.expand,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(
+                top: MediaQuery.paddingOf(context).top + 44,
+              ),
+              child: _buildBody(
+                pageBackground: pageBackground,
+                child: widget.childPad
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: widget.child,
+                      )
+                    : widget.child,
+              ),
             ),
-            child: _buildBody(
-              pageBackground: pageBackground,
-              child: widget.childPad
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: widget.child,
-                    )
-                  : widget.child,
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: header,
-          ),
-        ],
+            Positioned(top: 0, left: 0, right: 0, child: header),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -660,58 +638,59 @@ class _HyperosBlurredPageState extends State<_HyperosBlurredPage> {
     final headerInset = _overlayMetrics.overlayContentTopInset(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: widget.systemOverlayStyle ??
+      value:
+          widget.systemOverlayStyle ??
           HyperosColors.systemOverlayForBackground(pageBackground),
       child: Scaffold(
         resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
         backgroundColor: pageBackground,
         body: _buildHeaderScope(
-        contentTopInset: headerInset,
-        routeBlurEnabled: _backdropBlurEnabled,
-        headerBackgroundColor: pageBackground,
-        child: Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.hardEdge,
-          children: [
-            Positioned.fill(
-              child: ValueListenableBuilder<double>(
-                valueListenable: _collapseInsetDelta,
-                child: _buildBody(
-                  pageBackground: pageBackground,
-                  child: widget.child,
+          contentTopInset: headerInset,
+          routeBlurEnabled: _backdropBlurEnabled,
+          headerBackgroundColor: pageBackground,
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fill(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _collapseInsetDelta,
+                  child: _buildBody(
+                    pageBackground: pageBackground,
+                    child: widget.child,
+                  ),
+                  builder: (context, delta, body) {
+                    return Transform.translate(
+                      offset: Offset(0, delta),
+                      child: body,
+                    );
+                  },
                 ),
-                builder: (context, delta, body) {
-                  return Transform.translate(
-                    offset: Offset(0, delta),
-                    child: body,
-                  );
-                },
               ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  if (!width.isFinite || width <= 0) {
-                    return const SizedBox.shrink();
-                  }
-                  return SizedBox(
-                    key: _overlayMetrics.overlayHeaderKey,
-                    width: width,
-                    child: blurredHeader,
-                  );
-                },
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    if (!width.isFinite || width <= 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return SizedBox(
+                      key: _overlayMetrics.overlayHeaderKey,
+                      width: width,
+                      child: blurredHeader,
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 /// Scrollable HyperOS settings list with standard page padding.

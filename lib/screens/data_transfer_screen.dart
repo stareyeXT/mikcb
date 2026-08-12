@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/l10n/service_message_localizer.dart';
@@ -9,8 +11,15 @@ import 'package:provider/provider.dart';
 
 import '../providers/timetable_provider.dart';
 import '../services/data_transfer_service.dart';
+import '../services/transfer_package.dart';
+import '../services/transfer_undo_service.dart';
+import '../services/unified_transfer_service.dart';
+import 'ics_export_screen.dart';
+import '../services/qr_transfer/qr_transfer_codec.dart';
+import '../services/qr_transfer/qr_transfer_session.dart';
 import 'qr_transfer_send_screen.dart';
 import 'qr_transfer_scan_screen.dart';
+import 'transfer_preview_dialog.dart';
 import '../utils/app_toast.dart';
 import '../ui/hyperos/hyperos.dart';
 
@@ -24,6 +33,8 @@ class DataTransferScreen extends StatefulWidget {
 class _DataTransferScreenState extends State<DataTransferScreen> {
   bool _isExporting = false;
   bool _isImporting = false;
+  bool _qrImportInFlight = false;
+  final UnifiedTransferService _transferService = UnifiedTransferService();
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +72,17 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
             ),
           ),
           const HyperosSectionGap(),
+          HyperosSectionLabel(text: l10n.icsExportSectionTitle),
+          HyperosListGroup(
+            children: [
+              HyperosNavTile(
+                title: l10n.icsExportSectionTitle,
+                subtitle: l10n.icsExportSectionSubtitle,
+                onTap: _openIcsExport,
+              ),
+            ],
+          ),
+          const HyperosSectionGap(),
           HyperosSectionLabel(text: l10n.fullImportTitle),
           HyperosControlCard(
             child: HyperosControlCardInset(
@@ -84,6 +106,13 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
                   Text(
                     l10n.qrTransferSectionSubtitle,
                     style: HyperosTypography.listDetail(context),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.qrTransferPlaintextWarning,
+                    style: HyperosTypography.listDetail(
+                      context,
+                    ).copyWith(color: Colors.orangeAccent),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -213,12 +242,12 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
       _isExporting = true;
     });
     try {
-      await provider.dataTransferService.exportAndShare(
-        profileName: provider.activeProfile?.name,
-        courses: provider.courses,
-        exams: provider.exams,
-        settings: provider.settings,
-        currentWeek: provider.currentWeek,
+      final package = _transferService.buildCurrentPackage(
+        provider: provider,
+        channel: TransferChannel.file,
+      );
+      await _shareTransferPackage(
+        package,
         shareText: l10n.dataTransferProfileShareText,
         shareSubject: provider.activeProfile?.name == null
             ? l10n.dataTransferProfileShareSubject
@@ -235,6 +264,37 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
     }
   }
 
+  Future<void> _shareTransferPackage(
+    TransferPackage package, {
+    required String shareText,
+    required String shareSubject,
+  }) async {
+    final now = DateTime.now();
+    final prefix = package.isFullBackup ? 'mikcb-full-backup' : 'mikcb-backup';
+    final filename =
+        '$prefix-${now.year}${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}-'
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}.${DataTransferService.fileExtension}';
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [
+          XFile.fromData(
+            package.encodeBytes(),
+            mimeType: 'application/json',
+            name: filename,
+          ),
+        ],
+        text: shareText,
+        subject: shareSubject,
+      ),
+    );
+  }
+
+  void _openIcsExport() {
+    HyperosNavigation.pushWidget<void>(context, const IcsExportScreen());
+  }
+
   Future<void> _exportFullData() async {
     final provider = context.read<TimetableProvider>();
     final l10n = AppLocalizations.of(context)!;
@@ -242,10 +302,12 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
       _isExporting = true;
     });
     try {
-      await provider.dataTransferService.exportFullBackupAndShare(
-        profiles: provider.profiles,
-        activeProfileId: provider.activeProfileId,
-        timeSchemes: provider.timeSchemes,
+      final package = _transferService.buildFullPackage(
+        provider: provider,
+        channel: TransferChannel.file,
+      );
+      await _shareTransferPackage(
+        package,
         shareText: l10n.dataTransferFullBackupShareText,
         shareSubject: l10n.dataTransferFullBackupShareSubject,
       );
@@ -260,33 +322,6 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
 
   Future<void> _confirmAndImport() async {
     final l10n = AppLocalizations.of(context)!;
-    final importMode = await showHyperosDialog<_BackupImportMode>(
-      context: context,
-      title: l10n.selectImportModeTitle,
-      message: l10n.selectImportModeMessage,
-      actions: [
-        HyperosDialogAction(
-          label: l10n.cancelAction,
-          onPressed: () => Navigator.pop(context),
-        ),
-        HyperosDialogAction(
-          label: l10n.replaceCurrentTimetable,
-          isPrimary: true,
-          onPressed: () =>
-              Navigator.pop(context, _BackupImportMode.replaceCurrent),
-        ),
-        HyperosDialogAction(
-          label: l10n.importAsNewTimetable,
-          onPressed: () =>
-              Navigator.pop(context, _BackupImportMode.importAsNew),
-        ),
-      ],
-    );
-
-    if (importMode == null || !mounted) {
-      return;
-    }
-
     setState(() {
       _isImporting = true;
     });
@@ -310,30 +345,7 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
       if (content.isEmpty) {
         throw FormatException(l10n.importFileReadFailed);
       }
-      if (!mounted) {
-        return;
-      }
-
-      final provider = context.read<TimetableProvider>();
-      final message = switch (importMode) {
-        _BackupImportMode.replaceCurrent => await provider.importAppDataBackup(
-          content,
-        ),
-        _BackupImportMode.importAsNew =>
-          await provider.importAppDataBackupAsNewProfile(content),
-      };
-      if (!mounted) {
-        return;
-      }
-      showAppToast(
-        context,
-        message: message != null
-            ? localizeServiceMessage(l10n, message)
-            : (importMode == _BackupImportMode.importAsNew
-                  ? l10n.createdNewTimetableAfterImport
-                  : l10n.backupRestoredSuccess),
-        kind: message != null ? AppToastKind.error : AppToastKind.success,
-      );
+      await _previewAndApply(content, TransferChannel.file);
     } on FormatException catch (e) {
       if (!mounted) {
         return;
@@ -364,127 +376,299 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
   Future<void> _qrSendCurrent() async {
     final provider = context.read<TimetableProvider>();
     final l10n = AppLocalizations.of(context)!;
-    final content = provider.dataTransferService.buildBackupJson(
-      profileName: provider.activeProfile?.name,
-      courses: provider.courses,
-      exams: provider.exams,
-      settings: provider.settings,
-      currentWeek: provider.currentWeek,
-    );
-    if (!mounted) {
+    final scope = await _chooseQrScope();
+    if (scope == null || !mounted) {
       return;
     }
-    await Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => QrTransferSendScreen(
-          payloadBytes: Uint8List.fromList(utf8.encode(content)),
-          title: l10n.qrTransferSendCurrent,
-        ),
-      ),
+    Set<String> selectedCourseIds = const {};
+    if (scope == TransferScope.selectedCourses ||
+        scope == TransferScope.selectedCourse) {
+      final selected = await _chooseCoursesForQr(provider);
+      if (selected == null || selected.isEmpty || !mounted) {
+        return;
+      }
+      selectedCourseIds = selected;
+    }
+    final package = _transferService.buildCurrentPackage(
+      provider: provider,
+      channel: TransferChannel.qr,
+      scope: scope,
+      selectedCourseIds: selectedCourseIds,
+    );
+    final content = package.encode();
+    await _openQrSender(
+      Uint8List.fromList(utf8.encode(content)),
+      l10n.qrTransferSendCurrent,
     );
   }
 
   Future<void> _qrSendAll() async {
     final provider = context.read<TimetableProvider>();
     final l10n = AppLocalizations.of(context)!;
-    final content = provider.dataTransferService.buildFullBackupJson(
-      profiles: provider.profiles,
-      activeProfileId: provider.activeProfileId,
-      timeSchemes: provider.timeSchemes,
+    final content = _transferService
+        .buildFullPackage(provider: provider, channel: TransferChannel.qr)
+        .encode();
+    await _openQrSender(
+      Uint8List.fromList(utf8.encode(content)),
+      l10n.qrTransferSendAll,
     );
+  }
+
+  Future<void> _openQrSender(Uint8List payloadBytes, String title) async {
+    try {
+      QrTransferEncoder.preflight(payloadBytes);
+    } on QrTransferLimitException {
+      if (mounted) {
+        showAppToast(
+          context,
+          message: AppLocalizations.of(context)!.qrTransferResourceLimit,
+          kind: AppToastKind.error,
+        );
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
-    await Navigator.push(
+    await HyperosNavigation.pushWidget<void>(
       context,
-      MaterialPageRoute<void>(
-        builder: (_) => QrTransferSendScreen(
-          payloadBytes: Uint8List.fromList(utf8.encode(content)),
-          title: l10n.qrTransferSendAll,
-        ),
-      ),
+      QrTransferSendScreen(payloadBytes: payloadBytes, title: title),
     );
   }
 
   void _qrReceive() {
-    Navigator.push(
+    if (_isImporting || _qrImportInFlight) {
+      return;
+    }
+    HyperosNavigation.pushWidget<void>(
       context,
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            QrTransferScanScreen(onComplete: _handleQrReceivedBytes),
-      ),
+      QrTransferScanScreen(onComplete: _handleQrReceivedBytes),
     );
   }
 
   Future<void> _handleQrReceivedBytes(Uint8List bytes) async {
-    if (!mounted) {
+    if (!mounted || _qrImportInFlight) {
       return;
     }
-    Navigator.pop(context);
-    final content = utf8.decode(bytes);
-    final l10n = AppLocalizations.of(context)!;
-    final provider = context.read<TimetableProvider>();
+    _qrImportInFlight = true;
+    setState(() {
+      _isImporting = true;
+    });
 
-    if (provider.dataTransferService.isFullBackupJson(content)) {
-      final message = await provider.importFullAppDataBackup(content);
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      late final String content;
+      try {
+        final decoded = StringBuffer();
+        final sink = utf8.decoder.startChunkedConversion(
+          StringConversionSink.withCallback(decoded.write),
+        );
+        sink.add(bytes);
+        sink.close();
+        content = decoded.toString();
+      } on FormatException {
+        throw const FormatException('qr_transfer_invalid_utf8');
+      }
+      await _previewAndApply(content, TransferChannel.qr);
+    } on FormatException catch (error) {
       if (!mounted) {
         return;
       }
       showAppToast(
         context,
-        message: message != null
-            ? localizeServiceMessage(l10n, message)
-            : l10n.backupRestoredSuccess,
-        kind: message != null ? AppToastKind.error : AppToastKind.success,
+        message: error.message == 'qr_transfer_invalid_utf8'
+            ? l10n.importFailedInvalidFile
+            : localizeServiceMessage(l10n, error.message),
+        kind: AppToastKind.error,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showAppToast(
+        context,
+        message: l10n.importFailedInvalidFile,
+        kind: AppToastKind.error,
+      );
+    } finally {
+      _qrImportInFlight = false;
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _previewAndApply(String content, TransferChannel channel) async {
+    if (!mounted) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final provider = context.read<TimetableProvider>();
+    final incoming = _transferService.parseCompatible(
+      content,
+      channel: channel,
+    );
+    final current = _transferService.buildCurrentPackage(
+      provider: provider,
+      channel: channel,
+    );
+    final mergePreview = _transferService.preview(
+      current: current,
+      incoming: incoming,
+      mode: TransferApplyMode.merge,
+    );
+    final overwritePreview = _transferService.preview(
+      current: current,
+      incoming: incoming,
+      mode: TransferApplyMode.overwrite,
+    );
+    final choice = await showTransferPreviewDialog(
+      context: context,
+      preview: overwritePreview,
+      alternatePreview: mergePreview,
+      incoming: incoming,
+    );
+    if (choice == null || !mounted) {
+      return;
+    }
+    final mode = choice;
+    final result = await _transferService.applyToProvider(
+      provider: provider,
+      incoming: incoming,
+      mode: mode,
+      current: current,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!result.applied) {
+      showAppToast(
+        context,
+        message: result.error == null
+            ? l10n.importFailedInvalidFile
+            : localizeServiceMessage(l10n, result.error!),
+        kind: AppToastKind.error,
       );
       return;
     }
+    final token = result.undoToken;
+    if (token == null) {
+      showAppToast(
+        context,
+        message: l10n.backupRestoredSuccess,
+        kind: AppToastKind.success,
+      );
+      return;
+    }
+    showAppToastWithAction(
+      context,
+      message: l10n.backupRestoredSuccess,
+      actionLabel: l10n.themeUndo,
+      kind: AppToastKind.success,
+      onAction: () => unawaited(_undoTransfer(token)),
+    );
+  }
 
-    final importMode = await showHyperosDialog<_BackupImportMode>(
+  Future<void> _undoTransfer(TransferUndoToken token) async {
+    final provider = context.read<TimetableProvider>();
+    final success = await _transferService.undoToken(provider, token.id);
+    if (!mounted) {
+      return;
+    }
+    showAppToast(
+      context,
+      message: success ? 'Transfer undone' : 'Undo failed',
+      kind: success ? AppToastKind.success : AppToastKind.error,
+    );
+  }
+
+  Future<TransferScope?> _chooseQrScope() {
+    final l10n = AppLocalizations.of(context)!;
+    return showHyperosDialog<TransferScope>(
       context: context,
-      title: l10n.selectImportModeTitle,
-      message: l10n.selectImportModeMessage,
+      title: l10n.qrTransferSendCurrent,
+      message: l10n.qrTransferSectionSubtitle,
       actions: [
         HyperosDialogAction(
           label: l10n.cancelAction,
           onPressed: () => Navigator.pop(context),
         ),
         HyperosDialogAction(
-          label: l10n.replaceCurrentTimetable,
-          isPrimary: true,
-          onPressed: () =>
-              Navigator.pop(context, _BackupImportMode.replaceCurrent),
+          label: 'Share this week',
+          onPressed: () => Navigator.pop(context, TransferScope.weekTimetable),
         ),
         HyperosDialogAction(
-          label: l10n.importAsNewTimetable,
+          label: 'Share selected courses',
           onPressed: () =>
-              Navigator.pop(context, _BackupImportMode.importAsNew),
+              Navigator.pop(context, TransferScope.selectedCourses),
+        ),
+        HyperosDialogAction(
+          label: 'Share time template',
+          onPressed: () => Navigator.pop(context, TransferScope.timeTemplate),
+        ),
+        HyperosDialogAction(
+          label: l10n.qrTransferSendCurrent,
+          isPrimary: true,
+          onPressed: () =>
+              Navigator.pop(context, TransferScope.currentTimetable),
         ),
       ],
     );
-    if (importMode == null || !mounted) {
-      return;
-    }
+  }
 
-    final message = switch (importMode) {
-      _BackupImportMode.replaceCurrent => await provider.importAppDataBackup(
-        content,
-      ),
-      _BackupImportMode.importAsNew =>
-        await provider.importAppDataBackupAsNewProfile(content),
-    };
-    if (!mounted) {
-      return;
-    }
-    showAppToast(
-      context,
-      message: message != null
-          ? localizeServiceMessage(l10n, message)
-          : (importMode == _BackupImportMode.importAsNew
-                ? l10n.createdNewTimetableAfterImport
-                : l10n.backupRestoredSuccess),
-      kind: message != null ? AppToastKind.error : AppToastKind.success,
+  Future<Set<String>?> _chooseCoursesForQr(TimetableProvider provider) {
+    final selected = <String>{};
+    return showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.75,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          for (final course in provider.courses)
+                            CheckboxListTile(
+                              value: selected.contains(course.id),
+                              title: Text(course.name),
+                              subtitle: Text(course.location),
+                              onChanged: (value) {
+                                setModalState(() {
+                                  if (value == true) {
+                                    selected.add(course.id);
+                                  } else {
+                                    selected.remove(course.id);
+                                  }
+                                });
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: HyperosButton(
+                        label: 'Done',
+                        onPressed: () => Navigator.pop(
+                          sheetContext,
+                          Set<String>.from(selected),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -492,5 +676,3 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }
-
-enum _BackupImportMode { replaceCurrent, importAsNew }

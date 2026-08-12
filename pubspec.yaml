@@ -8,7 +8,8 @@ issue_tracker: https://github.com/Mutx163/mikcb/issues
 license: GPL-3.0-or-later
 
 environment:
-  sdk: ^3.9.0
+  sdk: ">=3.12.2 <4.0.0"
+  flutter: ">=3.44.2"
 
 dependencies:
   flutter:
@@ -20,9 +21,9 @@ dependencies:
   intl: ^0.20.2
   uuid: ^4.6.0
   cupertino_icons: ^1.0.8
-  file_picker: ^11.0.2
+  file_picker: ^11.0.3
   http: ^1.2.2
-  package_info_plus: ^8.0.2
+  package_info_plus: ^9.0.1
   share_plus: ^12.0.2
   crypto: ^3.0.6
   webdav_plus: ^1.2.2
@@ -35,6 +36,7 @@ dependencies:
   azlistview: ^2.0.0
   animations: ^2.0.11
   table_parser: ^1.0.1
+  qr: ^3.0.2
   qr_flutter: ^4.1.0
   fl_chart: ^1.2.0
   forui: ^0.23.0
@@ -45,7 +47,7 @@ dependencies:
   flutter_miuix:
     git:
       url: https://github.com/Mutx163/flutter_miuix.git
-      ref: ef5c1312d7aab00670a2539ff67bc3b88086f795
+      ref: 8d72a94a72ca4580b43ef2b5872ded3021815ccd
   liquid_glass_renderer: ^0.2.0-dev.4
   flutter_blackbox: ^0.7.0
   fountain_codes: ^1.0.0

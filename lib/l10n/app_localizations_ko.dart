@@ -58,7 +58,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get fontModeLabel => '글꼴 선택';
 
   @override
-  String get fontModeSystem => '앱 기본(Inter)';
+  String get fontModeSystem => '앱 기본';
 
   @override
   String get fontModeSansSerif => '시스템 산세리프';
@@ -1255,6 +1255,72 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get qrTransferSessionMismatch =>
       '다른 전송 내용이 감지되었습니다. 하나의 화면에만 정면으로 대세요';
+
+  @override
+  String get qrTransferChecksumFailed => '전송 검증에 실패했습니다. 다시 시작해 주세요';
+
+  @override
+  String get qrTransferRawLengthMismatch => '수신 데이터 길이 검증에 실패했습니다. 다시 시작해 주세요';
+
+  @override
+  String get qrTransferDecompressionFailed =>
+      '수신 데이터를 압축 해제할 수 없습니다. 다시 시작해 주세요';
+
+  @override
+  String get qrTransferPlaintextWarning =>
+      'QR 전송은 평문입니다. 가까운 카메라가 내용을 읽을 수 있습니다. 가져오기 전에 출처를 확인하며, 확인 없이 덮어쓰지 않습니다.';
+
+  @override
+  String get qrTransferResourceLimit =>
+      '수신 데이터가 QR 전송 리소스 한도를 초과했습니다. 다시 시작하고 더 작은 백업을 사용하세요.';
+
+  @override
+  String get qrTransferSessionExpired =>
+      'QR 전송 시간이 초과되었습니다. 다시 시작하고 한 화면만 향하게 하세요.';
+
+  @override
+  String get qrTransferFullBackupWarning => '확인하면 이 전체 백업이 이 기기의 데이터를 대체합니다.';
+
+  @override
+  String get qrTransferImportFullBackup => '전체 백업 가져오기';
+
+  @override
+  String get qrTransferDecodeFailed => 'QR 전송을 디코딩할 수 없습니다. 다시 시작해 주세요';
+
+  @override
+  String get qrTransferRestart => '다시 시작';
+
+  @override
+  String get qrTransferSampleFps => '샘플 FPS';
+
+  @override
+  String get qrTransferDecodeFps => '디코딩 FPS';
+
+  @override
+  String get qrTransferReceiveSpeed => '수신 속도';
+
+  @override
+  String get qrTransferElapsed => '경과 시간';
+
+  @override
+  String get qrTransferNewFrames => '새 프레임';
+
+  @override
+  String get qrTransferDuplicateFrames => '중복 프레임';
+
+  @override
+  String get qrTransferBlockSize => '블록 크기';
+
+  @override
+  String get qrTransferBlockCount => '블록 수';
+
+  @override
+  String get qrTransferFileData => '파일 데이터';
+
+  @override
+  String qrTransferFileDataDetail(String rawSize, String compressedSize) {
+    return '원본 $rawSize · 압축 $compressedSize';
+  }
 
   @override
   String get fullExportTitle => '전체 내보내기';
@@ -3158,10 +3224,31 @@ class AppLocalizationsKo extends AppLocalizations {
   String get homePagePickImageAction => '选择图片';
 
   @override
+  String get homePageSwitchImageAction => '切换照片';
+
+  @override
   String get homePageClearImageAction => '清除图片';
 
   @override
   String get homePageImageNotSelected => '未选择';
+
+  @override
+  String get wallpaperPositionPickerTitle => '调整壁纸显示位置';
+
+  @override
+  String get wallpaperPositionPickerResetTooltip => '重置居中';
+
+  @override
+  String get wallpaperPositionPickerDragHint => '拖动壁纸调整位置';
+
+  @override
+  String get wallpaperPositionPickerSwitchWallpaper => '换壁纸';
+
+  @override
+  String get wallpaperPositionPickerDone => '完成';
+
+  @override
+  String get wallpaperPositionPickerExit => '退出';
 
   @override
   String get appearanceTextColorsSectionTitle => '文字颜色';
@@ -5004,14 +5091,6 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get switchTimetableTitle => '시간표 전환';
-
-  @override
-  String get switchTimetableSubtitleEmpty => '아래 시간표를 탭하여 현재 뷰를 즉시 전환하세요';
-
-  @override
-  String switchTimetableSubtitleCurrent(String name) {
-    return '현재: $name. 아래 시간표를 탭하여 즉시 전환하세요';
-  }
 
   @override
   String get todayTimetableTitle => '오늘 시간표';
@@ -9362,9 +9441,6 @@ class AppLocalizationsKo extends AppLocalizations {
   String get courseCardSurfaceStyleTranslucent => '반투명';
 
   @override
-  String get courseCardSurfaceStyleLiquidGlass => '리퀴드 글래스';
-
-  @override
   String get courseCardSurfaceStyleGaussian => '가우시안 블러';
 
   @override
@@ -9476,16 +9552,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get selectEndTimeTitle => '종료 시간 선택';
 
   @override
-  String get weekdayInkContrastTitle => '텍스트 대비 향상';
+  String get weekdayInkContrastTitle => '텍스트 대비 부족';
 
   @override
-  String get weekdayInkContrastBodyDark => '다크 모드에서 강의 텍스트 대비를 향상시킵니다';
+  String get weekdayInkContrastBodyDark =>
+      '요일 표시줄 텍스트 색상이 어두운 배경화면과 대비가 충분하지 않아 일시적으로 자동 흰색을 사용합니다. 가독성을 보장하기 위한 조치이며, \"시간표 페이지 → 텍스트 색상\"에서 색상을 변경하거나 기본값으로 재설정할 수 있습니다.';
 
   @override
-  String get weekdayInkContrastBodyLight => '라이트 모드에서 강의 텍스트 대비를 향상시킵니다';
+  String get weekdayInkContrastBodyLight =>
+      '요일 표시줄 텍스트 색상이 밝은 배경화면과 대비가 충분하지 않아 일시적으로 자동 검은색을 사용합니다. 가독성을 보장하기 위한 조치이며, \"시간표 페이지 → 텍스트 색상\"에서 색상을 변경하거나 기본값으로 재설정할 수 있습니다.';
 
   @override
-  String get keepCurrentColorAction => '현재 색상 유지';
+  String get gotItAction => '알겠습니다';
 
   @override
   String get settingsTimetableSectionTitle => '시간표';
@@ -9546,4 +9624,246 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get debugUiOverlayToggleTitle => '디버그 UI 오버레이';
+
+  @override
+  String get scheduleRepeatSectionTitle => '반복';
+
+  @override
+  String get scheduleRepeatNone => '반복하지 않음';
+
+  @override
+  String get scheduleRepeatDaily => '매일';
+
+  @override
+  String get scheduleRepeatWeekly => '매주';
+
+  @override
+  String get scheduleRepeatEndDateLabel => '반복 종료일';
+
+  @override
+  String get scheduleRepeatEndDateHint => '반복 일정에는 종료일이 필요합니다';
+
+  @override
+  String get scheduleRepeatWeeklyHint => '시작 날짜의 요일에 반복합니다';
+
+  @override
+  String get scheduleReminderSectionTitle => '일정 알림';
+
+  @override
+  String get scheduleReminderOff => '알림 없음';
+
+  @override
+  String scheduleReminderMinutes(int minutes) {
+    return '$minutes분 전';
+  }
+
+  @override
+  String get scheduleReminderPermissionMissing =>
+      '알림 권한이 꺼져 있습니다. 일정은 저장되지만 알림이 전달되지 않을 수 있습니다';
+
+  @override
+  String get scheduleReminderPermissionAction => '알림 권한 확인';
+
+  @override
+  String get scheduleEnabledTitle => '일정 사용';
+
+  @override
+  String get scheduleDisabledSubtitle => '일시 중지됨. 알림이 비활성화됩니다';
+
+  @override
+  String get scheduleEditScopeTitle => '편집 범위';
+
+  @override
+  String get scheduleEditScopeThis => '이번 항목만';
+
+  @override
+  String get scheduleEditScopeAll => '모든 반복 항목';
+
+  @override
+  String get scheduleDeleteScopeTitle => '삭제 범위';
+
+  @override
+  String get scheduleDeleteScopeThis => '이번 항목만 삭제';
+
+  @override
+  String get scheduleDeleteScopeAll => '모든 반복 항목 삭제';
+
+  @override
+  String get scheduleOccurrenceEditHint => '반복 일정의 한 항목을 편집하고 있습니다';
+
+  @override
+  String get scheduleRepeatEndRequired => '반복 종료일을 선택하세요';
+
+  @override
+  String get homeMenuTasksTitle => '할 일';
+
+  @override
+  String get taskListTitle => '할 일';
+
+  @override
+  String get addTask => '할 일 추가';
+
+  @override
+  String get editTask => '할 일 편집';
+
+  @override
+  String get saveTask => '할 일 저장';
+
+  @override
+  String get taskTitleLabel => '할 일 제목';
+
+  @override
+  String get taskTitleHint => '예: 3장 연습문제 끝내기';
+
+  @override
+  String get taskTitleRequired => '할 일 제목을 입력해 주세요';
+
+  @override
+  String get taskNoteLabel => '메모';
+
+  @override
+  String get taskNoteHint => '추가 내용(선택 사항)';
+
+  @override
+  String get taskDueDateLabel => '마감일';
+
+  @override
+  String get taskNoDueDate => '마감일 없음';
+
+  @override
+  String get taskCourseLabel => '수업';
+
+  @override
+  String get taskCourseFilter => '수업 필터';
+
+  @override
+  String get taskAllCourses => '모든 수업';
+
+  @override
+  String get taskNoCourse => '연결된 수업 없음';
+
+  @override
+  String get taskAllFilter => '전체';
+
+  @override
+  String get taskTodayFilter => '오늘';
+
+  @override
+  String get taskWeekFilter => '이번 주';
+
+  @override
+  String get taskOverdueSection => '기한 초과';
+
+  @override
+  String get taskCompletedSection => '완료됨';
+
+  @override
+  String get taskNoTasks => '아직 할 일이 없습니다';
+
+  @override
+  String get taskNoTasksForToday => '오늘 마감인 할 일이 없습니다';
+
+  @override
+  String get taskNoTasksForWeek => '이번 주 마감인 할 일이 없습니다';
+
+  @override
+  String get taskNoTasksForCourse => '이 수업의 할 일이 없습니다';
+
+  @override
+  String get taskDelete => '할 일 삭제';
+
+  @override
+  String get taskDeleteConfirm => '이 할 일을 삭제할까요?';
+
+  @override
+  String get taskHomeworkDefaultTitle => '과제';
+
+  @override
+  String get taskAddFromCourse => '할 일 추가';
+
+  @override
+  String get taskViewCourse => '수업 보기';
+
+  @override
+  String get taskSaved => '할 일이 저장되었습니다';
+
+  @override
+  String get taskUpdated => '할 일이 업데이트되었습니다';
+
+  @override
+  String get taskDeleted => '할 일이 삭제되었습니다';
+
+  @override
+  String get icsExportSectionTitle => '캘린더 내보내기';
+
+  @override
+  String get icsExportSectionSubtitle => '수업, 시험, 일정을 선택해 ICS 캘린더로 공유합니다';
+
+  @override
+  String get icsExportTitle => '캘린더 내보내기';
+
+  @override
+  String get icsExportProfileLabel => '시간표 프로필';
+
+  @override
+  String get icsExportProfileSelectTitle => '시간표 프로필 선택';
+
+  @override
+  String get icsExportDateRangeTitle => '날짜 범위';
+
+  @override
+  String get icsExportStartDate => '시작 날짜';
+
+  @override
+  String get icsExportEndDate => '종료 날짜';
+
+  @override
+  String get icsExportTypesTitle => '캘린더 내용';
+
+  @override
+  String get icsExportCourses => '수업';
+
+  @override
+  String get icsExportExams => '시험';
+
+  @override
+  String get icsExportSchedules => '일정';
+
+  @override
+  String get icsExportButton => '내보내고 공유';
+
+  @override
+  String get icsExportSharing => '캘린더 준비 중…';
+
+  @override
+  String get icsExportNoProfiles => '내보낼 시간표 프로필이 없습니다';
+
+  @override
+  String get icsExportDateRangeInvalid => '종료 날짜를 시작 날짜 이후로 선택하세요';
+
+  @override
+  String get icsExportNoSelection => '하나 이상의 캘린더 내용 유형을 선택하세요';
+
+  @override
+  String get icsExportSemesterStartRequired => '수업을 내보내기 전에 학기 시작 날짜를 설정하세요';
+
+  @override
+  String get icsExportNoEvents => '선택한 날짜 범위에 캘린더 이벤트가 없습니다';
+
+  @override
+  String get icsExportCancelled => '캘린더 공유가 취소되었습니다';
+
+  @override
+  String get icsExportFailed => '캘린더를 내보내지 못했습니다. 잠시 후 다시 시도하세요';
+
+  @override
+  String icsExportShared(int count) {
+    return '캘린더 이벤트 $count개를 내보내고 공유했습니다';
+  }
+
+  @override
+  String get icsExportShareText => '轻屿课表에서 내보낸 캘린더 파일';
+
+  @override
+  String get icsExportShareSubject => '轻屿课表 캘린더';
 }

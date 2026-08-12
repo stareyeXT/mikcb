@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:university_timetable/l10n/app_localizations.dart';
 import 'package:university_timetable/ui/hyperos/hyperos.dart';
+import 'package:university_timetable/ui/hyperos/frosted/liquid_glass_degradation.dart';
 
 double _maxMenuTitleHeight({
   required List<String> titles,
@@ -31,6 +32,7 @@ enum HomeTopMenuAction {
   addCourse,
   exams,
   importCourses,
+  tasks,
   settings,
   support,
 }
@@ -63,7 +65,7 @@ class _HomeTopMenuSheet extends StatelessWidget {
     // Phone visual cap: tiles stay at most this wide so icon wells don't stretch.
     const maxTileWidth = 112.0;
     const minTileWidth = 64.0;
-    const columnsPerRow = 4;
+    const columnsPerRow = 3;
 
     final menuTitles = [
       l10n.homeMenuUpdateTitle,
@@ -72,6 +74,7 @@ class _HomeTopMenuSheet extends StatelessWidget {
       l10n.homeMenuAddCourseTitle,
       l10n.examListTitle,
       l10n.homeMenuImportTitle,
+      l10n.homeMenuTasksTitle,
       l10n.homeMenuSettingsTitle,
       l10n.homeMenuCoffeeTitle,
     ];
@@ -83,6 +86,9 @@ class _HomeTopMenuSheet extends StatelessWidget {
 
     return HyperosSheetFrame(
       frosted: true,
+      // HyperosSheetFrame supplies the shared modal material used by every
+      // dialog, picker, and action sheet. The moving action tiles use stable
+      // tint surfaces.
       child: LayoutBuilder(
         builder: (context, constraints) {
           // Width is already after floating outer inset + frame padding.
@@ -144,62 +150,71 @@ class _HomeTopMenuSheet extends StatelessWidget {
             );
           }
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                menuRow([
-                  tile(
-                    icon: Icons.system_update_alt_rounded,
-                    title: l10n.homeMenuUpdateTitle,
-                    action: HomeTopMenuAction.update,
-                    badgeText: hasAvailableUpdate ? l10n.updateLabel : null,
-                    accentColor: hasAvailableUpdate
-                        ? colorScheme.primary
-                        : null,
-                  ),
-                  tile(
-                    icon: Icons.dashboard_customize_rounded,
-                    title: l10n.homeMenuOverviewTitle,
-                    action: HomeTopMenuAction.overview,
-                  ),
-                  tile(
-                    icon: Icons.bar_chart_rounded,
-                    title: l10n.homeMenuStatisticsTitle,
-                    action: HomeTopMenuAction.statistics,
-                  ),
-                  tile(
-                    icon: Icons.add_circle_outline_rounded,
-                    title: l10n.homeMenuAddCourseTitle,
-                    action: HomeTopMenuAction.addCourse,
-                  ),
-                ]),
-                const SizedBox(height: tileSpacing),
-                menuRow([
-                  tile(
-                    icon: Icons.school_outlined,
-                    title: l10n.examListTitle,
-                    action: HomeTopMenuAction.exams,
-                  ),
-                  tile(
-                    icon: Icons.file_upload_outlined,
-                    title: l10n.homeMenuImportTitle,
-                    action: HomeTopMenuAction.importCourses,
-                  ),
-                  tile(
-                    icon: Icons.tune_rounded,
-                    title: l10n.homeMenuSettingsTitle,
-                    action: HomeTopMenuAction.settings,
-                  ),
-                  tile(
-                    icon: Icons.favorite_border_rounded,
-                    title: l10n.homeMenuCoffeeTitle,
-                    action: HomeTopMenuAction.support,
-                  ),
-                ]),
-              ],
-            ),
+          final menuColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              menuRow([
+                tile(
+                  icon: Icons.system_update_alt_rounded,
+                  title: l10n.homeMenuUpdateTitle,
+                  action: HomeTopMenuAction.update,
+                  badgeText: hasAvailableUpdate ? l10n.updateLabel : null,
+                  accentColor: hasAvailableUpdate ? colorScheme.primary : null,
+                ),
+                tile(
+                  icon: Icons.dashboard_customize_rounded,
+                  title: l10n.homeMenuOverviewTitle,
+                  action: HomeTopMenuAction.overview,
+                ),
+                tile(
+                  icon: Icons.bar_chart_rounded,
+                  title: l10n.homeMenuStatisticsTitle,
+                  action: HomeTopMenuAction.statistics,
+                ),
+              ]),
+              const SizedBox(height: tileSpacing),
+              menuRow([
+                tile(
+                  icon: Icons.add_circle_outline_rounded,
+                  title: l10n.homeMenuAddCourseTitle,
+                  action: HomeTopMenuAction.addCourse,
+                ),
+                tile(
+                  icon: Icons.school_outlined,
+                  title: l10n.examListTitle,
+                  action: HomeTopMenuAction.exams,
+                ),
+                tile(
+                  icon: Icons.file_upload_outlined,
+                  title: l10n.homeMenuImportTitle,
+                  action: HomeTopMenuAction.importCourses,
+                ),
+              ]),
+              const SizedBox(height: tileSpacing),
+              menuRow([
+                tile(
+                  icon: Icons.task_alt_outlined,
+                  title: l10n.homeMenuTasksTitle,
+                  action: HomeTopMenuAction.tasks,
+                ),
+                tile(
+                  icon: Icons.tune_rounded,
+                  title: l10n.homeMenuSettingsTitle,
+                  action: HomeTopMenuAction.settings,
+                ),
+                tile(
+                  icon: Icons.favorite_border_rounded,
+                  title: l10n.homeMenuCoffeeTitle,
+                  action: HomeTopMenuAction.support,
+                ),
+              ]),
+            ],
           );
+
+          // The sheet owns the only live glass backdrop. The action tiles are
+          // deliberately ordinary rounded tint surfaces so fast scrolling
+          // moves stable pixels instead of shader/filter shapes.
+          return SingleChildScrollView(child: menuColumn);
         },
       ),
     );
@@ -230,57 +245,70 @@ class _HomeMenuActionTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final highlightColor = accentColor ?? colorScheme.primary;
     const iconWellRadius = BorderRadius.all(Radius.circular(14));
+    final useLiquidGlassTint =
+        FrostedAppearanceScope.of(context).glassMode ==
+            FrostedGlassMode.liquidGlass &&
+        !LiquidGlassDegradation.shouldDegrade(context);
+    final tileTint = useLiquidGlassTint
+        ? HyperosBlurredHeader.nestedLiquidTileTintColor(context)
+        : HyperosBlurredHeader.nestedSurfaceTintColor(context, withBlur: false);
 
-    return HyperosFrostedSurface(
-      borderRadius: HyperosTheme.cardBorderRadius,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: HyperosTheme.cardBorderRadius,
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 13),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                HyperosBadge(
-                  label: badgeText,
-                  show: (badgeText ?? '').isNotEmpty,
-                  child: HyperosFrostedSurface(
-                    borderRadius: iconWellRadius,
-                    blurEnabled: false,
-                    tint: HyperosBlurredHeader.accentSurfaceTintColor(
-                      highlightColor,
-                    ),
-                    child: SizedBox(
-                      width: 46,
-                      height: 46,
-                      child: Center(
-                        child: Icon(icon, color: highlightColor, size: 24),
-                      ),
+    final tile = Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: HyperosTheme.cardBorderRadius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 13),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HyperosBadge(
+                label: badgeText,
+                show: (badgeText ?? '').isNotEmpty,
+                child: HyperosFrostedSurface(
+                  borderRadius: iconWellRadius,
+                  blurEnabled: false,
+                  tint: HyperosBlurredHeader.accentSurfaceTintColor(
+                    highlightColor,
+                  ),
+                  child: SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Center(
+                      child: Icon(icon, color: highlightColor, size: 24),
                     ),
                   ),
                 ),
-                const SizedBox(height: 7),
-                SizedBox(
-                  height: titleAreaHeight,
-                  width: double.infinity,
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Text(
-                      title,
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      style: titleStyle,
-                    ),
+              ),
+              const SizedBox(height: 7),
+              SizedBox(
+                height: titleAreaHeight,
+                width: double.infinity,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+
+    // Keep the sheet as the only live backdrop blur. The nine tiles move
+    // inside a scroll view; a separate BackdropFilter or refraction shape per
+    // tile can leave stale rounded-corner textures during a fast direction
+    // change. The tint and rounded geometry preserve the existing hierarchy.
+    return ClipRRect(
+      borderRadius: HyperosTheme.cardBorderRadius,
+      child: ColoredBox(color: tileTint, child: tile),
     );
   }
 }
