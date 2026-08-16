@@ -15,6 +15,19 @@ allprojects {
 rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
+
+    // These plugins assume AGP 9 built-in Kotlin, which is disabled until all
+    // Flutter plugins in this project support it.
+    if (project.name in ["file_picker", "workmanager_android"]) {
+        project.pluginManager.withPlugin("com.android.library") {
+            project.pluginManager.apply("org.jetbrains.kotlin.android")
+            if (project.name == "workmanager_android") {
+                project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+                }
+            }
+        }
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")

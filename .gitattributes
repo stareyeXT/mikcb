@@ -18,6 +18,7 @@
 *.properties text
 *.arb text
 *.sh text eol=lf
+android/gradlew text eol=lf
 
 # Declare files that will always have CRLF line endings on checkout
 *.bat text eol=crlf

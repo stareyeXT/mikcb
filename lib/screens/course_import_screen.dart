@@ -6476,6 +6476,7 @@ class _HtmlCourseImportScreenState extends State<HtmlCourseImportScreen> {
       onBack: () => Navigator.pop(context),
       title: Text(l10n.importMethodHtmlTitle),
       childPad: false,
+      resizeToAvoidBottomInset: true,
       child: Material(
         type: MaterialType.transparency,
         child: HyperosBlurredBodyInset(

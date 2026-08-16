@@ -613,10 +613,15 @@ Future<void> _liveSyncScheduleSnapshot(TimetableProvider host) async {
     return;
   }
 
-  final displayCourses = host._courses
-      .map(host.resolveCourseDisplayName)
-      .toList(growable: false);
   final now = DateTime.now();
+  final resolvedScheduleCourses = host._courses
+      .map(host.resolveCourseDisplayName)
+      .map(
+        (course) => _isLiveTestingFixture(course)
+            ? course
+            : host._syncCourseWithEffectiveTimeScheme(course, onDate: now),
+      )
+      .toList(growable: false);
   // Use calendar week (not UI browse week) so native schedule matches live
   // course selection even when the user has scrolled the timetable.
   final scheduleWeek = host._calculateCalendarWeekForDate(now);
@@ -637,14 +642,16 @@ Future<void> _liveSyncScheduleSnapshot(TimetableProvider host) async {
     'holidayOverrideEnabled': host._settings.holidayOverrideEnabled,
     'enableHolidayMarking': host._settings.enableHolidayMarking,
     'settings': host._settings.toJson(),
-    'courses': displayCourses.map((course) => course.toJson()).toList(),
+    'courses': resolvedScheduleCourses
+        .map((course) => course.toJson())
+        .toList(),
   });
   if (host._lastLiveSnapshotSignature == snapshotSignature) {
     return;
   }
 
   final synced = await host._liveActivitiesService.syncScheduleSnapshot(
-    courses: displayCourses,
+    courses: resolvedScheduleCourses,
     settings: host._settings,
     currentWeek: scheduleWeek,
     semesterStartDate: host._settings.semesterStartDate,

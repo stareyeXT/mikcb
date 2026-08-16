@@ -689,7 +689,10 @@ class WebdavSyncService {
             : resolveSyncConflictForBackground(conflict);
         switch (choice) {
           case SyncConflictChoice.keepLocal:
-            return uploadSnapshot(provider: provider, configOverride: config);
+            return await uploadSnapshot(
+              provider: provider,
+              configOverride: config,
+            );
           case SyncConflictChoice.keepRemote:
             break;
           case SyncConflictChoice.cancel:

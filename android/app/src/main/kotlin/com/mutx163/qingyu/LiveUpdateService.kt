@@ -5,75 +5,28 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.Manifest
-import android.app.ActivityManager
-import android.app.AppOpsManager
-import android.app.DownloadManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
-import android.content.ContentResolver
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.provider.OpenableColumns
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.BitmapShader
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.Rect
-import android.graphics.RectF
-import android.graphics.Shader
-import android.graphics.Typeface
 import android.graphics.drawable.Icon
-import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
-import android.provider.MediaStore
 import android.provider.Settings
-import android.text.TextPaint
-import android.text.TextUtils
 import android.util.Log
-import android.util.TypedValue
-import android.webkit.URLUtil
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.xzakota.hyper.notification.common.model.TimerInfo
-import com.xzakota.hyper.notification.focus.FocusNotification
-import com.xzakota.hyper.notification.focus.model.ActionInfo
-import com.xzakota.hyper.notification.focus.model.BaseInfo
-import com.xzakota.hyper.notification.focus.model.HintInfo
-import com.xzakota.hyper.notification.focus.model.PicInfo
-import com.xzakota.hyper.notification.island.model.BigIslandArea
-import com.xzakota.hyper.notification.island.model.ImageTextInfo
-import com.xzakota.hyper.notification.island.model.SameWidthDigitInfo
-import com.xzakota.hyper.notification.island.model.ShareData
-import com.xzakota.hyper.notification.island.model.SmallIslandArea
-import com.xzakota.hyper.notification.island.model.TextInfo
-import com.xzakota.hyper.notification.island.template.IslandTemplate
-import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.MethodChannel
-import org.json.JSONObject
-import java.util.Locale
-import java.io.File
 import java.util.Calendar
-import kotlin.math.ceil
 
 class LiveUpdateService : Service() {
     companion object {
@@ -359,14 +312,16 @@ class LiveUpdateService : Service() {
     private var lastRemainingText = "-1"
     private var lastProgressUnits = -1
     private var lastCriticalTimeText = ""
-    private var cachedIslandBitmapKey: String? = null
-    private var cachedIslandBitmap: Bitmap? = null
-    private var cachedLauncherIconKey: String? = null
-    private var cachedLauncherIcon: Icon? = null
     private var hasStartedForeground = false
     private var lastTickerStage: String? = null
     private var validateAgainstSchedule = true
     private var superIslandEngine = "builtIn"
+    private val xiaomiSuperIslandRenderer by lazy {
+        XiaomiSuperIslandNotificationRenderer(this)
+    }
+    private val androidLiveUpdateRenderer by lazy {
+        AndroidLiveUpdateNotificationRenderer(this)
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -1053,802 +1008,28 @@ class LiveUpdateService : Service() {
         return enableDuringClass && (promoteDuringClass || showNotificationDuringClass)
     }
 
-    private fun isXiaomiFamilyDevice(): Boolean {
-        val brand = Build.BRAND.lowercase()
-        val manufacturer = Build.MANUFACTURER.lowercase()
-        return manufacturer.contains("xiaomi") ||
-            brand.contains("xiaomi") ||
-            brand.contains("redmi") ||
-            brand.contains("poco")
-    }
-
-    private fun dp(value: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)
-
-    private fun sp(value: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
-
-    private fun resolveIslandLabelBitmap(text: String): Bitmap? {
-        if (!enableMiuiIslandLabelImage || !isXiaomiFamilyDevice() || text.isBlank()) {
-            return null
-        }
-
-        val cacheKey = listOf(
-            text,
-            miuiIslandLabelStyle,
-            miuiIslandLabelFontColor,
-            miuiIslandLabelFontWeight,
-            miuiIslandLabelRenderQuality,
-            miuiIslandLabelFontSize.toString(),
-            miuiIslandLabelOffsetX.toString(),
-            miuiIslandLabelOffsetY.toString(),
-            miuiIslandLabelLogoPath.orEmpty(),
-            miuiIslandLabelLogoCornerRadius.toString(),
-        ).joinToString("|")
-        if (cacheKey == cachedIslandBitmapKey && cachedIslandBitmap != null) {
-            return cachedIslandBitmap
-        }
-
-        val bitmap = buildIslandLabelBitmap(
-            text = text,
-            includeAppIcon = miuiIslandLabelStyle == "icon_and_text",
-            customIconPath = miuiIslandLabelLogoPath,
-            customIconCornerRadiusDp = miuiIslandLabelLogoCornerRadius,
-            fontColorHex = miuiIslandLabelFontColor,
-            fontWeight = miuiIslandLabelFontWeight,
-            renderQuality = miuiIslandLabelRenderQuality,
-            fontSizeSp = miuiIslandLabelFontSize,
-            offsetXDp = miuiIslandLabelOffsetX,
-            offsetYDp = miuiIslandLabelOffsetY,
-        )
-        cachedIslandBitmapKey = cacheKey
-        cachedIslandBitmap = bitmap
-        return bitmap
-    }
-
-    private fun buildIslandLabelBitmap(
-        text: String,
-        includeAppIcon: Boolean,
-        customIconPath: String?,
-        customIconCornerRadiusDp: Float,
-        fontColorHex: String,
-        fontWeight: String,
-        renderQuality: String,
-        fontSizeSp: Float,
-        offsetXDp: Float,
-        offsetYDp: Float,
-    ): Bitmap? {
-        val resolvedFontSizeSp = fontSizeSp.coerceIn(1f, 32f)
-        val renderScale = when (renderQuality) {
-            "high" -> 3f
-            "ultra" -> 4f
-            else -> 2f
-        }
-        val textColor = parseColorHexOrDefault(fontColorHex, 0xFFFFFFFF.toInt())
-        val typeface = resolveIslandLabelTypeface(fontWeight)
-        val baseTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = textColor
-            textSize = sp(resolvedFontSizeSp)
-            this.typeface = typeface
-            isFakeBoldText = fontWeight == "bold"
-            isSubpixelText = true
-            isLinearText = true
-        }
-        val iconSizeDp = if (includeAppIcon) 24f else 0f
-        val iconGapDp = if (includeAppIcon) 3f else 0f
-        val horizontalPaddingDp = if (includeAppIcon) 3f else 0.75f
-        val verticalPaddingDp = 0.5f
-        val maxWidthDp = if (includeAppIcon) 132f else 112f
-        val maxTextWidthPx = dp(
-            maxWidthDp - horizontalPaddingDp * 2f - iconSizeDp - iconGapDp
-        ).coerceAtLeast(dp(28f))
-
-        var fittedSizeSp = resolvedFontSizeSp
-        while (fittedSizeSp > 1f) {
-            baseTextPaint.textSize = sp(fittedSizeSp)
-            if (baseTextPaint.measureText(text) <= maxTextWidthPx) {
-                break
-            }
-            fittedSizeSp -= 1f
-        }
-
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = textColor
-            textSize = sp(fittedSizeSp) * renderScale
-            this.typeface = typeface
-            isFakeBoldText = fontWeight == "bold"
-            isSubpixelText = true
-            isLinearText = true
-            setShadowLayer(dp(0.75f) * renderScale, 0f, dp(0.25f) * renderScale, 0x44000000)
-        }
-
-        val displayText = if (baseTextPaint.measureText(text) <= maxTextWidthPx) {
-            text
-        } else {
-            TextUtils.ellipsize(
-                text,
-                baseTextPaint,
-                maxTextWidthPx,
-                TextUtils.TruncateAt.END
-            ).toString()
-        }
-
-        val glyphBounds = Rect()
-        textPaint.getTextBounds(displayText, 0, displayText.length, glyphBounds)
-        val textWidthPx = textPaint.measureText(displayText)
-        val textHeightPx = glyphBounds.height().toFloat().coerceAtLeast(sp(1f) * renderScale)
-        val iconSizePx = (dp(iconSizeDp) * renderScale).toInt()
-        val iconGapPx = dp(iconGapDp) * renderScale
-        val horizontalPaddingPx = dp(horizontalPaddingDp) * renderScale
-        val verticalPaddingPx = dp(verticalPaddingDp) * renderScale
-        val textOnlyMinHeightPx = dp(18f) * renderScale
-        val clampedOffsetXDp = offsetXDp.coerceIn(-2f, 2f)
-        val clampedOffsetYDp = offsetYDp.coerceIn(-2f, 2f)
-        val horizontalOffsetPx = dp(clampedOffsetXDp) * renderScale
-        val verticalOffsetPx = dp(clampedOffsetYDp) * renderScale
-
-        val contentWidth = (
-            horizontalPaddingPx * 2f +
-                textWidthPx +
-                if (includeAppIcon) iconSizePx + iconGapPx else 0f
-            )
-        val width = maxOf(
-            ceil(contentWidth).toInt(),
-            if (includeAppIcon) (dp(20f) * renderScale).toInt() else 1
-        )
-        val contentHeight = (
-            verticalPaddingPx * 2f + maxOf(textHeightPx, iconSizePx.toFloat())
-            )
-        val height = maxOf(
-            contentHeight,
-            if (includeAppIcon) sp(1f) * renderScale else textOnlyMinHeightPx
-        ).toInt()
-        if (width <= 0 || height <= 0) {
-            return null
-        }
-
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        var textStartX = horizontalPaddingPx
-        val centerY = height / 2f
-
-        if (includeAppIcon) {
-            val iconTop = ((height - iconSizePx) / 2f).toInt()
-            val customBitmap = customIconPath?.let {
-                decodeSquareBitmap(it, iconSizePx.coerceAtLeast(1))
-            }
-            if (customBitmap != null) {
-                drawRoundedBitmap(
-                    canvas = canvas,
-                    bitmap = customBitmap,
-                    left = horizontalPaddingPx,
-                    top = iconTop.toFloat(),
-                    sizePx = iconSizePx.toFloat(),
-                    cornerRadiusPx = (dp(customIconCornerRadiusDp.coerceIn(0f, 12f)) * renderScale)
-                        .coerceAtMost(iconSizePx / 2f),
-                )
-            } else {
-                val appIcon = packageManager.getApplicationIcon(packageName)
-                appIcon.setBounds(
-                    horizontalPaddingPx.toInt(),
-                    iconTop,
-                    horizontalPaddingPx.toInt() + iconSizePx,
-                    iconTop + iconSizePx
-                )
-                appIcon.draw(canvas)
-            }
-            textStartX += iconSizePx + iconGapPx
-        } else {
-            textStartX = (
-                (width - textWidthPx) / 2f + horizontalOffsetPx
-            ).coerceIn(horizontalPaddingPx, width - horizontalPaddingPx - textWidthPx)
-        }
-        if (includeAppIcon) {
-            textStartX = (
-                textStartX + horizontalOffsetPx
-            ).coerceIn(horizontalPaddingPx, width - horizontalPaddingPx - textWidthPx)
-        }
-        val baseline = centerY - (glyphBounds.top + glyphBounds.bottom) / 2f + verticalOffsetPx
-        canvas.drawText(displayText, textStartX, baseline, textPaint)
-        return bitmap
-    }
-
-    private fun drawRoundedBitmap(
-        canvas: Canvas,
-        bitmap: Bitmap,
-        left: Float,
-        top: Float,
-        sizePx: Float,
-        cornerRadiusPx: Float,
-    ) {
-        if (cornerRadiusPx <= 0f) {
-            canvas.drawBitmap(bitmap, left, top, null)
-            return
-        }
-        val rect = RectF(left, top, left + sizePx, top + sizePx)
-        val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.shader = shader
-            isFilterBitmap = true
-        }
-        canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, paint)
-    }
-
-    private fun parseColorHexOrDefault(colorHex: String?, fallback: Int): Int {
-        val normalized = colorHex?.trim()?.removePrefix("#")?.takeIf { it.isNotBlank() } ?: return fallback
-        return try {
-            when (normalized.length) {
-                6 -> (0xFF000000 or normalized.toLong(16)).toInt()
-                8 -> normalized.toLong(16).toInt()
-                else -> fallback
-            }
-        } catch (_: Exception) {
-            fallback
-        }
-    }
-
-    private fun resolveIslandLabelTypeface(fontWeight: String): Typeface {
-        return when (fontWeight) {
-            "regular" -> Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            "medium" -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            else -> Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        }
-    }
-
-    private fun buildHyperFocusBundle(
-        stage: String?,
-        remainingText: String,
-        showCountdown: Boolean,
-    ): Bundle? {
-        if (!isXiaomiFamilyDevice()) return null
-        val now = System.currentTimeMillis()
-        val stageKey = when (stage) {
-            "beforeClass" -> "pre"
-            "afterClass" -> "post"
-            else -> "active"
-        }
-        val targetTimerWhen = if (stageKey == "pre") startAtMillis else endAtMillis
-        val expired = targetTimerWhen <= now
-        if (expired) {
-            return buildHyperFocusDismissBundle()
-        }
-
-        return try {
-            val templates = loadHyperFocusTemplates(this)
-
-            val countdownDiff = kotlin.math.max(0L, targetTimerWhen - now)
-            val elapsedDiff = kotlin.math.max(0L, now - targetTimerWhen)
-            val countdownText = ""
-            val elapsedText = ""
-
-            val r = { tpl: String ->
-                resolveTemplate(
-                    tpl = tpl,
-                    courseName = courseName,
-                    shortName = shortCourseNameRaw,
-                    location = location,
-                    teacher = teacher,
-                    startTime = startTimeText,
-                    endTime = endTimeText,
-                    countdownText = countdownText,
-                    elapsedText = elapsedText,
-                )
-            }
-
-            val tickerText = r(templates["ticker_$stageKey"] ?: "{课名}")
-            val islandAText = r(templates["islandA_$stageKey"] ?: "{课名}")
-            val islandBText = r(templates["islandB_$stageKey"] ?: "")
-            val baseTitleText = r(templates["baseTitle_$stageKey"] ?: "{课名}")
-            val baseContentText = r(templates["baseContent_$stageKey"] ?: "")
-            val baseSubcontentText = r(templates["baseSubcontent_$stageKey"] ?: "")
-            val hintTitleText = r(templates["hintTitle_$stageKey"] ?: "")
-            val hintContentText = r(templates["hintContent_$stageKey"] ?: "")
-            val hintSubcontentText = r(templates["hintSubcontent_$stageKey"] ?: "")
-            val hintSubtitleText = r(templates["hintSubtitle_$stageKey"] ?: "")
-
-            val launchAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-            val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
-
-            val extras = FocusNotification.buildV3 {
-                business = "course_schedule"
-                updatable = true
-                enableFloat = true
-                ticker = tickerText
-                aodTitle = tickerText
-                islandFirstFloat = true
-                outEffectSrc = if (outEffectStatusEnabled) "outer_glow" else ""
-                outEffectColor = if (outEffectStatusEnabled) outEffectStatusColor else ""
-
-                baseInfo {
-                    type = 2
-                    title = baseTitleText
-                    content = listOfNotNull(
-                        baseContentText.ifBlank { null },
-                        baseSubcontentText.ifBlank { null },
-                    ).joinToString(" · ")
-                }
-
-                picInfo {
-                    if (iconAEnabled) {
-                        type = 1
-                    }
-                }
-
-                hintInfo {
-                    type = 2
-                    title = hintTitleText
-                    content = remainingText.ifBlank { hintTitleText }
-                    subTitle = hintSubtitleText
-                    extraTitle = hintContentText
-                    specialTitle = hintSubcontentText
-
-                    if (showCountdown) {
-                        timerInfo {
-                            timerType = -1
-                            timerWhen = targetTimerWhen
-                            timerSystemCurrent = now
-                        }
-                    }
-
-                    actionInfo {
-                        actionIntentType = 1
-                        actionIntent = openAppUri
-                        actionTitle = "查看课表"
-                    }
-                }
-
-                island {
-                    islandProperty = 1
-                    islandTimeout = when (stageKey) {
-                        "pre" -> islandTimeoutPre
-                        "post" -> islandTimeoutPost
-                        else -> islandTimeoutActive
-                    }
-
-                    bigIslandArea {
-                        imageTextInfoLeft {
-                            type = 1
-                            textInfo {
-                                title = islandAText
-                                showHighlightColor = true
-                            }
-                            picInfo {
-                                if (iconAEnabled) {
-                                    type = 1
-                                }
-                            }
-                        }
-
-                        val islandBHasCountdown =
-                            (templates["islandB_$stageKey"] ?: "").contains("倒计时")
-                        if (islandBText.isNotEmpty() || (showCountdown && islandBHasCountdown)) {
-                            if (showCountdown && islandBHasCountdown) {
-                                sameWidthDigitInfo {
-                                    timerInfo {
-                                        timerType = -1
-                                        timerWhen = targetTimerWhen
-                                        timerSystemCurrent = now
-                                    }
-                                    content = ""
-                                    turnAnim = true
-                                    showHighlightColor = true
-                                }
-                            } else {
-                                sameWidthDigitInfo {
-                                    content = islandBText
-                                    turnAnim = true
-                                    showHighlightColor = true
-                                }
-                            }
-                        }
-                    }
-
-                    smallIslandArea { }
-
-                    shareData {
-                        title = courseName
-                        content = location.ifBlank { "" }
-                    }
-                }
-            }
-
-            if (outEffectStatusEnabled) {
-                extras.putString("miui.bigIsland.effect.src", "outer_glow")
-                extras.putString("miui.effect.src", "outer_glow")
-            }
-
-            extras
-        } catch (e: Exception) {
-            Log.e(TAG, "buildHyperFocusBundle failed", e)
-            null
-        }
-
-    }
-
-    private fun buildHyperFocusDismissBundle(): Bundle? {
-        return try {
-            FocusNotification.buildV3 {
-                business = "course_schedule"
-                updatable = false
-                enableFloat = false
-                ticker = ""
-                aodTitle = ""
-
-                baseInfo {
-                    type = 2
-                    title = courseName.ifBlank { "" }
-                    content = ""
-                    subContent = ""
-                }
-                picInfo { type = 1 }
-                hintInfo {
-                    type = 2
-                    title = ""
-                    content = ""
-                }
-                island {
-                    islandProperty = 0
-                    islandTimeout = 0
-                    bigIslandArea { }
-                    smallIslandArea { }
-                    shareData {
-                        title = ""
-                        content = ""
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "buildHyperFocusDismissBundle failed", e)
-            null
-        }
-    }
-
-    private fun buildMiuiFocusParam(
-        title: String,
-        remainingText: String,
-        timeRangeText: String,
-        bodyContent: String,
-        visibleLocation: String,
-        stage: String?,
-        classProgress: DuringClassProgress?,
-        startAtMillis: Long,
-        endAtMillis: Long,
-        islandName: String,
-        progressBreakOffsetsMillis: LongArray,
-        progressMilestoneLabels: List<String>,
-        progressMilestoneTimeTexts: List<String>,
-    ): String? {
-        if (!isXiaomiFamilyDevice()) {
-            return null
-        }
-
-        return try {
-            val extraInfo = JSONObject().apply {
-                if (visibleLocation.isNotBlank()) put("location", visibleLocation)
-                if (teacher.isNotBlank()) put("teacher", teacher)
-                if (timeRangeText.isNotBlank()) put("time", timeRangeText)
-                if (nextName.isNotBlank()) put("nextCourse", nextName)
-            }
-
-            // 摘要态：岛内容
-            val paramIsland = buildIslandSummary(
-                stage = stage,
-                classProgress = classProgress,
-                islandName = islandName,
-                visibleLocation = visibleLocation,
-                startAtMillis = startAtMillis,
-                endAtMillis = endAtMillis,
-                progressBreakOffsetsMillis = progressBreakOffsetsMillis,
-                progressMilestoneLabels = progressMilestoneLabels,
-                progressMilestoneTimeTexts = progressMilestoneTimeTexts,
-            )
-
-            val paramV2 = JSONObject().apply {
-                put("protocol", 1)
-                put("business", "class_schedule")
-                put("updatable", true)
-                put("enableFloat", true)
-                put("ticker", title)
-                // 展开态：焦点通知卡片
-                put(
-                    "baseInfo",
-                    JSONObject().apply {
-                        put("title", title)
-                        put("content", bodyContent.ifBlank { remainingText })
-                        put("type", 2)
-                    }
-                )
-                if (remainingText.isNotBlank()) {
-                    put(
-                        "hintInfo",
-                        JSONObject().apply {
-                            put("type", 1)
-                            put("title", remainingText)
-                        }
-                    )
-                }
-                if (extraInfo.length() > 0) {
-                    put("extraInfo", extraInfo)
-                }
-                put("param_island", paramIsland)
-            }
-
-            JSONObject().apply {
-                put("param_v2", paramV2)
-            }.toString()
-        } catch (e: Exception) {
-            Log.w(TAG, DiagnosticLogMessages.LOG_BUILD_MIUI_FOCUS_PARAM_FAILED, e)
-            null
-        }
-    }
-
-    private fun buildIslandSummary(
-        stage: String?,
-        classProgress: DuringClassProgress?,
-        islandName: String,
-        visibleLocation: String,
-        startAtMillis: Long,
-        endAtMillis: Long,
-        progressBreakOffsetsMillis: LongArray,
-        progressMilestoneLabels: List<String>,
-        progressMilestoneTimeTexts: List<String>,
-    ): JSONObject {
-        val totalMillis = (endAtMillis - startAtMillis).coerceAtLeast(1L)
-        val now = System.currentTimeMillis()
-        val elapsedMillis = (now - startAtMillis).coerceIn(0L, totalMillis)
-        val progressPercent = classProgress?.progressPercent
-            ?: ((elapsedMillis.toDouble() / totalMillis.toDouble()) * 100).toInt().coerceIn(0, 100)
-
-        val islandContentText = when (stage) {
-            "beforeClass" -> remainingTextForIsland(stage, startAtMillis, endAtMillis)
-            "beforeEnd" -> remainingTextForIsland(stage, startAtMillis, endAtMillis)
-            else -> classProgress?.compactDisplayText ?: getString(R.string.stage_in_class)
-        }
-
-        val bigIslandArea = JSONObject().apply {
-            // A 区：图文组件1
-            val imageTextInfoLeft = JSONObject().apply {
-                put("type", 1)
-                put(
-                    "textInfo",
-                    JSONObject().apply {
-                        put("title", islandName)
-                        put("content", islandContentText)
-                    }
-                )
-                // 上课中阶段显示环形进度
-                if (stage == "duringClass" && classProgress != null) {
-                    put(
-                        "progressInfo",
-                        JSONObject().apply {
-                            put("progress", progressPercent)
-                            put("colorReach", "#4CAF50")
-                            put("colorUnReach", "#33FFFFFF")
-                        }
-                    )
-                }
-            }
-            put("imageTextInfoLeft", imageTextInfoLeft)
-
-            // B 区：仅上课中阶段显示线性进度+节点
-            if (stage == "duringClass" && classProgress != null) {
-                val milestonePoints = buildMilestonePoints(
-                    progressBreakOffsetsMillis,
-                    progressMilestoneLabels,
-                    progressMilestoneTimeTexts,
-                    totalMillis,
-                )
-                val progressTextInfo = JSONObject().apply {
-                    put(
-                        "progressInfo",
-                        JSONObject().apply {
-                            put("progress", progressPercent)
-                            put("colorReach", "#4CAF50")
-                            put("colorUnReach", "#33FFFFFF")
-                            if (milestonePoints.isNotEmpty()) {
-                                put("picMiddle", milestonePoints.first().picKey)
-                            }
-                        }
-                    )
-                    put(
-                        "textInfo",
-                        JSONObject().apply {
-                            val nextMilestone = classProgress.nextMilestoneDisplayText
-                            if (nextMilestone != null) {
-                                put("title", nextMilestone)
-                            } else {
-                                put("title", classProgress.finalDismissDisplayText)
-                            }
-                        }
-                    )
-                }
-                put("progressTextInfo", progressTextInfo)
-            }
-        }
-
-        val smallIslandArea = JSONObject()
-
-        return JSONObject().apply {
-            put("islandProperty", 1)
-            put("islandTimeout", 3600)
-            put("bigIslandArea", bigIslandArea)
-            put("smallIslandArea", smallIslandArea)
-        }
-    }
-
-    private fun remainingTextForIsland(
-        stage: String?,
-        startAtMillis: Long,
-        endAtMillis: Long,
-    ): String {
-        val now = System.currentTimeMillis()
-        return when (stage) {
-            "beforeClass" -> {
-                val remaining = startAtMillis - now
-                if (remaining > 0) {
-                    getString(R.string.remaining_until_class_start, formatCountdownDuration(remaining))
-                } else {
-                    getString(R.string.stage_before_class)
-                }
-            }
-            "beforeEnd" -> {
-                val remaining = endAtMillis - now
-                if (remaining > 0) {
-                    getString(R.string.remaining_until_class_end, formatCountdownDuration(remaining))
-                } else {
-                    getString(R.string.stage_before_end)
-                }
-            }
-            else -> getString(R.string.stage_in_class)
-        }
-    }
-
-    private data class MilestonePoint(
-        val position: Int,
-        val picKey: String,
-    )
-
-    private fun buildMilestonePoints(
-        progressBreakOffsetsMillis: LongArray,
-        progressMilestoneLabels: List<String>,
-        progressMilestoneTimeTexts: List<String>,
-        totalMillis: Long,
-    ): List<MilestonePoint> {
-        if (progressBreakOffsetsMillis.isEmpty() || totalMillis <= 0) return emptyList()
-        val points = mutableListOf<MilestonePoint>()
-        for (index in progressBreakOffsetsMillis.indices) {
-            val offsetMillis = progressBreakOffsetsMillis[index]
-            val position = ((offsetMillis.toDouble() / totalMillis.toDouble()) * 100)
-                .toInt().coerceIn(1, 99)
-            val label = progressMilestoneLabels.getOrNull(index) ?: continue
-            points.add(MilestonePoint(position = position, picKey = "miui.focus.pic_milestone_$index"))
-        }
-        return points.distinctBy { it.position }.sortedBy { it.position }
-    }
-
-    private fun decodeSquareBitmap(path: String, targetSize: Int): Bitmap? {
-        val source = BitmapFactory.decodeFile(path) ?: return null
-        val side = minOf(source.width, source.height)
-        if (side <= 0) {
-            source.recycle()
-            return null
-        }
-        val offsetX = ((source.width - side) / 2).coerceAtLeast(0)
-        val offsetY = ((source.height - side) / 2).coerceAtLeast(0)
-        val cropped = Bitmap.createBitmap(source, offsetX, offsetY, side, side)
-        if (cropped != source) {
-            source.recycle()
-        }
-        val resolvedTargetSize = targetSize.coerceAtLeast(1)
-        if (cropped.width == resolvedTargetSize && cropped.height == resolvedTargetSize) {
-            return cropped
-        }
-        val scaled = Bitmap.createScaledBitmap(cropped, resolvedTargetSize, resolvedTargetSize, true)
-        if (scaled != cropped) {
-            cropped.recycle()
-        }
-        return scaled
-    }
-
-    private fun decodeExpandedIconBitmap(path: String): Bitmap? {
-        val targetSize = dp(56f).toInt().coerceAtLeast(96)
-        return decodeSquareBitmap(path, targetSize)
-    }
-
-    private fun applyExpandedLargeIcon(builder: Notification.Builder) {
-        when (miuiIslandExpandedIconMode) {
-            "hidden" -> return
-            "custom_image" -> {
-                val path = miuiIslandExpandedIconPath ?: return
-                decodeExpandedIconBitmap(path)?.let(builder::setLargeIcon)
-            }
-            else -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    builder.setLargeIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
-                }
-            }
-        }
-    }
-
-    private fun buildRoundedLauncherIcon(targetSizePx: Int, cornerRadiusPx: Float): Icon? {
-        val size = targetSizePx.coerceAtLeast(1)
-        val cacheKey = "$size@$cornerRadiusPx"
-        if (cacheKey == cachedLauncherIconKey && cachedLauncherIcon != null) {
-            return cachedLauncherIcon
-        }
-        val icon = try {
-            val drawable = packageManager.getApplicationIcon(packageName)
-            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            val clipPath = Path().apply {
-                addRoundRect(
-                    RectF(0f, 0f, size.toFloat(), size.toFloat()),
-                    cornerRadiusPx,
-                    cornerRadiusPx,
-                    Path.Direction.CW
-                )
-            }
-            canvas.save()
-            canvas.clipPath(clipPath)
-            drawable.setBounds(0, 0, size, size)
-            drawable.draw(canvas)
-            canvas.restore()
-            Icon.createWithBitmap(bitmap)
-        } catch (e: Exception) {
-            Log.w(TAG, DiagnosticLogMessages.LOG_BUILD_ROUNDED_LAUNCHER_ICON_FAILED, e)
-            null
-        }
-        if (icon != null) {
-            cachedLauncherIconKey = cacheKey
-            cachedLauncherIcon = icon
-        }
-        return icon
-    }
-
     private fun buildNotification(remainingText: String): Notification {
         val now = System.currentTimeMillis()
-        val stage = resolveStage(now)
-        val isUpcoming = stage == "beforeClass"
-        val isDuringClassStatusBar = stage == "duringClassStatusBar"
-        val isEndingSoon = stage == "beforeEnd"
-        val isDuringClass = stage == "duringClass" || isDuringClassStatusBar
-        val shouldPromote = when {
-            isDuringClassStatusBar -> false
-            isDuringClass -> promoteDuringClass
-            else -> true
+        val stage = LiveUpdateNotificationStage.fromWireValue(resolveStage(now))
+            ?: return buildBootstrapNotification(courseName)
+        val progress = if (stage == LiveUpdateNotificationStage.DURING_CLASS) {
+            buildDuringClassProgress(now)
+        } else {
+            null
         }
-        val showStandardNotification = when {
-            isDuringClassStatusBar -> true
-            isDuringClass -> showNotificationDuringClass
-            else -> true
+        val shouldPromote = stage.shouldPromote(promoteDuringClass)
+        val showStandardNotification = stage.showStandardNotification(showNotificationDuringClass)
+        val shortCourseName = courseName.take(8) + if (courseName.length > 8) ".." else ""
+        val islandName = if (useShortNameInIsland && shortCourseNameRaw.isNotBlank()) {
+            shortCourseNameRaw
+        } else {
+            courseName
         }
-        val classProgress = if (stage == "duringClass") buildDuringClassProgress(now) else null
-        val usesProgressExpandedStyle = Build.VERSION.SDK_INT >= 36 && classProgress != null
-
-        val shortCourseName = if (courseName.length > 8) courseName.substring(0, 8) + ".." else courseName
-        val nameToUse = if (useShortNameInIsland && shortCourseNameRaw.isNotBlank()) shortCourseNameRaw else courseName
-        val islandCourseName = if (showCourseNameInIsland) {
-            if (nameToUse.length > 5) nameToUse.substring(0, 5) else nameToUse
-        } else ""
+        val islandCourseName = if (showCourseNameInIsland) islandName.take(5) else ""
         val visibleLocation = if (showLocationInIsland) location else ""
-        val islandLocation = visibleLocation
-        val miuiIslandLabelText = when (miuiIslandLabelContent) {
-            "location" -> location
-            "course_name_and_location" -> listOf(
-                nameToUse.takeIf { it.isNotBlank() },
-                location.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" ")
-            else -> nameToUse
-        }
-        val miuiIslandLabelBitmap = resolveIslandLabelBitmap(miuiIslandLabelText)
-
         val stageTitle = when (stage) {
-            "beforeClass" -> getString(R.string.stage_before_class)
-            "beforeEnd" -> getString(R.string.stage_before_end)
+            LiveUpdateNotificationStage.BEFORE_CLASS -> getString(R.string.stage_before_class)
+            LiveUpdateNotificationStage.BEFORE_END -> getString(R.string.stage_before_end)
             else -> getString(R.string.stage_in_class)
         }
         val visibleStatusText = when {
@@ -1857,128 +1038,138 @@ class LiveUpdateService : Service() {
             else -> remainingText.ifBlank { stageTitle }
         }
         val title = when (stage) {
-            "beforeClass" -> getString(R.string.title_before_class, shortCourseName)
-            "beforeEnd" -> getString(R.string.title_before_end, shortCourseName)
+            LiveUpdateNotificationStage.BEFORE_CLASS ->
+                getString(R.string.title_before_class, shortCourseName)
+            LiveUpdateNotificationStage.BEFORE_END ->
+                getString(R.string.title_before_end, shortCourseName)
             else -> shortCourseName
         }
-        val shortNameLabel = shortCourseNameRaw.takeIf { it.isNotBlank() && it != courseName }
+        val shortNameLabel = shortCourseNameRaw.takeIf {
+            it.isNotBlank() && it != courseName
+        }
         val timeRangeText = if (startTimeText.isNotBlank() || endTimeText.isNotBlank()) {
             "$startTimeText - $endTimeText".trim()
         } else {
             ""
         }
-        val subText = if (isUpcoming) {
-            listOf(
-                timeRangeText.takeIf { it.isNotBlank() }?.let { getString(R.string.label_class_start_time, it) },
-                visibleLocation.takeIf { it.isNotBlank() }?.let { getString(R.string.label_location, it) }
-            ).filterNotNull().joinToString("  ·  ")
-        } else if (isEndingSoon) {
-            listOf(
-                timeRangeText.takeIf { it.isNotBlank() }?.let { getString(R.string.label_class_end_time, it) },
-                visibleLocation.takeIf { it.isNotBlank() }?.let { getString(R.string.label_location, it) }
-            ).filterNotNull().joinToString("  ·  ")
-        } else {
-            ""
-        }
-        val summaryText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-            listOf(
-                classProgress.nextMilestoneDisplayText,
-                classProgress.finalDismissDisplayText,
+        val subText = when (stage) {
+            LiveUpdateNotificationStage.BEFORE_CLASS -> listOfNotNull(
+                timeRangeText.takeIf { it.isNotBlank() }
+                    ?.let { getString(R.string.label_class_start_time, it) },
                 visibleLocation.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
+                    ?.let { getString(R.string.label_location, it) },
+            ).joinToString("  ·  ")
+            LiveUpdateNotificationStage.BEFORE_END -> listOfNotNull(
+                timeRangeText.takeIf { it.isNotBlank() }
+                    ?.let { getString(R.string.label_class_end_time, it) },
+                visibleLocation.takeIf { it.isNotBlank() }
+                    ?.let { getString(R.string.label_location, it) },
+            ).joinToString("  ·  ")
+            else -> ""
+        }
+        val summaryText = if (progress != null && showCountdown) {
+            listOfNotNull(
+                progress.nextMilestoneDisplayText,
+                progress.finalDismissDisplayText,
+                visibleLocation.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
         } else {
-            listOf(
+            listOfNotNull(
                 visibleLocation.takeIf { it.isNotBlank() },
                 teacher.takeIf { it.isNotBlank() },
-                visibleStatusText.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
+                visibleStatusText.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
         }
-
-        val notificationIntent = Intent(this, MainActivity::class.java).apply {
-            this.action = Intent.ACTION_MAIN
-            this.addCategory(Intent.CATEGORY_LAUNCHER)
-            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            notificationIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val detailStatusText = when {
-            (isDuringClass || isEndingSoon) && classProgress != null && showCountdown -> null
+            progress != null && showCountdown -> null
             visibleStatusText.isNotBlank() && !shouldPromote -> visibleStatusText
             else -> null
         }
-
         val expandedDetailText = buildString {
             append(stageTitle)
-            if (shortNameLabel != null) {
-                append("\n").append(getString(R.string.detail_short_name, shortNameLabel))
+            shortNameLabel?.let {
+                append("\n").append(getString(R.string.detail_short_name, it))
             }
-            if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-                if (classProgress.nextMilestoneDisplayText != null) {
-                    append("\n").append(
-                        getString(R.string.detail_next_milestone, classProgress.nextMilestoneDisplayText)
-                    )
+            if (progress != null && showCountdown) {
+                progress.nextMilestoneDisplayText?.let {
+                    append("\n").append(getString(R.string.detail_next_milestone, it))
                 }
                 append("\n").append(
-                    getString(R.string.detail_final_dismiss, classProgress.finalDismissDisplayText)
+                    getString(R.string.detail_final_dismiss, progress.finalDismissDisplayText)
                 )
-            } else if (detailStatusText != null) {
-                append("\n").append(getString(R.string.detail_status, detailStatusText))
+            } else {
+                detailStatusText?.let {
+                    append("\n").append(getString(R.string.detail_status, it))
+                }
             }
-            if (timeRangeText.isNotBlank()) append("\n").append(getString(R.string.detail_time, timeRangeText))
-            if (location.isNotBlank()) append("\n").append(getString(R.string.label_location, location))
-            if (teacher.isNotBlank()) append("\n").append(getString(R.string.detail_teacher, teacher))
-            if (nextName.isNotBlank()) append("\n").append(getString(R.string.detail_next_course, nextName))
-            if (note.isNotBlank()) append("\n").append(getString(R.string.detail_note, note))
+            if (timeRangeText.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_time, timeRangeText))
+            }
+            if (location.isNotBlank()) {
+                append("\n").append(getString(R.string.label_location, location))
+            }
+            if (teacher.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_teacher, teacher))
+            }
+            if (nextName.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_next_course, nextName))
+            }
+            if (note.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_note, note))
+            }
         }
-
-        val promotedContentText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-            listOf(
-                classProgress.compactDisplayText,
-                visibleLocation.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
+        val promotedContentText = if (progress != null && showCountdown) {
+            listOfNotNull(
+                progress.compactDisplayText,
+                visibleLocation.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
         } else {
-            listOf(
+            listOfNotNull(
                 visibleStatusText.takeIf { it.isNotBlank() },
                 timeRangeText.takeIf { it.isNotBlank() },
                 visibleLocation.takeIf { it.isNotBlank() },
-                teacher.takeIf { it.isNotBlank() }
-            ).filterNotNull().joinToString(" · ")
+                teacher.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
         }
         val promotedExpandedDetailText = buildString {
-            if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-                if (classProgress.nextMilestoneDisplayText != null) {
-                    append(getString(R.string.detail_next_milestone, classProgress.nextMilestoneDisplayText))
-                    append("\n")
+            if (progress != null && showCountdown) {
+                progress.nextMilestoneDisplayText?.let {
+                    append(getString(R.string.detail_next_milestone, it)).append("\n")
                 }
-                append(getString(R.string.detail_final_dismiss, classProgress.finalDismissDisplayText))
-            } else if (detailStatusText != null) {
-                append(getString(R.string.detail_status, detailStatusText))
+                append(getString(R.string.detail_final_dismiss, progress.finalDismissDisplayText))
+            } else {
+                detailStatusText?.let {
+                    append(getString(R.string.detail_status, it))
+                }
             }
-            if (timeRangeText.isNotBlank()) append("\n").append(getString(R.string.detail_time, timeRangeText))
-            if (location.isNotBlank()) append("\n").append(getString(R.string.label_location, location))
-            if (teacher.isNotBlank()) append("\n").append(getString(R.string.detail_teacher, teacher))
-            if (shortNameLabel != null) append("\n").append(getString(R.string.detail_short_name, shortNameLabel))
-            if (nextName.isNotBlank()) append("\n").append(getString(R.string.detail_next_course, nextName))
-            if (note.isNotBlank()) append("\n").append(getString(R.string.detail_note, note))
+            if (timeRangeText.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_time, timeRangeText))
+            }
+            if (location.isNotBlank()) {
+                append("\n").append(getString(R.string.label_location, location))
+            }
+            if (teacher.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_teacher, teacher))
+            }
+            shortNameLabel?.let {
+                append("\n").append(getString(R.string.detail_short_name, it))
+            }
+            if (nextName.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_next_course, nextName))
+            }
+            if (note.isNotBlank()) {
+                append("\n").append(getString(R.string.detail_note, note))
+            }
         }
-
-        val contentText = if (!showStandardNotification) {
-            ""
-        } else if ((isDuringClass || isEndingSoon) && classProgress != null) {
-            promotedContentText
-        } else if (shouldPromote && !showCourseNameInIsland && !showLocationInIsland) {
-            visibleStatusText
-        } else {
-            listOf(islandCourseName, islandLocation, teacher, visibleStatusText)
+        val contentText = when {
+            !showStandardNotification -> ""
+            progress != null -> promotedContentText
+            shouldPromote && !showCourseNameInIsland && !showLocationInIsland ->
+                visibleStatusText
+            else -> listOf(islandCourseName, visibleLocation, teacher, visibleStatusText)
                 .filter { it.isNotBlank() }
                 .joinToString(" · ")
         }
-            
         val miuiFocusHintText = if (
             liveShouldMirrorStatusIntoMiuiFocusHint(
                 sdkInt = Build.VERSION.SDK_INT,
@@ -1989,242 +1180,132 @@ class LiveUpdateService : Service() {
         } else {
             ""
         }
-
-        val hyperFocusBundle = if (superIslandEngine == "hyperFocusApi" && shouldPromote && !isDuringClassStatusBar) {
-            buildHyperFocusBundle(
-                stage = stage,
-                remainingText = miuiFocusHintText,
-                showCountdown = showCountdown,
-            )
-        } else {
-            null
-        }
-        val miuiFocusParam = if (superIslandEngine == "hyperFocusApi" || !shouldPromote || isDuringClassStatusBar) {
-            null
-        } else {
-            buildMiuiFocusParam(
-                title = title,
-                remainingText = miuiFocusHintText,
-                timeRangeText = timeRangeText,
-                bodyContent = promotedContentText,
-                visibleLocation = visibleLocation,
-                stage = stage,
-                classProgress = classProgress,
-                startAtMillis = startAtMillis,
-                endAtMillis = endAtMillis,
-                islandName = nameToUse,
-                progressBreakOffsetsMillis = progressBreakOffsetsMillis,
-                progressMilestoneLabels = progressMilestoneLabels,
-                progressMilestoneTimeTexts = progressMilestoneTimeTexts,
-            )
-        }
-
-        val islandCriticalStatusText = if ((isDuringClass || isEndingSoon) && classProgress != null && showCountdown) {
-            classProgress.criticalTimeText
+        val criticalStatusText = if (progress != null && showCountdown) {
+            progress.criticalTimeText
         } else {
             visibleStatusText
         }
-
-        val islandCriticalText = if (shouldPromote && !showCourseNameInIsland && !showLocationInIsland) {
-            islandCriticalStatusText
+        val islandCriticalText = if (
+            shouldPromote && !showCourseNameInIsland && !showLocationInIsland
+        ) {
+            criticalStatusText
         } else {
-            listOf(islandCourseName, islandLocation, islandCriticalStatusText)
+            listOf(islandCourseName, visibleLocation, criticalStatusText)
                 .filter { it.isNotBlank() }
                 .joinToString(" ")
         }
+        val miuiIslandLabelText = when (miuiIslandLabelContent) {
+            "location" -> location
+            "course_name_and_location" -> listOf(islandName, location)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+            else -> islandName
+        }
+        val state = LiveUpdateNotificationState(
+            nowMillis = now,
+            stage = stage,
+            shouldPromote = shouldPromote,
+            showStandardNotification = showStandardNotification,
+            courseName = courseName,
+            shortCourseNameRaw = shortCourseNameRaw,
+            location = location,
+            teacher = teacher,
+            nextCourseName = nextName,
+            startTimeText = startTimeText,
+            endTimeText = endTimeText,
+            startAtMillis = startAtMillis,
+            endAtMillis = endAtMillis,
+            stageTitle = stageTitle,
+            title = title,
+            timeRangeText = timeRangeText,
+            subText = subText,
+            summaryText = summaryText,
+            contentText = contentText,
+            expandedDetailText = expandedDetailText,
+            promotedContentText = promotedContentText,
+            promotedExpandedDetailText = promotedExpandedDetailText,
+            islandCriticalText = islandCriticalText,
+            progress = progress,
+        )
+        val xiaomiSettings = XiaomiSuperIslandSettings(
+            engine = superIslandEngine,
+            showCountdown = showCountdown,
+            countdownTextStyle = countdownTextStyle,
+            visibleLocation = visibleLocation,
+            islandName = islandName,
+            focusHintText = miuiFocusHintText,
+            progressBreakOffsetsMillis = progressBreakOffsetsMillis,
+            progressMilestoneLabels = progressMilestoneLabels,
+            enableLabelImage = enableMiuiIslandLabelImage,
+            labelStyle = miuiIslandLabelStyle,
+            labelText = miuiIslandLabelText,
+            labelFontColor = miuiIslandLabelFontColor,
+            labelFontWeight = miuiIslandLabelFontWeight,
+            labelRenderQuality = miuiIslandLabelRenderQuality,
+            labelFontSize = miuiIslandLabelFontSize,
+            labelOffsetX = miuiIslandLabelOffsetX,
+            labelOffsetY = miuiIslandLabelOffsetY,
+            labelLogoPath = miuiIslandLabelLogoPath,
+            labelLogoCornerRadius = miuiIslandLabelLogoCornerRadius,
+            expandedIconMode = miuiIslandExpandedIconMode,
+            expandedIconPath = miuiIslandExpandedIconPath,
+            timeoutPre = islandTimeoutPre,
+            timeoutActive = islandTimeoutActive,
+            timeoutPost = islandTimeoutPost,
+            iconAEnabled = iconAEnabled,
+            outEffectEnabled = outEffectStatusEnabled,
+            outEffectColor = outEffectStatusColor,
+        )
 
-        val iconRes = when (stage) {
-            "beforeClass" -> R.drawable.ic_upcoming
-            "beforeEnd" -> R.drawable.ic_countdown
-            else -> R.drawable.ic_course
-        }
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-        } else {
-            Notification.Builder(this)
-        }
-
-        val notificationTitle = if (shouldPromote || showStandardNotification) {
-            title
-        } else {
-            ""
-        }
-        val notificationContentText = if (shouldPromote) {
-            promotedContentText
-        } else if (!showStandardNotification) {
-            ""
-        } else {
-            contentText
-        }
-        val notificationExpandedText = if (shouldPromote) {
-            promotedExpandedDetailText
-        } else if (!showStandardNotification) {
-            ""
-        } else {
-            expandedDetailText
-        }
-
-        builder.apply {
-            setContentTitle(notificationTitle)
-            setContentText(notificationContentText)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && miuiIslandLabelBitmap != null) {
-                setSmallIcon(Icon.createWithBitmap(miuiIslandLabelBitmap))
-            } else {
-                setSmallIcon(iconRes)
-            }
-            applyExpandedLargeIcon(this)
-            setContentIntent(pendingIntent)
-            setOngoing(true)
-            setAutoCancel(false)
-            setOnlyAlertOnce(true)
-            setCategory(
-                if (isDuringClassStatusBar) {
-                    Notification.CATEGORY_REMINDER
-                } else {
-                    Notification.CATEGORY_PROGRESS
-                }
+        val xiaomi = xiaomiSuperIslandRenderer.render(state, xiaomiSettings)
+        val decoration = xiaomi.decoration
+        val android = androidLiveUpdateRenderer.render(
+            state = state,
+            decoration = decoration,
+            requestPromotion = shouldRequestAndroidLiveUpdatePromotion(
+                shouldPromote = state.shouldPromote,
+                vendorSurfaceReady = decoration.isVendorSurfaceReady,
+            ),
+            beforeClassAction = if (stage.isUpcoming) buildBeforeClassQuickAction() else null,
+            dismissAction = if (stage.isStatusBarOnly) buildDismissStatusBarAction() else null,
+        )
+        val actuallyPromotable = shouldPromote && (
+            decoration.isVendorSurfaceReady ||
+                (android.canPostPromoted && android.hasPromotableCharacteristics == true)
             )
-            setColorized(false)
-            setShowWhen(!shouldPromote)
-            setWhen(if (isUpcoming) startAtMillis else endAtMillis)
-            setUsesChronometer(false)
-            if (usesProgressExpandedStyle) {
-                val progress = requireNotNull(classProgress)
-                setProgress(progress.progressMax, progress.progressUnits, false)
-            } else {
-                setProgress(0, 0, false)
-            }
-
-            if (showStandardNotification && !shouldPromote && subText.isNotBlank()) {
-                setSubText(subText)
-            }
-
-            if (Build.VERSION.SDK_INT >= 36) {
-                if (isDuringClassStatusBar) {
-                    setShortCriticalText("")
-                    setExtras(Bundle())
-                } else if (shouldPromote) {
-                    setShortCriticalText(islandCriticalText)
-                    val hasIslandChannel = hyperFocusBundle != null || miuiFocusParam != null
-                    if (hasIslandChannel) {
-                        // MIUI focus channel (super island) is the display target;
-                        // skip the system-level promotion so Live Updates and the
-                        // island are not shown simultaneously.
-                        setExtras(Bundle())
-                    } else {
-                        setExtras(
-                            Bundle().apply {
-                                putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
-                            }
-                        )
-                    }
-                } else {
-                    setShortCriticalText("")
-                    setExtras(Bundle())
-                }
-            }
-        }
-
-        if (isUpcoming) {
-            buildBeforeClassQuickAction()?.let(builder::addAction)
-        }
-        if (isDuringClassStatusBar) {
-            builder.addAction(buildDismissStatusBarAction())
-        }
-
-        if (usesProgressExpandedStyle) {
-            val progress = requireNotNull(classProgress)
-            builder.setStyle(
-                Notification.ProgressStyle()
-                    .setStyledByProgress(true)
-                    .setProgress(progress.progressUnits)
-                    .setProgressSegments(
-                        listOf(
-                            Notification.ProgressStyle.Segment(
-                                progress.progressMax
-                            )
-                        )
-                    )
-                    .setProgressTrackerIcon(
-                        buildRoundedLauncherIcon(dp(28f).toInt(), dp(9f))
-                            ?: Icon.createWithResource(this, R.mipmap.ic_launcher)
-                    )
-                    .setProgressPoints(
-                        progress.breakPointUnits.map { point ->
-                            Notification.ProgressStyle.Point(point)
-                        }
-                    )
-            )
-        } else {
-            builder.setStyle(
-                Notification.BigTextStyle()
-                    .setBigContentTitle(notificationTitle)
-                    .bigText(notificationExpandedText)
-                    .setSummaryText(if (showStandardNotification) summaryText else "")
-            )
-        }
-
-        val notification = builder.build()
-        if (hyperFocusBundle != null) {
-            notification.extras.putAll(hyperFocusBundle)
-        } else {
-            miuiFocusParam?.let { notification.extras.putString("miui.focus.param", it) }
-        }
-
-        val canPostPromoted = if (Build.VERSION.SDK_INT >= 36) {
-            getSystemService(NotificationManager::class.java)?.canPostPromotedNotifications() == true
-        } else {
-            false
-        }
-        val hasPromotableCharacteristics = if (Build.VERSION.SDK_INT >= 36) {
-            notification.hasPromotableCharacteristics()
-        } else {
-            null
-        }
-        val isMiuiFocusIslandReady =
-            isXiaomiFamilyDevice() &&
-                (miuiFocusParam != null || hyperFocusBundle != null) &&
-                shouldPromote &&
-                !isDuringClassStatusBar
-        val isActuallyPromotable = when {
-            isDuringClassStatusBar || !shouldPromote -> false
-            Build.VERSION.SDK_INT >= 36 &&
-                canPostPromoted &&
-                hasPromotableCharacteristics == true -> true
-            isMiuiFocusIslandReady -> true
-            else -> false
-        }
         val notIslandReason = when {
             !hasStartedForeground -> getString(R.string.debug_foreground_not_started)
-            stage == null -> getString(R.string.debug_stage_not_displayable)
-            isDuringClassStatusBar -> getString(R.string.debug_status_bar_only)
-            !shouldPromote && isDuringClass && !promoteDuringClass ->
+            stage.isStatusBarOnly -> getString(R.string.debug_status_bar_only)
+            !shouldPromote && stage.isDuringClass && !promoteDuringClass ->
                 getString(R.string.debug_during_class_normal_notification)
             !shouldPromote -> getString(R.string.debug_promote_not_requested)
-            !hasNotificationPermissionCompat(this) -> getString(R.string.debug_notification_permission_off)
-            isActuallyPromotable -> ""
+            !hasNotificationPermissionCompat(this) ->
+                getString(R.string.debug_notification_permission_off)
+            actuallyPromotable -> ""
             Build.VERSION.SDK_INT >= 36 && !isPromotedPermissionDeclaredCompat(this) ->
                 getString(R.string.debug_promoted_permission_not_declared)
-            Build.VERSION.SDK_INT >= 36 && !canPostPromoted && !isMiuiFocusIslandReady ->
+            Build.VERSION.SDK_INT >= 36 && !android.canPostPromoted &&
+                !decoration.isVendorSurfaceReady ->
                 getString(R.string.debug_system_denied_promoted)
-            Build.VERSION.SDK_INT >= 36 && hasPromotableCharacteristics == false && !isMiuiFocusIslandReady ->
+            Build.VERSION.SDK_INT >= 36 &&
+                android.hasPromotableCharacteristics == false &&
+                !decoration.isVendorSurfaceReady ->
                 getString(R.string.debug_notification_not_promotable)
-            isXiaomiFamilyDevice() && miuiFocusParam == null && hyperFocusBundle == null ->
+            xiaomi.isXiaomiDevice && !decoration.isVendorSurfaceReady ->
                 getString(R.string.debug_miui_focus_param_missing)
-            Build.VERSION.SDK_INT < 36 && !isXiaomiFamilyDevice() ->
+            Build.VERSION.SDK_INT < 36 && !xiaomi.isXiaomiDevice ->
                 getString(R.string.debug_os_not_supported)
             else -> getString(R.string.debug_try_return_home)
         }
-
         updateDebugSnapshot(
             linkedMapOf(
                 "summary" to linkedMapOf(
                     "serviceRunning" to true,
                     "currentStage" to activityStage,
-                    "resolvedStage" to stage,
+                    "resolvedStage" to stage.wireValue,
                     "isExpectedToShowIsland" to shouldPromote,
-                    "isActuallyPromotable" to isActuallyPromotable,
-                    "statusText" to if (isActuallyPromotable) {
+                    "isActuallyPromotable" to actuallyPromotable,
+                    "statusText" to if (actuallyPromotable) {
                         getString(R.string.debug_island_ready)
                     } else {
                         getString(R.string.debug_island_not_ready)
@@ -2235,8 +1316,8 @@ class LiveUpdateService : Service() {
                     "serviceRunning" to true,
                     "hasStartedForeground" to hasStartedForeground,
                     "activityStage" to activityStage,
-                    "resolvedStage" to stage,
-                    "lastRemainingText" to remainingText,
+                    "resolvedStage" to stage.wireValue,
+                    "lastRemainingText" to lastRemainingText,
                     "lastProgressUnits" to lastProgressUnits,
                     "lastCriticalTimeText" to lastCriticalTimeText,
                 ),
@@ -2261,89 +1342,33 @@ class LiveUpdateService : Service() {
                     "endSecondsCountdownThreshold" to endSecondsCountdownThreshold,
                     "autoDismissAfterStartMinutes" to autoDismissAfterStartMinutes,
                 ),
-                "switches" to linkedMapOf(
-                    "enableBeforeClass" to enableBeforeClass,
-                    "enableDuringClass" to enableDuringClass,
-                    "enableBeforeEnd" to enableBeforeEnd,
-                    "promoteDuringClass" to promoteDuringClass,
-                    "showNotificationDuringClass" to showNotificationDuringClass,
-                ),
-                "display" to linkedMapOf(
-                    "showCountdown" to showCountdown,
-                    "countdownTextStyle" to countdownTextStyle,
-                    "showStageText" to showStageText,
-                    "showCourseNameInIsland" to showCourseNameInIsland,
-                    "showLocationInIsland" to showLocationInIsland,
-                    "useShortNameInIsland" to useShortNameInIsland,
-                    "hidePrefixText" to hidePrefixText,
-                    "duringClassTimeDisplayMode" to duringClassTimeDisplayMode,
-                    "enableMiuiIslandLabelImage" to enableMiuiIslandLabelImage,
-                    "miuiIslandLabelStyle" to miuiIslandLabelStyle,
-                    "miuiIslandLabelContent" to miuiIslandLabelContent,
-                    "miuiIslandLabelFontColor" to miuiIslandLabelFontColor,
-                    "miuiIslandLabelFontWeight" to miuiIslandLabelFontWeight,
-                    "miuiIslandLabelRenderQuality" to miuiIslandLabelRenderQuality,
-                    "miuiIslandLabelFontSize" to miuiIslandLabelFontSize,
-                    "miuiIslandLabelOffsetX" to miuiIslandLabelOffsetX,
-                    "miuiIslandLabelOffsetY" to miuiIslandLabelOffsetY,
-                    "miuiIslandLabelLogoPath" to miuiIslandLabelLogoPath,
-                    "miuiIslandLabelLogoCornerRadius" to miuiIslandLabelLogoCornerRadius,
-                    "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                    "miuiIslandExpandedIconPath" to miuiIslandExpandedIconPath,
-                    "beforeClassQuickAction" to beforeClassQuickAction,
-                ),
                 "notification" to linkedMapOf(
                     "shouldPromote" to shouldPromote,
                     "showStandardNotification" to showStandardNotification,
-                    "isDuringClassStatusBar" to isDuringClassStatusBar,
-                    "canPostPromotedNotifications" to canPostPromoted,
-                    "hasPromotableCharacteristics" to hasPromotableCharacteristics,
-                    "miuiFocusParamPresent" to (miuiFocusParam != null),
-                    "notificationTitle" to notificationTitle,
-                    "notificationContentText" to notificationContentText,
-                    "notificationExpandedText" to notificationExpandedText,
+                    "statusBarOnly" to stage.isStatusBarOnly,
+                    "canPostPromotedNotifications" to android.canPostPromoted,
+                    "hasPromotableCharacteristics" to android.hasPromotableCharacteristics,
+                    "miuiFocusParamPresent" to (xiaomi.legacyFocusParam != null),
+                    "hyperFocusPresent" to (xiaomi.hyperFocusExtras != null),
+                    "androidPromotionRequested" to android.requestedPromotion,
+                    "notificationTitle" to title,
+                    "notificationContentText" to if (shouldPromote) {
+                        promotedContentText
+                    } else {
+                        contentText
+                    },
+                    "notificationExpandedText" to if (shouldPromote) {
+                        promotedExpandedDetailText
+                    } else {
+                        expandedDetailText
+                    },
                     "visibleStatusText" to visibleStatusText,
                     "islandCriticalText" to islandCriticalText,
-                    "promotedContentText" to promotedContentText,
                 ),
             )
         )
-
-        if (Build.VERSION.SDK_INT >= 36) {
-            if (shouldPromote && (hasPromotableCharacteristics != true || !canPostPromoted)) {
-                UmengDiagnosticReporter.record(
-                    context = applicationContext,
-                    category = "live_update_not_promoted",
-                    message = DiagnosticLogMessages.LIVE_UPDATE_NOT_PROMOTED,
-                    extras = mapOf(
-                        "courseName" to courseName,
-                        "stage" to stage,
-                        "canPostPromoted" to canPostPromoted,
-                        "hasPromotableCharacteristics" to hasPromotableCharacteristics,
-                        "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                    )
-                )
-                UmengDiagnosticReporter.report(
-                    context = applicationContext,
-                    category = "live_update_promoted_not_shown",
-                    message = DiagnosticLogMessages.LIVE_UPDATE_PROMOTED_NOT_SHOWN,
-                    dedupeKey = "live_update_promoted_not_shown:${courseName}:${activityStage}",
-                    extras = mapOf(
-                        "courseName" to courseName,
-                        "stage" to stage,
-                        "canPostPromoted" to canPostPromoted,
-                        "hasPromotableCharacteristics" to hasPromotableCharacteristics,
-                        "showStandardNotification" to showStandardNotification,
-                        "remainingText" to remainingText,
-                        "miuiIslandExpandedIconMode" to miuiIslandExpandedIconMode,
-                    )
-                )
-            }
-        }
-
-        return notification
+        return android.notification
     }
-
     private fun sanitizeTextExtra(value: String?): String {
         val normalized = value?.trim().orEmpty()
         return if (normalized.equals("null", ignoreCase = true)) "" else normalized
@@ -2409,19 +1434,7 @@ class LiveUpdateService : Service() {
         }
     }
 
-    private data class DuringClassProgress(
-        val progressMax: Int,
-        val progressUnits: Int,
-        val progressPercent: Int,
-        val nextMilestoneDisplayText: String?,
-        val finalDismissDisplayText: String,
-        val compactDisplayText: String,
-        val criticalTimeText: String,
-        val breakPointUnits: List<Int>,
-        val updatesEverySecond: Boolean,
-    )
-
-    private fun buildDuringClassProgress(now: Long): DuringClassProgress? {
+    private fun buildDuringClassProgress(now: Long): LiveUpdateProgressState? {
         val totalMillis = (endAtMillis - startAtMillis).coerceAtLeast(1L)
         val elapsedMillis = (now - startAtMillis).coerceIn(0L, totalMillis)
         val remainingMillis = (endAtMillis - now).coerceAtLeast(0L)
@@ -2465,7 +1478,7 @@ class LiveUpdateService : Service() {
         } else {
             nextMilestoneRemainingText ?: finalDismissRemainingText
         }
-        return DuringClassProgress(
+        return LiveUpdateProgressState(
             progressMax = progressMax,
             progressUnits = progressUnits,
             progressPercent = progressPercent,
@@ -2549,7 +1562,7 @@ class LiveUpdateService : Service() {
     private fun computeNextTickDelayMillis(
         now: Long,
         stage: String?,
-        duringClassProgress: DuringClassProgress?,
+        duringClassProgress: LiveUpdateProgressState?,
     ): Long {
         val refreshEverySecond = when (stage) {
             "beforeClass" -> shouldRefreshEverySecond(

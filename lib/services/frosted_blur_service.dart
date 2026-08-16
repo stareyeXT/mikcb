@@ -73,7 +73,7 @@ abstract final class FrostedBlurService {
               source.dispose();
             }
             _setBlurEngine('native');
-            return _imageFromRgba(result, width, height);
+            return await _imageFromRgba(result, width, height);
           }
         } on PlatformException {
           _nativeBlurUnavailable = true;

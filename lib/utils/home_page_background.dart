@@ -607,7 +607,7 @@ sampleHomePageWallpaperLuminanceBands(
     if (image == null) {
       return null;
     }
-    return _averageBandLuminances(
+    return await _averageBandLuminances(
       image,
       viewportSize: viewportSize,
       alignX: alignX,

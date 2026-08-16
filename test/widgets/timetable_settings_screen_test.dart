@@ -85,6 +85,63 @@ void main() {
         .setMockMethodCallHandler(liveChannel, null);
   });
 
+  testWidgets('live engine uses the standard HyperOS select row', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final provider = await createInitializedTestProvider(tester);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: provider,
+        child: const TestApp(home: TimetableSettingsScreen()),
+      ),
+    );
+    await _pumpScreen(tester);
+
+    final homeList = find.byType(HyperosListView).first;
+    await tester.scrollUntilVisible(
+      find.text('超级岛与通知'),
+      200,
+      scrollable: _scrollableUnder(homeList),
+    );
+    await tester.tap(find.text('超级岛与通知'));
+    await tester.pumpAndSettle();
+
+    final engineSelector = find.byKey(
+      const ValueKey<String>('settings-live-engine-select'),
+    );
+    expect(engineSelector, findsOneWidget);
+    expect(find.byType(HyperosRadioTile<SuperIslandEngine>), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(HyperosListView).last,
+        matching: find.byType(HyperosListGroup),
+      ),
+      findsNWidgets(2),
+    );
+
+    final select = tester.widget<HyperosSelectTile<SuperIslandEngine>>(
+      engineSelector,
+    );
+    expect(select.label, '超级岛引擎');
+    expect(select.value, SuperIslandEngine.hyperFocusApi);
+
+    await tester.tap(engineSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Live Updates').last);
+    await tester.pumpAndSettle();
+
+    expect(provider.settings.superIslandEngine, SuperIslandEngine.builtIn);
+    final updatedSelect = tester.widget<HyperosSelectTile<SuperIslandEngine>>(
+      engineSelector,
+    );
+    expect(updatedSelect.value, SuperIslandEngine.builtIn);
+    expect(find.text('状态栏岛自定义'), findsNothing);
+  });
+
   testWidgets('live testing screen keeps one-second auto refresh cadence', (
     tester,
   ) async {

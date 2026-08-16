@@ -236,7 +236,7 @@ class StatisticsShareService {
         if (rgbaImage == null) {
           return null;
         }
-        return _encodePngOffMainThread(rgbaImage);
+        return await _encodePngOffMainThread(rgbaImage);
       }
 
       // Tall content: reuse one host, only change slice window.
@@ -286,7 +286,7 @@ class StatisticsShareService {
         slices: decodedSlices,
         fillColor: scaffoldColor,
       );
-      return _encodePngOffMainThread(stitched);
+      return await _encodePngOffMainThread(stitched);
     } finally {
       barrierEntry.remove();
       captureEntry.remove();

@@ -157,4 +157,21 @@ void main() {
     );
     expect(scaffold.resizeToAvoidBottomInset, isTrue);
   });
+
+  testWidgets('html import screen keeps keyboard-aware resizing enabled', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const TestApp(home: HtmlCourseImportScreen()));
+    await tester.pumpAndSettle();
+
+    final scaffold = tester.widget<Scaffold>(
+      find
+          .descendant(
+            of: find.byType(HtmlCourseImportScreen),
+            matching: find.byType(Scaffold),
+          )
+          .first,
+    );
+    expect(scaffold.resizeToAvoidBottomInset, isTrue);
+  });
 }

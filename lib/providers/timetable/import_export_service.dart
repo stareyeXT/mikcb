@@ -191,7 +191,7 @@ Future<String?> _timetableImportAppDataBackup(
 ) async {
   try {
     if (host._dataTransferService.isFullBackupJson(content)) {
-      return host.importFullAppDataBackup(content);
+      return await host.importFullAppDataBackup(content);
     }
     final backup = host._dataTransferService.parseBackupJson(content);
     final resolvedSettings = await host._resolveSettingsAgainstTimeSchemes(

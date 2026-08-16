@@ -56,24 +56,18 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
 
   Widget _buildEngineSelector() {
     return HyperosSettingsBlock(
-      title: '超级岛引擎',
+      title: '通知形态',
       child: HyperosListGroup(
         children: [
-          HyperosRadioTile<SuperIslandEngine>(
-            title: 'Live Updates',
-            value: SuperIslandEngine.builtIn,
-            groupValue: _draft.superIslandEngine,
-            onChanged: (v) {
-              if (v != null) _onEngineChanged(v);
+          HyperosSelectTile<SuperIslandEngine>(
+            key: const ValueKey<String>('settings-live-engine-select'),
+            label: '超级岛引擎',
+            items: const {
+              'Live Updates': SuperIslandEngine.builtIn,
+              '小米超级岛': SuperIslandEngine.hyperFocusApi,
             },
-          ),
-          HyperosRadioTile<SuperIslandEngine>(
-            title: '小米超级岛',
-            value: SuperIslandEngine.hyperFocusApi,
-            groupValue: _draft.superIslandEngine,
-            onChanged: (v) {
-              if (v != null) _onEngineChanged(v);
-            },
+            value: _draft.superIslandEngine,
+            onChanged: _onEngineChanged,
           ),
         ],
       ),
@@ -182,125 +176,100 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
   }
 
   Widget _buildHyperFocusSettings(BuildContext context, AppLocalizations l10n) {
-    return Column(
+    return HyperosListGroup(
       children: [
-        HyperosSectionLabel(text: '提醒'),
-        HyperosListGroup(
-          children: [
-            HyperosListTile(
-              icon: Icons.alarm_outlined,
-              title: l10n.liveReminderTimingTitle,
-              details:
-                  '课前: ${_draft.liveEnableBeforeClass ? "开" : "关"} 课中: ${_draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd ? "开" : "关"}',
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => const HyperFocusTimingScreen(),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-          ],
+        HyperosListTile(
+          icon: Icons.alarm_outlined,
+          title: l10n.liveReminderTimingTitle,
+          details:
+              '课前: ${_draft.liveEnableBeforeClass ? "开" : "关"} 课中: ${_draft.liveEnableDuringClass || _draft.liveEnableBeforeEnd ? "开" : "关"}',
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              builder: (_) => const HyperFocusTimingScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
         ),
-        const HyperosSectionGap(),
-        HyperosSectionLabel(text: '显示自定义'),
-        HyperosListGroup(
-          children: [
-            HyperosListTile(
-              icon: Icons.brightness_4_outlined,
-              title: '状态栏岛自定义',
-              details: '岛A/岛B/息屏文字（课前/课中/课后）',
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => const HyperFocusStatusIslandScreen(),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-            HyperosListTile(
-              icon: Icons.space_dashboard_outlined,
-              title: '展开态自定义',
-              details: '主要标题/次要文本/前置文本/主要小文本',
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => const HyperFocusExpandedIslandScreen(),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-          ],
+        HyperosListTile(
+          icon: Icons.brightness_4_outlined,
+          title: '状态栏岛自定义',
+          details: '岛A/岛B/息屏文字（课前/课中/课后）',
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              builder: (_) => const HyperFocusStatusIslandScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
         ),
-        const HyperosSectionGap(),
-        HyperosSectionLabel(text: '消失时间'),
-        HyperosListGroup(
-          children: [
-            HyperosListTile(
-              icon: Icons.timer_outlined,
-              title: '岛消失时间',
-              details: '按课前/课中/课后配置状态栏岛消失时间',
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => const HyperFocusIslandTimeoutScreen(),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-          ],
+        HyperosListTile(
+          icon: Icons.space_dashboard_outlined,
+          title: '展开态自定义',
+          details: '主要标题/次要文本/前置文本/主要小文本',
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              builder: (_) => const HyperFocusExpandedIslandScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
         ),
-        const HyperosSectionGap(),
-        HyperosSectionLabel(text: '工具'),
-        HyperosListGroup(
-          children: [
-            HyperosListTile(
-              icon: Icons.science_outlined,
-              title: '测试',
-              details: l10n.hfTestingEntryDetails,
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  builder: (_) => const _HyperFocusTestingSettingsScreen(),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-            HyperosListTile(
-              key: const ValueKey<String>('settings-live-self-check'),
-              icon: Icons.bug_report_outlined,
-              title: l10n.liveSelfCheckTitle,
-              details: l10n.liveSelfCheckSubtitle,
-              onTap: () async {
-                await HyperosNavigation.push(
-                  context,
-                  settings: const RouteSettings(
-                    name: '/settings/live/self-check',
-                  ),
-                  builder: (_) => const _LiveTestingSettingsScreen(),
-                );
-                if (!mounted) return;
-                setState(() {
-                  _draft = context.read<TimetableProvider>().settings;
-                });
-              },
-            ),
-          ],
+        HyperosListTile(
+          icon: Icons.timer_outlined,
+          title: '岛消失时间',
+          details: '按课前/课中/课后配置状态栏岛消失时间',
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              builder: (_) => const HyperFocusIslandTimeoutScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
+        ),
+        HyperosListTile(
+          icon: Icons.science_outlined,
+          title: '测试',
+          details: l10n.hfTestingEntryDetails,
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              builder: (_) => const _HyperFocusTestingSettingsScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
+        ),
+        HyperosListTile(
+          key: const ValueKey<String>('settings-live-self-check'),
+          icon: Icons.bug_report_outlined,
+          title: l10n.liveSelfCheckTitle,
+          details: l10n.liveSelfCheckSubtitle,
+          onTap: () async {
+            await HyperosNavigation.push(
+              context,
+              settings: const RouteSettings(name: '/settings/live/self-check'),
+              builder: (_) => const _LiveTestingSettingsScreen(),
+            );
+            if (!mounted) return;
+            setState(() {
+              _draft = context.read<TimetableProvider>().settings;
+            });
+          },
         ),
       ],
     );
