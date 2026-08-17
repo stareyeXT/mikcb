@@ -81,4 +81,12 @@ class XiaomiSuperIslandNotificationRendererTest {
             hyperFocusTemplateStage(LiveUpdateNotificationStage.BEFORE_END),
         )
     }
+
+    @Test
+    fun afterClassUsesThePostTemplate() {
+        assertEquals(
+            "post",
+            hyperFocusTemplateStage(LiveUpdateNotificationStage.AFTER_CLASS),
+        )
+    }
 }

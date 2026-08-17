@@ -1393,13 +1393,13 @@ class _HyperFocusIslandTimeoutScreenState
     super.initState();
     _draft = context.read<TimetableProvider>().settings;
     _preMinutesCtrl = TextEditingController(
-      text: (_draft.hfIslandTimeoutPre / 60).round().toString(),
+      text: (_draft.hfIslandTimeoutPre / 60).round().clamp(1, 60).toString(),
     );
     _activeMinutesCtrl = TextEditingController(
-      text: (_draft.hfIslandTimeoutActive / 60).round().toString(),
+      text: (_draft.hfIslandTimeoutActive / 60).round().clamp(1, 60).toString(),
     );
     _postMinutesCtrl = TextEditingController(
-      text: (_draft.hfIslandTimeoutPost / 60).round().toString(),
+      text: (_draft.hfIslandTimeoutPost / 60).round().clamp(1, 60).toString(),
     );
   }
 
@@ -1455,6 +1455,12 @@ class _HyperFocusIslandTimeoutScreenState
           final minutes = int.tryParse(text) ?? 0;
           final clamped = minutes.clamp(1, 60);
           onChanged(clamped * 60);
+          // 回写规范化值，避免界面显示与实际保存不一致（如输入 99 实际保存 60）
+          final normalized = clamped.toString();
+          if (controller.text != normalized) {
+            controller.text = normalized;
+            controller.selection = TextSelection.collapsed(offset: normalized.length);
+          }
         },
       ),
     );

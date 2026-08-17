@@ -7,7 +7,8 @@ internal enum class LiveUpdateNotificationStage {
     BEFORE_CLASS,
     DURING_CLASS,
     DURING_CLASS_STATUS_BAR,
-    BEFORE_END;
+    BEFORE_END,
+    AFTER_CLASS;
 
     val wireValue: String
         get() = when (this) {
@@ -15,6 +16,7 @@ internal enum class LiveUpdateNotificationStage {
             DURING_CLASS -> "duringClass"
             DURING_CLASS_STATUS_BAR -> "duringClassStatusBar"
             BEFORE_END -> "beforeEnd"
+            AFTER_CLASS -> "afterClass"
         }
 
     val isUpcoming: Boolean get() = this == BEFORE_CLASS
@@ -25,12 +27,12 @@ internal enum class LiveUpdateNotificationStage {
     fun shouldPromote(promoteDuringClass: Boolean): Boolean = when (this) {
         DURING_CLASS_STATUS_BAR -> false
         DURING_CLASS -> promoteDuringClass
-        BEFORE_CLASS, BEFORE_END -> true
+        BEFORE_CLASS, BEFORE_END, AFTER_CLASS -> true
     }
 
     fun showStandardNotification(showDuringClass: Boolean): Boolean = when (this) {
         DURING_CLASS -> showDuringClass
-        BEFORE_CLASS, DURING_CLASS_STATUS_BAR, BEFORE_END -> true
+        BEFORE_CLASS, DURING_CLASS_STATUS_BAR, BEFORE_END, AFTER_CLASS -> true
     }
 
     companion object {
@@ -39,6 +41,7 @@ internal enum class LiveUpdateNotificationStage {
             "duringClass" -> DURING_CLASS
             "duringClassStatusBar" -> DURING_CLASS_STATUS_BAR
             "beforeEnd" -> BEFORE_END
+            "afterClass" -> AFTER_CLASS
             else -> null
         }
     }

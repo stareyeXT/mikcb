@@ -53,6 +53,7 @@ internal fun isXiaomiSuperIslandPayloadReady(
 internal fun hyperFocusTemplateStage(stage: LiveUpdateNotificationStage): String =
     when (stage) {
         LiveUpdateNotificationStage.BEFORE_CLASS -> "pre"
+        LiveUpdateNotificationStage.AFTER_CLASS -> "post"
         else -> "active"
     }
 
@@ -173,6 +174,56 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             brand.contains("redmi") || brand.contains("poco")
     }
 
+    /**
+     * 岛消失时间到期后使用的渲染结果：hyperFocusApi 引擎持续携带 dismiss
+     * 参数防止重推把岛重新唤起；builtIn 引擎则不再附加焦点参数。
+     */
+    fun renderDismiss(engine: String): XiaomiSuperIslandRenderResult {
+        val isXiaomi = isXiaomiFamilyDevice()
+        return when (engine) {
+            "hyperFocusApi" -> XiaomiSuperIslandRenderResult(
+                payloadMode = XiaomiSuperIslandPayloadMode.HYPER_FOCUS,
+                isXiaomiDevice = isXiaomi,
+                hyperFocusExtras = buildDismissBundle(),
+                isIslandReady = true,
+            )
+            else -> XiaomiSuperIslandRenderResult(
+                payloadMode = XiaomiSuperIslandPayloadMode.NONE,
+                isXiaomiDevice = isXiaomi,
+            )
+        }
+    }
+
+    private fun buildDismissBundle(): Bundle? = try {
+        FocusNotification.buildV3 {
+            business = "course_schedule"
+            updatable = false
+            enableFloat = false
+            ticker = ""
+            aodTitle = ""
+            baseInfo {
+                type = 2
+                title = ""
+                content = ""
+            }
+            picInfo { type = 1 }
+            hintInfo {
+                type = 2
+                title = ""
+                content = ""
+            }
+            island {
+                islandProperty = 0
+                islandTimeout = 0
+                bigIslandArea { }
+                smallIslandArea { }
+            }
+        }
+    } catch (error: Exception) {
+        Log.e(TAG, "buildDismissBundle failed", error)
+        null
+    }
+
     private fun dp(value: Float): Float = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, value, context.resources.displayMetrics,
     )
@@ -249,10 +300,26 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
     ): Bundle? = try {
         val templates = loadHyperFocusTemplates(context)
         val key = hyperFocusTemplateStage(state.stage)
-        val target = if (key == "pre") state.startAtMillis else state.endAtMillis
+        val isPost = key == "post"
+        // 课后阶段不再倒计时：目标时间设为课后窗口结束，避免被判为已过期而下岛
+        val target = when {
+            isPost -> state.endAtMillis + settings.timeoutPost * 1000L
+            key == "pre" -> state.startAtMillis
+            else -> state.endAtMillis
+        }
+        val countdownText = when {
+            isPost -> ""
+            key == "pre" -> formatCountdownForTemplate((state.startAtMillis - state.nowMillis).coerceAtLeast(0L))
+            else -> formatCountdownForTemplate((state.endAtMillis - state.nowMillis).coerceAtLeast(0L))
+        }
+        val elapsedText = if (key == "active") {
+            formatElapsedForTemplate((state.nowMillis - state.startAtMillis).coerceAtLeast(0L))
+        } else {
+            ""
+        }
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
             ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = Uri.fromParts("package", context.packageName, null) }
-        val resolve: (String) -> String = { template -> resolveTemplate(template, state.courseName, state.shortCourseNameRaw, state.location, state.teacher, state.startTimeText, state.endTimeText, "", "") }
+        val resolve: (String) -> String = { template -> resolveTemplate(template, state.courseName, state.shortCourseNameRaw, state.location, state.teacher, state.startTimeText, state.endTimeText, countdownText, elapsedText) }
         FocusNotification.buildV3 {
             business = "course_schedule"; updatable = true; enableFloat = true
             ticker = resolve(templates["ticker_$key"] ?: "{课名}"); aodTitle = ticker; islandFirstFloat = true
@@ -263,7 +330,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             hintInfo {
                 type = 2; title = resolve(templates["hintTitle_$key"] ?: ""); content = remaining.ifBlank { title }
                 subTitle = resolve(templates["hintSubtitle_$key"] ?: ""); extraTitle = resolve(templates["hintContent_$key"] ?: ""); specialTitle = resolve(templates["hintSubcontent_$key"] ?: "")
-                if (settings.showCountdown) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
+                if (settings.showCountdown && !isPost) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
                 actionInfo { actionIntentType = 1; actionIntent = launch.toUri(Intent.URI_INTENT_SCHEME); actionTitle = "查看课表" }
             }
             island {
@@ -271,7 +338,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                 bigIslandArea {
                     imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 } }
                     val b = templates["islandB_$key"] ?: ""
-                    if (b.isNotEmpty()) sameWidthDigitInfo { if (settings.showCountdown && b.contains("倒计时")) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis } else content = resolve(b); turnAnim = true; showHighlightColor = true }
+                    if (b.isNotEmpty()) sameWidthDigitInfo { if (settings.showCountdown && !isPost && b.contains("倒计时")) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis } else content = resolve(b); turnAnim = true; showHighlightColor = true }
                 }
                 smallIslandArea { }; shareData { title = state.courseName; content = state.location }
             }
@@ -336,7 +403,8 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                 .coerceIn(0, 100)
         val islandContentText = when (state.stage) {
             LiveUpdateNotificationStage.BEFORE_CLASS,
-            LiveUpdateNotificationStage.BEFORE_END -> remainingTextForIsland(state, settings)
+            LiveUpdateNotificationStage.BEFORE_END,
+            LiveUpdateNotificationStage.AFTER_CLASS -> remainingTextForIsland(state, settings)
             else -> state.progress?.compactDisplayText ?: state.stageTitle
         }
         val bigIslandArea = JSONObject().apply {
@@ -389,7 +457,14 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         }
         return JSONObject().apply {
             put("islandProperty", 1)
-            put("islandTimeout", 3600)
+            put(
+                "islandTimeout",
+                when (state.stage) {
+                    LiveUpdateNotificationStage.BEFORE_CLASS -> settings.timeoutPre
+                    LiveUpdateNotificationStage.AFTER_CLASS -> settings.timeoutPost
+                    else -> settings.timeoutActive
+                },
+            )
             put("bigIslandArea", bigIslandArea)
             put("smallIslandArea", JSONObject())
         }
@@ -407,6 +482,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         settings: XiaomiSuperIslandSettings,
     ): String =
         when (state.stage) {
+            LiveUpdateNotificationStage.AFTER_CLASS -> state.stageTitle
             LiveUpdateNotificationStage.BEFORE_CLASS -> {
                 val remaining = state.startAtMillis - state.nowMillis
                 if (remaining > 0L) {

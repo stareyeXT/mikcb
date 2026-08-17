@@ -292,6 +292,8 @@ class LiveUpdateService : Service() {
     private var islandTimeoutPre = 300
     private var islandTimeoutActive = 600
     private var islandTimeoutPost = 600
+    private var islandSessionStartedAt = 0L
+    private var islandSuppressed = false
     private var iconAEnabled = false
     private var outEffectStatusEnabled = false
     private var outEffectStatusColor = ""
@@ -467,6 +469,8 @@ class LiveUpdateService : Service() {
             lastRemainingText = "-1"
             lastProgressUnits = -1
             lastCriticalTimeText = ""
+            islandSessionStartedAt = System.currentTimeMillis()
+            islandSuppressed = false
             markServiceRunning()
 
             UmengDiagnosticReporter.record(
@@ -831,7 +835,10 @@ class LiveUpdateService : Service() {
             override fun run() {
                 val now = System.currentTimeMillis()
                 BeforeClassQuickActionRestore.restoreIfClassEnded(applicationContext, now)
-                if (validateAgainstSchedule &&
+                val stage = resolveStage(now)
+                // 课后窗口调度器不感知（快照 stage 在课末即结束），跳过校验避免被提前停掉
+                if (stage != "afterClass" &&
+                    validateAgainstSchedule &&
                     !LiveUpdateScheduler.hasActiveLiveSelection(applicationContext, now)
                 ) {
                     if (!LiveUpdateScheduler.reschedule(
@@ -844,7 +851,6 @@ class LiveUpdateService : Service() {
                     }
                     return
                 }
-                val stage = resolveStage(now)
                 if (autoDismissAfterStartMinutes > 0 &&
                     now >= startAtMillis + autoDismissAfterStartMinutes * 60_000L
                 ) {
@@ -875,19 +881,41 @@ class LiveUpdateService : Service() {
                 // the correct displaySettings for the new stage.
                 if (lastTickerStage != null && stage != lastTickerStage) {
                     lastTickerStage = stage
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
+                    if (stage == "afterClass") {
+                        // 课后窗口本地渲染（模板与超时都在本服务内），不重读 intent
+                        islandSessionStartedAt = now
+                        islandSuppressed = false
+                    } else {
+                        if (!LiveUpdateScheduler.reschedule(
+                                applicationContext,
+                                allowImmediateStart = true,
+                                stopStaleSessions = validateAgainstSchedule,
+                            )
+                        ) {
+                            stopAndRemoveNotification()
+                        }
+                        return
                     }
-                    return
                 }
                 lastTickerStage = stage
 
-                if (now >= endAtMillis + 30_000L) { // Auto-remove 30s after class end, especially for tests.
+                val stageTimeoutSeconds = when (stage) {
+                    "beforeClass" -> islandTimeoutPre
+                    "afterClass" -> islandTimeoutPost
+                    else -> islandTimeoutActive
+                }
+                // 岛消失时间到期：主动下岛（含 dismiss bundle），避免每次重推刷新系统超时
+                if (!islandSuppressed &&
+                    stageTimeoutSeconds > 0 &&
+                    now - islandSessionStartedAt >= stageTimeoutSeconds * 1000L
+                ) {
+                    islandSuppressed = true
+                    getSystemService(NotificationManager::class.java)
+                        ?.notify(NOTIFICATION_ID, buildNotification(computeRemainingText(now)))
+                }
+
+                if (now >= endAtMillis + islandTimeoutPost * 1000L + 30_000L) {
+                    // Auto-remove 30s after the post window, especially for tests.
                     if (!LiveUpdateScheduler.reschedule(
                             applicationContext,
                             allowImmediateStart = true,
@@ -971,6 +999,10 @@ class LiveUpdateService : Service() {
 
     private fun resolveStage(now: Long): String? {
         if (now >= endAtMillis) {
+            // 课后窗口：下课后的 islandTimeoutPost 秒内继续展示"已下课"
+            if (islandTimeoutPost > 0 && now < endAtMillis + islandTimeoutPost * 1000L) {
+                return "afterClass"
+            }
             return null
         }
         // Do not show the before-class stage earlier than its window start.
@@ -1030,6 +1062,7 @@ class LiveUpdateService : Service() {
         val stageTitle = when (stage) {
             LiveUpdateNotificationStage.BEFORE_CLASS -> getString(R.string.stage_before_class)
             LiveUpdateNotificationStage.BEFORE_END -> getString(R.string.stage_before_end)
+            LiveUpdateNotificationStage.AFTER_CLASS -> getString(R.string.stage_after_class)
             else -> getString(R.string.stage_in_class)
         }
         val visibleStatusText = when {
@@ -1257,12 +1290,17 @@ class LiveUpdateService : Service() {
             outEffectColor = outEffectStatusColor,
         )
 
-        val xiaomi = xiaomiSuperIslandRenderer.render(state, xiaomiSettings)
+        val xiaomi = if (islandSuppressed && superIslandEngine == "hyperFocusApi") {
+            // 消失时间到期后持续携带 dismiss 参数，防止重推把岛重新唤起
+            xiaomiSuperIslandRenderer.renderDismiss(superIslandEngine)
+        } else {
+            xiaomiSuperIslandRenderer.render(state, xiaomiSettings)
+        }
         val decoration = xiaomi.decoration
         val android = androidLiveUpdateRenderer.render(
             state = state,
             decoration = decoration,
-            requestPromotion = shouldRequestAndroidLiveUpdatePromotion(
+            requestPromotion = !islandSuppressed && shouldRequestAndroidLiveUpdatePromotion(
                 shouldPromote = state.shouldPromote,
                 vendorSurfaceReady = decoration.isVendorSurfaceReady,
             ),
@@ -1350,6 +1388,7 @@ class LiveUpdateService : Service() {
                     "hasPromotableCharacteristics" to android.hasPromotableCharacteristics,
                     "miuiFocusParamPresent" to (xiaomi.legacyFocusParam != null),
                     "hyperFocusPresent" to (xiaomi.hyperFocusExtras != null),
+                    "islandSuppressed" to islandSuppressed,
                     "androidPromotionRequested" to android.requestedPromotion,
                     "notificationTitle" to title,
                     "notificationContentText" to if (shouldPromote) {
