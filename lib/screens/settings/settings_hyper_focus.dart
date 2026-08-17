@@ -114,6 +114,9 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
       hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
+      hfIconAEnabled: settings.hfIconAEnabled,
+      hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
+      hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
     );
     appDebugLog('MiuiLive', '发送结果：${error ?? '成功'}');
     if (!mounted) return;

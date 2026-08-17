@@ -689,6 +689,9 @@ class MiuiLiveActivitiesService {
     int hfIslandTimeoutPre = 300,
     int hfIslandTimeoutActive = 600,
     int hfIslandTimeoutPost = 600,
+    bool hfIconAEnabled = true,
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
   }) async {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return '非 Android 设备';
@@ -707,6 +710,9 @@ class MiuiLiveActivitiesService {
         'hfIslandTimeoutPre': hfIslandTimeoutPre.toString(),
         'hfIslandTimeoutActive': hfIslandTimeoutActive.toString(),
         'hfIslandTimeoutPost': hfIslandTimeoutPost.toString(),
+        'hfIconAEnabled': hfIconAEnabled.toString(),
+        'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled.toString(),
+        'hfOutEffectStatusColor': hfOutEffectStatusColor,
       });
       return null;
     } catch (e) {
@@ -859,10 +865,12 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     int hfIslandTimeoutPre = 300,
     int hfIslandTimeoutActive = 600,
     int hfIslandTimeoutPost = 600,
+    bool hfIconAEnabled = true,
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
   }) async {
     return null;
   }
-
   @override
   Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
     return const {
