@@ -85,6 +85,9 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     final scheduledStage = _debugStatus?['scheduling']?['nextTriggerStage'];
     final stage = switch (scheduledStage) {
       'pre' || 'active' || 'post' => scheduledStage as String,
+      'beforeClass' => 'pre',
+      'duringClass' || 'duringClassStatusBar' || 'beforeEnd' => 'active',
+      'afterClass' => 'post',
       _ => 'pre',
     };
     if (!mounted) return;
