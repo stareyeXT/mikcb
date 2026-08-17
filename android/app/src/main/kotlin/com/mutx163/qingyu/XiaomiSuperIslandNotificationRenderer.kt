@@ -338,11 +338,11 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             island {
                 islandProperty = 1; islandTimeout = when (key) { "pre" -> settings.timeoutPre; "post" -> settings.timeoutPost; else -> settings.timeoutActive }
                 bigIslandArea {
-                    imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 } }
+                    imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor } } }
                     val b = resolve(templates["islandB_$key"] ?: "")
                     if (b.isNotEmpty()) {
                         if (settings.showCountdown && !isPost) {
-                            sameWidthDigitInfo { timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }; turnAnim = true; showHighlightColor = true }
+                            sameWidthDigitInfo { timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }; content = b; turnAnim = true; showHighlightColor = true }
                         } else if (b.matches(Regex("[0-9.:：\\-]+"))) {
                             sameWidthDigitInfo { content = b; turnAnim = true; showHighlightColor = true }
                         } else {
@@ -350,7 +350,10 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                         }
                     }
                 }
-                smallIslandArea { }; shareData { title = state.courseName; content = state.location }
+                smallIslandArea {
+                    combinePicInfo { picInfo { type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor } } }
+                }
+                shareData { title = state.courseName; content = state.location }
             }
         }.also { if (settings.outEffectEnabled) { it.putString("miui.bigIsland.effect.src", "outer_glow"); it.putString("miui.effect.src", "outer_glow") } }
     } catch (error: Exception) {

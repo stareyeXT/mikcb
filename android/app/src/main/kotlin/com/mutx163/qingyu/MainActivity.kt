@@ -1512,6 +1512,12 @@ class MainActivity : FlutterActivity() {
                                     type = 1
                                 }
                             }
+                            if (templateStage == "active" && classEndAt > classStartAt && now >= classStartAt) {
+                                progressInfo {
+                                    progress = ((now - classStartAt) * 100 / (classEndAt - classStartAt)).toInt().coerceIn(0, 100)
+                                    colorReach = args?.get("hfOutEffectStatusColor")?.toString().takeIf { it.isNullOrBlank().not() } ?: "#FFFFFFFF"
+                                }
+                            }
                         }
 
                         val islandBHasCountdown =
@@ -1524,7 +1530,7 @@ class MainActivity : FlutterActivity() {
                                         timerWhen = timerTarget
                                         timerSystemCurrent = now
                                     }
-                                    content = ""
+                                    content = islandBText
                                     turnAnim = true
                                     showHighlightColor = true
                                 }
@@ -1545,7 +1551,19 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
-                    smallIslandArea { }
+                    smallIslandArea {
+                        combinePicInfo {
+                            picInfo {
+                                type = 1
+                            }
+                            if (templateStage == "active" && classEndAt > classStartAt && now >= classStartAt) {
+                                progressInfo {
+                                    progress = ((now - classStartAt) * 100 / (classEndAt - classStartAt)).toInt().coerceIn(0, 100)
+                                    colorReach = args?.get("hfOutEffectStatusColor")?.toString().takeIf { it.isNullOrBlank().not() } ?: "#FFFFFFFF"
+                                }
+                            }
+                        }
+                    }
 
                     shareData {
                         title = courseName
