@@ -1122,7 +1122,6 @@ class TimetableSettings {
   final int hfIslandTimeoutActive;
   final int hfIslandTimeoutPost;
   final bool hfIconAEnabled;
-  final String hfStatusTextColor;
   final bool hfOutEffectStatusEnabled;
   final String hfOutEffectStatusColor;
   final bool hfOutEffectExpandEnabled;
@@ -1309,7 +1308,6 @@ class TimetableSettings {
     this.hfIslandTimeoutActive = 600,
     this.hfIslandTimeoutPost = 600,
     this.hfIconAEnabled = true,
-    this.hfStatusTextColor = '#FFFFFFFF',
     this.hfOutEffectStatusEnabled = true,
     this.hfOutEffectStatusColor = '#FFFFFFFF',
     this.hfOutEffectExpandEnabled = true,
@@ -1637,7 +1635,6 @@ class TimetableSettings {
       'hfIslandTimeoutActive': hfIslandTimeoutActive,
       'hfIslandTimeoutPost': hfIslandTimeoutPost,
       'hfIconAEnabled': hfIconAEnabled,
-      'hfStatusTextColor': hfStatusTextColor,
       'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled,
       'hfOutEffectStatusColor': hfOutEffectStatusColor,
       'hfOutEffectExpandEnabled': hfOutEffectExpandEnabled,
@@ -1980,7 +1977,6 @@ class TimetableSettings {
           ((json['hfIslandTimeoutPost'] as num?)?.toInt() ?? 600)
               .clamp(60, 3600),
       hfIconAEnabled: json['hfIconAEnabled'] as bool? ?? true,
-      hfStatusTextColor: json['hfStatusTextColor'] as String? ?? '#FFFFFFFF',
       hfOutEffectStatusEnabled:
           json['hfOutEffectStatusEnabled'] as bool? ?? true,
       hfOutEffectStatusColor:
@@ -2227,7 +2223,6 @@ class TimetableSettings {
     int? hfIslandTimeoutActive,
     int? hfIslandTimeoutPost,
     bool? hfIconAEnabled,
-    String? hfStatusTextColor,
     bool? hfOutEffectStatusEnabled,
     String? hfOutEffectStatusColor,
     bool? hfOutEffectExpandEnabled,
@@ -2501,7 +2496,6 @@ class TimetableSettings {
           hfIslandTimeoutActive ?? this.hfIslandTimeoutActive,
       hfIslandTimeoutPost: hfIslandTimeoutPost ?? this.hfIslandTimeoutPost,
       hfIconAEnabled: hfIconAEnabled ?? this.hfIconAEnabled,
-      hfStatusTextColor: hfStatusTextColor ?? this.hfStatusTextColor,
       hfOutEffectStatusEnabled:
           hfOutEffectStatusEnabled ?? this.hfOutEffectStatusEnabled,
       hfOutEffectStatusColor:

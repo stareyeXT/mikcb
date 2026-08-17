@@ -592,7 +592,6 @@ Future<void> _liveUpdateActivityBody(
       hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
       hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
-      hfStatusTextColor: settings.hfStatusTextColor,
       hfIconAEnabled: settings.hfIconAEnabled,
       hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
       hfOutEffectStatusColor: settings.hfOutEffectStatusColor,

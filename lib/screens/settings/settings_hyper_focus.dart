@@ -111,7 +111,6 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
       stage: stage,
-      hfStatusTextColor: settings.hfStatusTextColor,
       hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
       hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
