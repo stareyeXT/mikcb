@@ -1520,8 +1520,10 @@ class MainActivity : FlutterActivity() {
                             }
                         }
 
+                        val islandBHasCountdown =
+                            (templates["islandB_$templateStage"] ?: "").contains("倒计时")
                         if (islandBText.isNotEmpty()) {
-                            if (hasTimer) {
+                            if (hasTimer && islandBHasCountdown) {
                                 sameWidthDigitInfo {
                                     timerInfo {
                                         timerType = -1

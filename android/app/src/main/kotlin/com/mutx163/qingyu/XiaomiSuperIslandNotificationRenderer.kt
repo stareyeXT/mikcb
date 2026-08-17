@@ -341,7 +341,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                     imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor } } }
                     val b = resolve(templates["islandB_$key"] ?: "")
                     if (b.isNotEmpty()) {
-                        if (settings.showCountdown && !isPost) {
+                        if (settings.showCountdown && !isPost && b.contains("倒计时")) {
                             sameWidthDigitInfo { timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }; content = b; turnAnim = true; showHighlightColor = true }
                         } else if (b.matches(Regex("[0-9.:：\\-]+"))) {
                             sameWidthDigitInfo { content = b; turnAnim = true; showHighlightColor = true }
