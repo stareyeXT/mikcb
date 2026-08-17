@@ -1322,6 +1322,7 @@ class LiveUpdateService : Service() {
             ),
             beforeClassAction = if (stage.isUpcoming) buildBeforeClassQuickAction() else null,
             dismissAction = if (stage.isStatusBarOnly) buildDismissStatusBarAction() else null,
+            useProgressStyle = superIslandEngine != "hyperFocusApi",
         )
         val actuallyPromotable = shouldPromote && (
             decoration.isVendorSurfaceReady ||

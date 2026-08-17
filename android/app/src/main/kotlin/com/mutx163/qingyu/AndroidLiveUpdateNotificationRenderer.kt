@@ -36,6 +36,7 @@ internal class AndroidLiveUpdateNotificationRenderer(private val context: Contex
         ),
         beforeClassAction: Notification.Action? = null,
         dismissAction: Notification.Action? = null,
+        useProgressStyle: Boolean = true,
     ): LiveUpdateRenderResult {
         val requestedPromotion = requestPromotion
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -62,13 +63,23 @@ internal class AndroidLiveUpdateNotificationRenderer(private val context: Contex
             setOngoing(true)
             setAutoCancel(false)
             setOnlyAlertOnce(true)
-            setCategory(if (state.stage.isStatusBarOnly) Notification.CATEGORY_REMINDER else Notification.CATEGORY_PROGRESS)
+            setCategory(
+                if (state.stage.isStatusBarOnly) {
+                    Notification.CATEGORY_REMINDER
+                } else if (useProgressStyle) {
+                    Notification.CATEGORY_PROGRESS
+                } else {
+                    Notification.CATEGORY_SERVICE
+                }
+            )
             setColorized(false)
             setShowWhen(!state.shouldPromote)
             setWhen(if (state.stage.isUpcoming) state.startAtMillis else state.endAtMillis)
             setUsesChronometer(false)
             val progress = state.progress
-            if (progress != null) setProgress(progress.progressMax, progress.progressUnits, false) else setProgress(0, 0, false)
+            if (useProgressStyle) {
+                if (progress != null) setProgress(progress.progressMax, progress.progressUnits, false) else setProgress(0, 0, false)
+            }
             if (state.showStandardNotification && !state.shouldPromote && state.subText.isNotBlank()) setSubText(state.subText)
             if (Build.VERSION.SDK_INT >= 36) {
                 if (state.stage.isStatusBarOnly) {
@@ -86,7 +97,7 @@ internal class AndroidLiveUpdateNotificationRenderer(private val context: Contex
         beforeClassAction?.let(builder::addAction)
         dismissAction?.let(builder::addAction)
         val progress = state.progress
-        if (progress != null && Build.VERSION.SDK_INT >= 36) {
+        if (progress != null && Build.VERSION.SDK_INT >= 36 && useProgressStyle) {
             builder.setStyle(
                 Notification.ProgressStyle()
                     .setStyledByProgress(true)
