@@ -1590,7 +1590,7 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
     'islandA_active': '短课名',
     'islandA_post': '短课名',
     'islandB_pre': '',
-    'islandB_active': '上课中',
+    'islandB_active': '倒计时',
     'islandB_post': '已下课',
   };
 

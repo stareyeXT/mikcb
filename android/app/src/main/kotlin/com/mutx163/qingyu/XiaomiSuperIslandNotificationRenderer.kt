@@ -339,8 +339,16 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                 islandProperty = 1; islandTimeout = when (key) { "pre" -> settings.timeoutPre; "post" -> settings.timeoutPost; else -> settings.timeoutActive }
                 bigIslandArea {
                     imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 } }
-                    val b = templates["islandB_$key"] ?: ""
-                    if (b.isNotEmpty()) sameWidthDigitInfo { if (settings.showCountdown && !isPost && b.contains("倒计时")) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis } else content = resolve(b); turnAnim = true; showHighlightColor = true }
+                    val b = resolve(templates["islandB_$key"] ?: "")
+                    if (b.isNotEmpty()) {
+                        if (settings.showCountdown && !isPost) {
+                            sameWidthDigitInfo { timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }; turnAnim = true; showHighlightColor = true }
+                        } else if (b.matches(Regex("[0-9.:：\\-]+"))) {
+                            sameWidthDigitInfo { content = b; turnAnim = true; showHighlightColor = true }
+                        } else {
+                            imageTextInfoRight { textInfo { title = b; showHighlightColor = true } }
+                        }
+                    }
                 }
                 smallIslandArea { }; shareData { title = state.courseName; content = state.location }
             }

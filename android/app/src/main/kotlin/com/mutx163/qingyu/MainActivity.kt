@@ -1528,11 +1528,18 @@ class MainActivity : FlutterActivity() {
                                     turnAnim = true
                                     showHighlightColor = true
                                 }
-                            } else {
+                            } else if (islandBText.isNotEmpty() && islandBText.matches(Regex("[0-9.:：\\-]+"))) {
                                 sameWidthDigitInfo {
                                     content = islandBText
                                     turnAnim = true
                                     showHighlightColor = true
+                                }
+                            } else if (islandBText.isNotEmpty()) {
+                                imageTextInfoRight {
+                                    textInfo {
+                                        title = islandBText
+                                        showHighlightColor = true
+                                    }
                                 }
                             }
                         }
