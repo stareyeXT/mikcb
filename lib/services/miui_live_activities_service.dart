@@ -329,6 +329,9 @@ class MiuiLiveActivitiesService {
     int hfIslandTimeoutActive = 600,
     int hfIslandTimeoutPost = 600,
     String hfStatusTextColor = '#FFFFFFFF',
+    bool hfIconAEnabled = true,
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
     bool validateAgainstSchedule = false,
     String superIslandEngine = 'hyperFocusApi',
   }) async {
@@ -380,6 +383,9 @@ class MiuiLiveActivitiesService {
         hfIslandTimeoutActive: hfIslandTimeoutActive,
         hfIslandTimeoutPost: hfIslandTimeoutPost,
         hfStatusTextColor: hfStatusTextColor,
+        hfIconAEnabled: hfIconAEnabled,
+        hfOutEffectStatusEnabled: hfOutEffectStatusEnabled,
+        hfOutEffectStatusColor: hfOutEffectStatusColor,
       );
       await _channel.invokeMethod('startLiveUpdate', data);
     } catch (e, stackTrace) {
@@ -505,6 +511,9 @@ class MiuiLiveActivitiesService {
     int hfIslandTimeoutActive = 600,
     int hfIslandTimeoutPost = 600,
     String hfStatusTextColor = '#FFFFFFFF',
+    bool hfIconAEnabled = true,
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
     bool validateAgainstSchedule = false,
     String superIslandEngine = 'hyperFocusApi',
   }) {
@@ -554,6 +563,9 @@ class MiuiLiveActivitiesService {
         'hfIslandTimeoutActive': hfIslandTimeoutActive,
         'hfIslandTimeoutPost': hfIslandTimeoutPost,
         'hfStatusTextColor': hfStatusTextColor,
+        'hfIconAEnabled': hfIconAEnabled,
+        'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled,
+        'hfOutEffectStatusColor': hfOutEffectStatusColor,
       },
       'currentCourse': {
         'name': currentCourse.name,
@@ -803,6 +815,9 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     int hfIslandTimeoutActive = 600,
     int hfIslandTimeoutPost = 600,
     String hfStatusTextColor = '#FFFFFFFF',
+    bool hfIconAEnabled = true,
+    bool hfOutEffectStatusEnabled = true,
+    String hfOutEffectStatusColor = '#FFFFFFFF',
     bool validateAgainstSchedule = false,
     String superIslandEngine = 'hyperFocusApi',
   }) async {

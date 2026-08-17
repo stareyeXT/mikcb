@@ -593,6 +593,9 @@ Future<void> _liveUpdateActivityBody(
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
       hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
       hfStatusTextColor: settings.hfStatusTextColor,
+      hfIconAEnabled: settings.hfIconAEnabled,
+      hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
+      hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
     );
   } else {
     host._currentLiveCourseId = null;

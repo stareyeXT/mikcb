@@ -556,6 +556,12 @@ private data class NativeLiveSettings(
     val liveTimeCorrectionSeconds: Int,
     val liveBeforeClassQuickAction: String,
     val superIslandEngine: String = "builtIn",
+    val islandTimeoutPre: Int = 300,
+    val islandTimeoutActive: Int = 600,
+    val islandTimeoutPost: Int = 600,
+    val iconAEnabled: Boolean = false,
+    val outEffectStatusEnabled: Boolean = false,
+    val outEffectStatusColor: String = "",
 )
 
 private data class NativeScheduleSnapshot(
@@ -1301,6 +1307,14 @@ object LiveUpdateScheduler {
                 settingsJson.optString("liveBeforeClassQuickAction", "none"),
             superIslandEngine =
                 settingsJson.optString("superIslandEngine", "builtIn"),
+            islandTimeoutPre = settingsJson.optInt("hfIslandTimeoutPre", 300),
+            islandTimeoutActive = settingsJson.optInt("hfIslandTimeoutActive", 600),
+            islandTimeoutPost = settingsJson.optInt("hfIslandTimeoutPost", 600),
+            iconAEnabled = settingsJson.optBoolean("hfIconAEnabled", false),
+            outEffectStatusEnabled =
+                settingsJson.optBoolean("hfOutEffectStatusEnabled", false),
+            outEffectStatusColor =
+                settingsJson.optString("hfOutEffectStatusColor", ""),
         )
 
         val coursesJson = json.optJSONArray("courses") ?: JSONArray()
@@ -1858,6 +1872,12 @@ object LiveUpdateScheduler {
             progressMilestoneTimeTexts = selection.progressMilestoneTimeTexts,
             validateAgainstSchedule = true,
             superIslandEngine = snapshot.settings.superIslandEngine,
+            islandTimeoutPre = snapshot.settings.islandTimeoutPre,
+            islandTimeoutActive = snapshot.settings.islandTimeoutActive,
+            islandTimeoutPost = snapshot.settings.islandTimeoutPost,
+            iconAEnabled = snapshot.settings.iconAEnabled,
+            outEffectStatusEnabled = snapshot.settings.outEffectStatusEnabled,
+            outEffectStatusColor = snapshot.settings.outEffectStatusColor,
         )
     }
 
