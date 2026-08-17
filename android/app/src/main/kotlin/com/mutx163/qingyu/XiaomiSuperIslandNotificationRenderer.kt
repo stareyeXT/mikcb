@@ -301,16 +301,18 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         val templates = loadHyperFocusTemplates(context)
         val key = hyperFocusTemplateStage(state.stage)
         val isPost = key == "post"
+        // 大课拆小节时课中倒计时指向下一小节下课点（里程碑），无断点时指向整课结束
+        val activeTarget = state.progress?.nextMilestoneAtMillis ?: state.endAtMillis
         // 课后阶段不再倒计时：目标时间设为课后窗口结束，避免被判为已过期而下岛
         val target = when {
             isPost -> state.endAtMillis + settings.timeoutPost * 1000L
             key == "pre" -> state.startAtMillis
-            else -> state.endAtMillis
+            else -> activeTarget
         }
         val countdownText = when {
             isPost -> ""
             key == "pre" -> formatCountdownForTemplate((state.startAtMillis - state.nowMillis).coerceAtLeast(0L))
-            else -> formatCountdownForTemplate((state.endAtMillis - state.nowMillis).coerceAtLeast(0L))
+            else -> formatCountdownForTemplate((activeTarget - state.nowMillis).coerceAtLeast(0L))
         }
         val elapsedText = if (key == "active") {
             formatElapsedForTemplate((state.nowMillis - state.startAtMillis).coerceAtLeast(0L))

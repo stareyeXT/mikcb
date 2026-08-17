@@ -1547,6 +1547,9 @@ class LiveUpdateService : Service() {
                     ?: remainingMillis,
                 secondsThresholdMillis = 60_000L,
             ),
+            nextMilestoneAtMillis = nextMilestoneIndex?.let {
+                startAtMillis + progressBreakOffsetsMillis[it]
+            },
         )
     }
 

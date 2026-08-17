@@ -57,6 +57,7 @@ internal data class LiveUpdateProgressState(
     val criticalTimeText: String,
     val breakPointUnits: List<Int>,
     val updatesEverySecond: Boolean,
+    val nextMilestoneAtMillis: Long?,
 )
 
 /**
