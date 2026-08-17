@@ -899,6 +899,22 @@ class LiveUpdateService : Service() {
                 }
                 lastTickerStage = stage
 
+                // 课后窗口让位于已激活的下一节课（含其课前提醒），避免吞掉连堂课程
+                if (stage == "afterClass" &&
+                    validateAgainstSchedule &&
+                    LiveUpdateScheduler.hasActiveLiveSelection(applicationContext, now)
+                ) {
+                    if (!LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = true,
+                        )
+                    ) {
+                        stopAndRemoveNotification()
+                    }
+                    return
+                }
+
                 val stageTimeoutSeconds = when (stage) {
                     "beforeClass" -> islandTimeoutPre
                     "afterClass" -> islandTimeoutPost
