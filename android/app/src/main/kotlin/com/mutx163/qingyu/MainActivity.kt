@@ -1333,6 +1333,19 @@ class MainActivity : FlutterActivity() {
             val realStart = startAtMillis ?: buildCourseTimeMillis(startTime)
             val realEnd = endAtMillis ?: buildCourseTimeMillis(endTime)
             val hasRealTime = realStart != null && realEnd != null && realEnd > realStart
+            // 大课拆小节断点（相对 startAtMillis 的毫秒偏移），用于测试时把倒计时指向下一小节下课点
+            val progressBreakOffsetsMillis = args?.get("progressBreakOffsetsMillis")
+                ?.split(",")
+                ?.mapNotNull { it.trim().toLongOrNull() }
+                ?: emptyList()
+            val nextMilestoneAtMillis = if (realStart != null && progressBreakOffsetsMillis.isNotEmpty()) {
+                progressBreakOffsetsMillis
+                    .map { realStart + it }
+                    .filter { it > now }
+                    .minOrNull()
+            } else {
+                null
+            }
             val classStartAt: Long
             val classEndAt: Long
             val timerTarget: Long
@@ -1341,7 +1354,7 @@ class MainActivity : FlutterActivity() {
                 "active" -> {
                     classStartAt = now - 10 * 60_000L
                     classEndAt = now + 5 * 60_000L
-                    timerTarget = classEndAt
+                    timerTarget = nextMilestoneAtMillis ?: classEndAt
                     hintText = "距下课还有 5 分钟"
                 }
                 "post" -> {
@@ -1361,8 +1374,8 @@ class MainActivity : FlutterActivity() {
                         hasRealTime && realEnd!! > now -> {
                             classStartAt = realEnd
                             classEndAt = realEnd
-                            timerTarget = classStartAt
-                            hintText = "距下课还有 ${((classEndAt - now) / 60_000L + 1)} 分钟"
+                            timerTarget = nextMilestoneAtMillis ?: classEndAt
+                            hintText = "距下课还有 ${((timerTarget - now) / 60_000L + 1)} 分钟"
                         }
                         else -> {
                             classStartAt = now + 5 * 60_000L

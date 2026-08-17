@@ -94,6 +94,15 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
     final selection = provider.getTestLiveActivityCourseSelection();
     final course = selection?.currentCourse;
     appDebugLog('MiuiLive', '测试课程：${course?.name}');
+    final startAtMillis = selection?.currentStartAt?.millisecondsSinceEpoch;
+    final endAtMillis = selection?.currentEndAt?.millisecondsSinceEpoch;
+    final progressBreakOffsetsMillis = course == null
+        ? const <int>[]
+        : provider.buildLiveProgressBreakOffsetsMillis(
+            course,
+            startAtMillis: startAtMillis,
+            endAtMillis: endAtMillis,
+          );
     await _hyperFocusService.recordDiagnosticEvent(
       'send_test_focus_requested',
       '收到超级岛测试通知发送请求',
@@ -108,9 +117,12 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       courseName: course?.name,
       startTime: course?.startTime,
       endTime: course?.endTime,
+      startAtMillis: startAtMillis,
+      endAtMillis: endAtMillis,
       location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
       stage: stage,
+      progressBreakOffsetsMillis: progressBreakOffsetsMillis,
       hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
       hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
