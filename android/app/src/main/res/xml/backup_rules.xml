@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- fullBackupContent（Android 11 及以下）：云备份/adb 备份排除项 -->
+<full-backup-content>
+    <!-- 凭据密文：Keystore 密钥不随备份迁移，恢复后也不可解密，排除避免误导 -->
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+</full-backup-content>
