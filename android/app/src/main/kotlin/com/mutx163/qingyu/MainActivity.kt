@@ -1324,8 +1324,8 @@ class MainActivity : FlutterActivity() {
             val now = System.currentTimeMillis()
             val showCountdown = args?.get("showCountdown")?.toBooleanStrictOrNull() ?: true
             val templateStage = when (stage) {
-                "active", "beforeEnd" -> "active"
-                "post" -> "post"
+                "active", "beforeEnd", "duringClass", "duringClassStatusBar" -> "active"
+                "post", "afterClass" -> "post"
                 else -> "pre"
             }
             val startAtMillis = args?.get("startAtMillis")?.toLongOrNull()?.takeIf { it > 0L }
@@ -1469,12 +1469,15 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // 字段映射与 XiaomiSuperIslandNotificationRenderer.buildHyperFocusBundle 保持一致：
+                // content ← 运行时剩余/状态文本（兜底 hintTitle），extraTitle ← hintContent 模板，
+                // specialTitle ← hintSubcontent 模板，subTitle ← hintSubtitle 模板。
                 hintInfo {
                     type = 2
                     title = hintTitleText
-                    content = hintContentText.ifBlank { hintText }
+                    content = hintText.ifBlank { hintTitleText }
                     subTitle = hintSubtitleText
-                    extraTitle = ""
+                    extraTitle = hintContentText
                     specialTitle = hintSubcontentText
 
                     if (hasTimer) {

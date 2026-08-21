@@ -278,10 +278,10 @@ class MiuiLiveActivitiesService {
     }
   }
 
-  Future<void> startLiveUpdate(
+  /// 返回 false 表示通道调用失败（异常已被吞掉并上报），调用方可据此重试。
+  Future<bool> startLiveUpdate(
     Course currentCourse,
     Course? nextCourse, {
-    int autoDismissAfterStartMinutes = 0,
     String? stage,
     int beforeClassLeadMillis = 0,
     int? startAtMillis,
@@ -339,7 +339,6 @@ class MiuiLiveActivitiesService {
       final data = _buildData(
         currentCourse,
         nextCourse,
-        autoDismissAfterStartMinutes: autoDismissAfterStartMinutes,
         stage: stage,
         beforeClassLeadMillis: beforeClassLeadMillis,
         validateAgainstSchedule: validateAgainstSchedule,
@@ -386,6 +385,7 @@ class MiuiLiveActivitiesService {
         hfOutEffectStatusColor: hfOutEffectStatusColor,
       );
       await _channel.invokeMethod('startLiveUpdate', data);
+      return true;
     } catch (e, stackTrace) {
       await UmengAnalyticsService.reportDiagnostic(
         'live_update_start_failed',
@@ -394,6 +394,7 @@ class MiuiLiveActivitiesService {
         stackTrace: stackTrace,
       );
       appDebugLog('MiuiLive', '启动超级岛失败：$e');
+      return false;
     }
   }
 
@@ -461,7 +462,6 @@ class MiuiLiveActivitiesService {
   Map<String, dynamic> _buildData(
     Course currentCourse,
     Course? nextCourse, {
-    int autoDismissAfterStartMinutes = 0,
     String? stage,
     int beforeClassLeadMillis = 0,
     int? startAtMillis,
@@ -516,7 +516,6 @@ class MiuiLiveActivitiesService {
   }) {
     final data = <String, dynamic>{
       'superIslandEngine': superIslandEngine,
-      'autoDismissAfterStartMinutes': autoDismissAfterStartMinutes,
       'stage': stage,
       'beforeClassLeadMillis': beforeClassLeadMillis,
       'validateAgainstSchedule': validateAgainstSchedule,
@@ -678,6 +677,7 @@ class MiuiLiveActivitiesService {
 
   Future<String?> sendTestFocusNotification({
     String? courseName,
+    String? shortName,
     String? startTime,
     String? endTime,
     int? startAtMillis,
@@ -700,6 +700,7 @@ class MiuiLiveActivitiesService {
     try {
       await _channel.invokeMethod('sendTestFocus', {
         'courseName': ?courseName,
+        'shortName': ?shortName,
         'startTime': ?startTime,
         'endTime': ?endTime,
         'startAtMillis': ?startAtMillis?.toString(),
@@ -766,10 +767,9 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
   }
 
   @override
-  Future<void> startLiveUpdate(
+  Future<bool> startLiveUpdate(
     Course currentCourse,
     Course? nextCourse, {
-    int autoDismissAfterStartMinutes = 0,
     String? stage,
     int beforeClassLeadMillis = 0,
     int? startAtMillis,
@@ -823,6 +823,7 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     String superIslandEngine = 'hyperFocusApi',
   }) async {
     startLiveUpdateCallCount++;
+    return true;
   }
 
   @override
@@ -856,6 +857,7 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
   @override
   Future<String?> sendTestFocusNotification({
     String? courseName,
+    String? shortName,
     String? startTime,
     String? endTime,
     int? startAtMillis,

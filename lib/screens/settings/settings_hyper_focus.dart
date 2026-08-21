@@ -116,8 +116,13 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       },
     );
     final settings = provider.settings;
+    // 与正式路径（live_activity_controller）一致：课前用 beforeClass 展示设置，其余阶段用 duringEnd
+    final displaySettings = stage == 'pre'
+        ? settings.beforeClassDisplaySettings
+        : settings.duringEndDisplaySettings;
     final error = await _hyperFocusService.sendTestFocusNotification(
       courseName: course?.name,
+      shortName: course?.shortName,
       startTime: course?.startTime,
       endTime: course?.endTime,
       startAtMillis: startAtMillis,
@@ -125,6 +130,7 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
       stage: stage,
+      showCountdown: displaySettings.showCountdown,
       progressBreakOffsetsMillis: progressBreakOffsetsMillis,
       hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
       hfIslandTimeoutActive: settings.hfIslandTimeoutActive,

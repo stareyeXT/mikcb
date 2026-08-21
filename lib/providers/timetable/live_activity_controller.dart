@@ -499,6 +499,8 @@ Future<void> _liveUpdateActivityBody(
     if (host._currentLiveCourseId == liveActivityKey) {
       return;
     }
+    // 先置 key 防止推送进行中被并发 tick 重复触发；失败时回滚以便下一轮重试。
+    final previousLiveActivityKey = host._currentLiveCourseId;
     host._currentLiveCourseId = liveActivityKey;
 
     final displayCourse = liveCourse.copyWith(
@@ -537,7 +539,7 @@ Future<void> _liveUpdateActivityBody(
           endAtMillis: endAtMillis,
         );
 
-    await host._liveActivitiesService.startLiveUpdate(
+    final startedOk = await host._liveActivitiesService.startLiveUpdate(
       displayCourse,
       displayNextCourse,
       stage: selection.stage.name,
@@ -596,6 +598,11 @@ Future<void> _liveUpdateActivityBody(
       hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
       hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
     );
+    if (!startedOk) {
+      // 通道异常已被服务层吞掉并上报：回滚去重 key，让下一次 tick 重试推送，
+      // 否则岛会一直丢失到阶段/课程切换。
+      host._currentLiveCourseId = previousLiveActivityKey;
+    }
   } else {
     host._currentLiveCourseId = null;
     host._lastLiveActivityStageKey = null;

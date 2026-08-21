@@ -265,7 +265,6 @@ class LiveUpdateService : Service() {
     private var startTimeText = ""
     private var endTimeText = ""
     private var nextName = ""
-    private var autoDismissAfterStartMinutes = 0
     private var activityStage = ""
     private var endSecondsCountdownThreshold = 60
     private var showCountdown = true
@@ -385,7 +384,6 @@ class LiveUpdateService : Service() {
             startTimeText = sanitizeTextExtra(intent?.getStringExtra("startTime"))
             endTimeText = sanitizeTextExtra(intent?.getStringExtra("endTime"))
             nextName = sanitizeTextExtra(intent?.getStringExtra("nextName"))
-            autoDismissAfterStartMinutes = intent?.getIntExtra("autoDismissAfterStartMinutes", 0) ?: 0
             activityStage = intent?.getStringExtra("stage").orEmpty()
             lastTickerStage = null
             endSecondsCountdownThreshold =
@@ -465,6 +463,11 @@ class LiveUpdateService : Service() {
                 intent?.getLongExtra("endAtMillis", 0L)?.takeIf { it > 0L }
                     ?: buildCourseTimeMillis(endTimeText)
                     ?: startAtMillis
+            if (endAtMillis <= startAtMillis) {
+                // extras 与时间文本解析全失败时 startAt==endAt 的零长会话：
+                // 立即判为过期，不进入最长 islandTimeoutPost 秒的课后幽灵窗口
+                islandTimeoutPost = 0
+            }
 
             lastRemainingText = "-1"
             lastProgressUnits = -1
@@ -851,20 +854,6 @@ class LiveUpdateService : Service() {
                     }
                     return
                 }
-                if (autoDismissAfterStartMinutes > 0 &&
-                    now >= startAtMillis + autoDismissAfterStartMinutes * 60_000L
-                ) {
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-
                 if (stage == null) {
                     if (!LiveUpdateScheduler.reschedule(
                             applicationContext,
@@ -886,15 +875,22 @@ class LiveUpdateService : Service() {
                         islandSessionStartedAt = now
                         islandSuppressed = false
                     } else {
-                        if (!LiveUpdateScheduler.reschedule(
-                                applicationContext,
-                                allowImmediateStart = true,
-                                stopStaleSessions = validateAgainstSchedule,
-                            )
-                        ) {
-                            stopAndRemoveNotification()
+                        val rescheduled = LiveUpdateScheduler.reschedule(
+                            applicationContext,
+                            allowImmediateStart = true,
+                            stopStaleSessions = validateAgainstSchedule,
+                        )
+                        if (rescheduled) {
+                            // onStartCommand 将携带新阶段设置重启渲染
+                            return
                         }
-                        return
+                        if (validateAgainstSchedule) {
+                            // 可校验会话被调度器判为过期：正常停止
+                            stopAndRemoveNotification()
+                            return
+                        }
+                        // 直启会话（validateAgainstSchedule=false）：调度器被挂起或无快照时
+                        // 不再误停，降级为本地续渲染当前阶段。
                     }
                 }
                 lastTickerStage = stage
@@ -1306,8 +1302,9 @@ class LiveUpdateService : Service() {
             outEffectColor = outEffectStatusColor,
         )
 
-        val xiaomi = if (islandSuppressed && superIslandEngine == "hyperFocusApi") {
-            // 消失时间到期后持续携带 dismiss 参数，防止重推把岛重新唤起
+        val xiaomi = if (islandSuppressed) {
+            // 消失时间到期后持续携带 dismiss 参数（hyperFocusApi）或不再附加焦点参数（builtIn），
+            // 防止每分钟重推把岛重新唤起——两种引擎统一走 renderDismiss。
             xiaomiSuperIslandRenderer.renderDismiss(superIslandEngine)
         } else {
             xiaomiSuperIslandRenderer.render(state, xiaomiSettings)
@@ -1395,7 +1392,6 @@ class LiveUpdateService : Service() {
                     "endReminderLeadMillis" to endReminderLeadMillis,
                     "liveClassReminderStartMinutes" to liveClassReminderStartMinutes,
                     "endSecondsCountdownThreshold" to endSecondsCountdownThreshold,
-                    "autoDismissAfterStartMinutes" to autoDismissAfterStartMinutes,
                 ),
                 "notification" to linkedMapOf(
                     "shouldPromote" to shouldPromote,
@@ -1449,6 +1445,7 @@ class LiveUpdateService : Service() {
             @Suppress("DEPRECATION")
             stopForeground(true)
         }
+        hasStartedForeground = false
         LiveUpdateScheduler.onLiveUpdateStopped(applicationContext)
         stopSelf()
     }
@@ -1484,9 +1481,9 @@ class LiveUpdateService : Service() {
         val m = (totalSec % 3600L) / 60L
         val s = totalSec % 60L
         return if (h > 0) {
-            String.format("%d:%02d:%02d", h, m, s)
+            String.format(java.util.Locale.ROOT, "%d:%02d:%02d", h, m, s)
         } else {
-            String.format("%02d:%02d", m, s)
+            String.format(java.util.Locale.ROOT, "%02d:%02d", m, s)
         }
     }
 

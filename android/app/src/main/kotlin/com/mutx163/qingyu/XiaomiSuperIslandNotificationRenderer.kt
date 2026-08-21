@@ -112,6 +112,8 @@ internal data class XiaomiSuperIslandRenderResult(
 internal class XiaomiSuperIslandNotificationRenderer(private val context: Context) {
     private var cachedLabelKey: String? = null
     private var cachedLabelBitmap: Bitmap? = null
+    private var cachedExpandedIconKey: String? = null
+    private var cachedExpandedIconValue: Icon? = null
 
     fun render(
         state: LiveUpdateNotificationState,
@@ -338,7 +340,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             island {
                 islandProperty = 1; islandTimeout = when (key) { "pre" -> settings.timeoutPre; "post" -> settings.timeoutPost; else -> settings.timeoutActive }
                 bigIslandArea {
-                    imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor } } }
+                    imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor.ifBlank { "#FFFFFFFF" } } } }
                     val b = resolve(templates["islandB_$key"] ?: "")
                     if (b.isNotEmpty()) {
                         if (settings.showCountdown && !isPost) {
@@ -351,7 +353,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                     }
                 }
                 smallIslandArea {
-                    combinePicInfo { picInfo { type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor } } }
+                    combinePicInfo { picInfo { type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor.ifBlank { "#FFFFFFFF" } } } }
                 }
                 shareData { title = state.courseName; content = state.location }
             }
@@ -551,10 +553,28 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         }.distinctBy { it.position }.sortedBy { it.position }
     }
 
-    private fun resolveExpandedIcon(settings: XiaomiSuperIslandSettings): Icon? = when (settings.expandedIconMode) {
-        "hidden" -> null
-        "custom_image" -> settings.expandedIconPath?.let { decodeSquareBitmap(it, dp(56f).toInt().coerceAtLeast(96)) }?.let(Icon::createWithBitmap)
-        else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Icon.createWithResource(context, R.mipmap.ic_launcher) else null
+    /** 展开图标按「模式+路径」缓存：render 每次通知重建都会调用，课末秒级刷新时避免主线程反复磁盘 IO。 */
+    private fun resolveExpandedIcon(settings: XiaomiSuperIslandSettings): Icon? {
+        if (settings.expandedIconMode == "hidden") return null
+        val key = if (settings.expandedIconMode == "custom_image") {
+            "custom_image|" + settings.expandedIconPath.orEmpty()
+        } else {
+            "default"
+        }
+        if (key == cachedExpandedIconKey) return cachedExpandedIconValue
+        val icon = when (settings.expandedIconMode) {
+            "custom_image" -> settings.expandedIconPath
+                ?.let { decodeSquareBitmap(it, dp(56f).toInt().coerceAtLeast(96)) }
+                ?.let(Icon::createWithBitmap)
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Icon.createWithResource(context, R.mipmap.ic_launcher)
+            } else {
+                null
+            }
+        }
+        cachedExpandedIconKey = key
+        cachedExpandedIconValue = icon
+        return icon
     }
 
     private fun parseColor(value: String): Int = try { val s = value.trim().removePrefix("#"); when (s.length) { 6 -> (0xFF000000 or s.toLong(16)).toInt(); 8 -> s.toLong(16).toInt(); else -> 0xFFFFFFFF.toInt() } } catch (_: Exception) { 0xFFFFFFFF.toInt() }

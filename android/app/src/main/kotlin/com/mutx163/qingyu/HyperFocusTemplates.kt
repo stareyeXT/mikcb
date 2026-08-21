@@ -1,79 +1,7 @@
 package com.mutx163.qingyu
 
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import android.view.HapticFeedbackConstants
-import android.Manifest
-import android.app.ActivityManager
-import android.app.AppOpsManager
-import android.app.DownloadManager
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.appwidget.AppWidgetManager
-import android.content.ActivityNotFoundException
-import android.content.ComponentName
-import android.content.ContentResolver
-import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
-import android.provider.OpenableColumns
-import android.content.pm.PackageManager
-import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.BitmapShader
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.Rect
-import android.graphics.RectF
-import android.graphics.Shader
-import android.graphics.Typeface
-import android.graphics.drawable.Icon
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Environment
-import android.os.Handler
-import android.os.IBinder
-import android.os.Looper
-import android.os.PowerManager
-import android.provider.MediaStore
-import android.provider.Settings
-import android.text.TextPaint
-import android.text.TextUtils
-import android.util.Log
-import android.util.TypedValue
-import android.webkit.URLUtil
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.xzakota.hyper.notification.common.model.TimerInfo
-import com.xzakota.hyper.notification.focus.FocusNotification
-import com.xzakota.hyper.notification.focus.model.ActionInfo
-import com.xzakota.hyper.notification.focus.model.BaseInfo
-import com.xzakota.hyper.notification.focus.model.HintInfo
-import com.xzakota.hyper.notification.focus.model.PicInfo
-import com.xzakota.hyper.notification.island.model.BigIslandArea
-import com.xzakota.hyper.notification.island.model.ImageTextInfo
-import com.xzakota.hyper.notification.island.model.SameWidthDigitInfo
-import com.xzakota.hyper.notification.island.model.ShareData
-import com.xzakota.hyper.notification.island.model.SmallIslandArea
-import com.xzakota.hyper.notification.island.model.TextInfo
-import com.xzakota.hyper.notification.island.template.IslandTemplate
-import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.MethodChannel
-import org.json.JSONObject
 import java.util.Locale
-import java.io.File
-import java.util.Calendar
-import kotlin.math.ceil
 
 // ── HyperFocus Template System (top-level, shared by MainActivity and LiveUpdateService) ──
 
@@ -85,7 +13,7 @@ internal val hfDefaultTemplates = mapOf(
     "islandA_active" to "短课名",
     "islandA_post" to "短课名",
     "islandB_pre" to "",
-    "islandB_active" to "上课中",
+    "islandB_active" to "倒计时",
     "islandB_post" to "已下课",
     "baseTitle_pre" to "课名",
     "baseTitle_active" to "课名",
@@ -173,9 +101,9 @@ internal fun formatCountdownForTemplate(millis: Long): String {
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
     return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
     } else {
-        "%02d:%02d".format(minutes, seconds)
+        String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
     }
 }
 
@@ -185,8 +113,8 @@ internal fun formatElapsedForTemplate(millis: Long): String {
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
     return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
     } else {
-        "%02d:%02d".format(minutes, seconds)
+        String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
     }
 }

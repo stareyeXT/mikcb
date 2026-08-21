@@ -853,10 +853,12 @@ object LiveUpdateScheduler {
         val current = data["currentCourse"] as? Map<String, Any> ?: emptyMap()
         val next = data["nextCourse"] as? Map<String, Any>
         val islandConfig = data["islandConfig"] as? Map<String, Any> ?: emptyMap()
+        // 断点偏移按升序兜底排序：下游 indexOfFirst/firstOrNull{>elapsed} 隐含升序假设，
+        // 调度路径已保证有序，这里防 Flutter 直传乱序导致里程碑/倒计时目标错位。
         val progressBreakOffsetsMillis =
             (data["progressBreakOffsetsMillis"] as? List<*>)?.mapNotNull {
                 (it as? Number)?.toLong()
-            }?.toLongArray() ?: longArrayOf()
+            }?.sorted()?.toLongArray() ?: longArrayOf()
         val progressMilestoneLabels =
             (data["progressMilestoneLabels"] as? List<*>)?.mapNotNull { it as? String }
                 ?: emptyList()
@@ -1384,7 +1386,6 @@ object LiveUpdateScheduler {
             putExtra("startTime", payload.currentCourse.startTime)
             putExtra("endTime", payload.currentCourse.endTime)
             putExtra("nextName", payload.nextCourse?.name ?: "")
-            putExtra("autoDismissAfterStartMinutes", 0)
             putExtra("stage", payload.stage)
             putExtra("beforeClassLeadMillis", payload.beforeClassLeadMillis)
             putExtra("startAtMillis", payload.startAtMillis)

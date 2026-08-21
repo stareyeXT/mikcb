@@ -104,6 +104,11 @@ class LiveActivityLogic {
         resolvedEndAtMillis <= resolvedStartAtMillis) {
       return const [];
     }
+    // 时长 ≤2ms 时下方 clamp(1, total-1) 的下界会大于上界而抛 ArgumentError，
+    // 这种亚毫秒级"课程"没有可拆的小节断点，直接返回空。
+    if (resolvedEndAtMillis - resolvedStartAtMillis <= 2) {
+      return const [];
+    }
 
     final sectionStartMinutes = parseClockMinutes(
       sections[firstSectionIndex].startTime,
