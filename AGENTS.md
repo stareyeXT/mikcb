@@ -9,13 +9,13 @@ qíngyǔ (qingyu) — Flutter 课表/校园生活 app，小米澎湃超级岛（
 flutter analyze
 flutter test
 
-# Android Kotlin 单测（注意：build 目录在仓库根 ../build，勿在 android/ 内找产物）
-./gradlew :app:testProdDebugUnitTest -x compileFlutterBuildProdDebug
+# Android Kotlin 单测（gradlew 在 android/ 下，不在仓库根；build 目录在仓库根 ../build，勿在 android/ 内找产物）
+android/gradlew -p android :app:testProdDebugUnitTest -x compileFlutterBuildProdDebug
 
 # 构建（flavor: dev / prod；两个 flavor 是不同 applicationId，可并存安装）
-./gradlew :app:assembleProdDebug     # 正式包 debug（com.mutx163.qingyu）
-./gradlew :app:assembleDevDebug      # 开发包 debug（com.mutx163.qingyu.debug）
-./gradlew :app:assembleProdRelease   # 正式包 release
+android/gradlew -p android :app:assembleProdDebug     # 正式包 debug（com.mutx163.qingyu）
+android/gradlew -p android :app:assembleDevDebug      # 开发包 debug（com.mutx163.qingyu.debug）
+android/gradlew -p android :app:assembleProdRelease   # 正式包 release
 # APK 产物：build/app/outputs/flutter-apk/app-{dev,prod}-{debug,release}.apk
 ```
 
