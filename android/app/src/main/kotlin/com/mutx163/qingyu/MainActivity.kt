@@ -1408,8 +1408,22 @@ class MainActivity : FlutterActivity() {
 
             val templates = loadHyperFocusTemplates(this)
 
-            val countdownText = ""
-            val elapsedText = ""
+            // 与 XiaomiSuperIslandNotificationRenderer.buildHyperFocusBundle 同步：
+            // 倒计时/正计时按阶段实时计算，否则模板里的 {倒计时}/{正计时} 变量
+            // 会被 resolveTemplate 替换为空并整段丢弃，测试通知与正式渲染不一致。
+            val activeTarget = nextMilestoneAtMillis ?: classEndAt
+            val countdownText = when {
+                templateStage == "post" -> ""
+                templateStage == "pre" ->
+                    formatCountdownForTemplate((classStartAt - now).coerceAtLeast(0L))
+                else ->
+                    formatCountdownForTemplate((activeTarget - now).coerceAtLeast(0L))
+            }
+            val elapsedText = if (templateStage == "active") {
+                formatElapsedForTemplate((now - classStartAt).coerceAtLeast(0L))
+            } else {
+                ""
+            }
 
             val r = { tpl: String ->
                 resolveTemplate(
