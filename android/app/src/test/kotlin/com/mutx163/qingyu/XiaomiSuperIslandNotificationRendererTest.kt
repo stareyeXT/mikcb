@@ -119,4 +119,27 @@ class XiaomiSuperIslandNotificationRendererTest {
         assertEquals("1:01:05", formatCountdownForTemplate(3_665_000L))
         assertEquals("25:00:00", formatElapsedForTemplate(90_000_000L))
     }
+
+    /**
+     * 岛右侧后缀严格按模板渲染：只有模板含「倒计时」token 且开关开启、非课后阶段，
+     * 才渲染系统走秒数字；否则纯文字，开关不再强制注入倒计时。
+     */
+    @Test
+    fun islandWantsSystemTimerOnlyWhenTemplateRequestsIt() {
+        assertTrue(islandWantsSystemTimer("倒计时", showCountdown = true, isPost = false))
+        assertTrue(islandWantsSystemTimer("距离下课,{倒计时}", showCountdown = true, isPost = false))
+        assertFalse(islandWantsSystemTimer("上课中", showCountdown = true, isPost = false))
+        // 开关关闭：即使模板写了「倒计时」也不走系统计时（退化为静态数字文本分支）
+        assertFalse(islandWantsSystemTimer("倒计时", showCountdown = false, isPost = false))
+        // 课后阶段永不走秒
+        assertFalse(islandWantsSystemTimer("倒计时", showCountdown = true, isPost = true))
+    }
+
+    @Test
+    fun islandLabelWithoutTimerTokensStripsOnlyTheTimerToken() {
+        assertEquals("", islandLabelWithoutTimerTokens("倒计时"))
+        assertEquals("", islandLabelWithoutTimerTokens("{倒计时}"))
+        assertEquals("距离下课", islandLabelWithoutTimerTokens("距离下课,倒计时"))
+        assertEquals("上课中", islandLabelWithoutTimerTokens(" 上课中 "))
+    }
 }

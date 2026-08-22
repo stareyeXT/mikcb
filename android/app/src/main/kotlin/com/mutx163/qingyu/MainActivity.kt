@@ -1441,7 +1441,8 @@ class MainActivity : FlutterActivity() {
 
             val tickerText = r(templates["ticker_$templateStage"] ?: "")
             val islandAText = r(templates["islandA_$templateStage"] ?: "")
-            val islandBText = r(templates["islandB_$templateStage"] ?: "")
+            val islandBRaw = templates["islandB_$templateStage"] ?: ""
+            val islandBText = r(islandBRaw)
             val baseTitleText = r(templates["baseTitle_$templateStage"] ?: "")
             val baseContentText = r(templates["baseContent_$templateStage"] ?: "")
             val baseSubcontentText = r(templates["baseSubcontent_$templateStage"] ?: "")
@@ -1457,7 +1458,10 @@ class MainActivity : FlutterActivity() {
             }
             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
 
-            val hasTimer = showCountdown && timerTarget > 0L && timerTarget > now
+            // 与 renderer 同步：走秒仅在模板含「倒计时」token 时渲染，标签去掉该 token
+            val islandBWantTimer = islandWantsSystemTimer(islandBRaw, showCountdown, templateStage == "post")
+            val islandBLabel = if (islandBWantTimer) r(islandLabelWithoutTimerTokens(islandBRaw)) else islandBText
+            val hasTimer = islandBWantTimer && timerTarget > 0L && timerTarget > now
             val extras = FocusNotification.buildV3 {
                 business = "course_schedule"
                 updatable = true
@@ -1539,30 +1543,28 @@ class MainActivity : FlutterActivity() {
                             }
                         }
 
-                        if (islandBText.isNotEmpty()) {
-                            if (hasTimer) {
-                                sameWidthDigitInfo {
-                                    timerInfo {
-                                        timerType = -1
-                                        timerWhen = timerTarget
-                                        timerSystemCurrent = now
-                                    }
-                                    content = islandBText
-                                    turnAnim = true
-                                    showHighlightColor = true
+                        if (hasTimer) {
+                            sameWidthDigitInfo {
+                                timerInfo {
+                                    timerType = -1
+                                    timerWhen = timerTarget
+                                    timerSystemCurrent = now
                                 }
-                            } else if (islandBText.isNotEmpty() && islandBText.matches(Regex("[0-9.:：\\-]+"))) {
-                                sameWidthDigitInfo {
-                                    content = islandBText
-                                    turnAnim = true
+                                if (islandBLabel.isNotEmpty()) content = islandBLabel
+                                turnAnim = true
+                                showHighlightColor = true
+                            }
+                        } else if (islandBText.isNotEmpty() && islandBText.matches(Regex("[0-9.:：\\-]+"))) {
+                            sameWidthDigitInfo {
+                                content = islandBText
+                                turnAnim = true
+                                showHighlightColor = true
+                            }
+                        } else if (islandBText.isNotEmpty()) {
+                            imageTextInfoRight {
+                                textInfo {
+                                    title = islandBText
                                     showHighlightColor = true
-                                }
-                            } else if (islandBText.isNotEmpty()) {
-                                imageTextInfoRight {
-                                    textInfo {
-                                        title = islandBText
-                                        showHighlightColor = true
-                                    }
                                 }
                             }
                         }

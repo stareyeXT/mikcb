@@ -73,7 +73,7 @@ scheduler Wire 阶段值 ↔ 模板 key：
 - `islandA` — 大岛 A 区（左侧）文字
 - `islandB` — 大岛 B 区（右侧）文字
 
-变量（`resolveTemplate` 支持）：`{课名}` `{短课名}` `{教室}` `{教师}` `{开始}` `{结束}` `{倒计时}` `{正计时}`。islandB 含"倒计时"字面量或 showCountdown 开启 → 渲染倒计时数字。
+变量（`resolveTemplate` 支持）：`{课名}` `{短课名}` `{教室}` `{教师}` `{开始}` `{结束}` `{倒计时}` `{正计时}`。islandB **严格按模板**：仅当模板含「倒计时」token 且 showCountdown 开启、非 post 阶段才渲染系统走秒数字（`islandWantsSystemTimer`），数字旁标签=去掉该 token 后的解析值；纯文字/纯数字模板走 imageTextInfoRight / 静态 sameWidthDigitInfo，开关不再强制注入倒计时。
 
 ### 关键文件
 - `android/.../qingyu/XiaomiSuperIslandNotificationRenderer.kt` — 正式超级岛渲染（V3、进度环、combinePicInfo、标签 bitmap、isXiaomiFamilyDevice 判定）

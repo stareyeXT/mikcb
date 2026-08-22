@@ -118,3 +118,19 @@ internal fun formatElapsedForTemplate(millis: Long): String {
         String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
     }
 }
+
+/** 岛右侧后缀是否请求系统走秒计时：模板含「倒计时」token 且开关开启、非课后阶段。 */
+internal fun islandWantsSystemTimer(rawTemplate: String, showCountdown: Boolean, isPost: Boolean): Boolean {
+    if (!showCountdown || isPost) return false
+    return rawTemplate.split(",")
+        .map { it.trim() }
+        .any { it == "倒计时" || it == "{倒计时}" }
+}
+
+/** 去掉模板中的「倒计时」token，剩余部分作为走秒数字旁的标签。 */
+internal fun islandLabelWithoutTimerTokens(rawTemplate: String): String {
+    return rawTemplate.split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && it != "倒计时" && it != "{倒计时}" }
+        .joinToString(",")
+}

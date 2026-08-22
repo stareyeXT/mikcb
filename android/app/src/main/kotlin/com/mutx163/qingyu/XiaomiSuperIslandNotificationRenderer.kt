@@ -344,11 +344,19 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                 islandProperty = 1; islandTimeout = when (key) { "pre" -> settings.timeoutPre; "post" -> settings.timeoutPost; else -> settings.timeoutActive }
                 bigIslandArea {
                     imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor.ifBlank { "#FFFFFFFF" } } } }
-                    val b = resolve(templates["islandB_$key"] ?: "")
-                    if (b.isNotEmpty()) {
-                        if (settings.showCountdown && !isPost) {
-                            sameWidthDigitInfo { timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }; content = b; turnAnim = true; showHighlightColor = true }
-                        } else if (b.matches(Regex("[0-9.:：\\-]+"))) {
+                    // 岛右侧严格按模板：只有模板含「倒计时」token 才渲染系统走秒数字，
+                    // 其余 token 解析为数字旁标签；纯文字模板走 imageTextInfoRight。
+                    val bRaw = templates["islandB_$key"] ?: ""
+                    val wantTimer = islandWantsSystemTimer(bRaw, settings.showCountdown, isPost)
+                    val b = resolve(if (wantTimer) islandLabelWithoutTimerTokens(bRaw) else bRaw)
+                    if (wantTimer) {
+                        sameWidthDigitInfo {
+                            timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
+                            if (b.isNotEmpty()) content = b
+                            turnAnim = true; showHighlightColor = true
+                        }
+                    } else if (b.isNotEmpty()) {
+                        if (b.matches(Regex("[0-9.:：\\-]+"))) {
                             sameWidthDigitInfo { content = b; turnAnim = true; showHighlightColor = true }
                         } else {
                             imageTextInfoRight { textInfo { title = b; showHighlightColor = true } }
