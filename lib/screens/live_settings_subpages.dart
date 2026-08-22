@@ -2017,6 +2017,14 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     });
   }
 
+  bool _previewShowCountdown() {
+    final provider = context.read<TimetableProvider>();
+    final displaySettings = _s == 'pre'
+        ? provider.settings.beforeClassDisplaySettings
+        : provider.settings.duringEndDisplaySettings;
+    return displaySettings.showCountdown;
+  }
+
   @override
   void dispose() {
     for (final c in _controllers.values) {
@@ -2059,6 +2067,15 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
                     expand: true,
                     onPressed: _sendTestNotification,
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    // 展开卡文本为发送瞬间的快照：hintInfo 不支持系统走秒计时，
+                    // 正式上课时服务每分钟重发通知，倒计时按分钟刷新。
+                    '测试通知为单次快照，倒计时定格在发送瞬间；正式上课时每分钟自动刷新，按分钟走动',
+                    style: HyperosTypography.listDetail(context).copyWith(
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   HyperosSectionLabel(text: '展开态'),
                   _variableSelectField('baseTitle_$_s', '主要标题'),
@@ -2094,12 +2111,23 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
                     style: HyperosTypography.listDetail(context),
                   ),
                   const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/hyperfocus/expanded_reference.png',
-                      fit: BoxFit.contain,
-                    ),
+                  _ExpandedIslandPreview(
+                    // 按 stage 重建：模拟时间轴锚点随阶段切换重置
+                    key: ValueKey('expanded_preview_$_s'),
+                    stage: _s,
+                    templates: {
+                      for (final key in const [
+                        'baseTitle',
+                        'baseContent',
+                        'baseSubcontent',
+                        'hintTitle',
+                        'hintContent',
+                        'hintSubcontent',
+                        'hintSubtitle',
+                      ])
+                        key: _controllers['${key}_$_s']?.text ?? '',
+                    },
+                    showCountdown: _previewShowCountdown(),
                   ),
                 ],
               ),
@@ -2115,4 +2143,311 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
 
 Color _parseColor(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
+}
+
+/// 展开态参考样式的实时渲染：字段角色与 XiaomiSuperIslandNotificationRenderer
+/// 的 buildHyperFocusBundle 一致，变量解析与 HyperFocusTemplates.resolveTemplate
+/// 逐条对齐（含花括号模式与逗号列表模式），倒计时逐秒走字模拟系统 timerInfo。
+class _ExpandedIslandPreview extends StatefulWidget {
+  const _ExpandedIslandPreview({
+    super.key,
+    required this.stage,
+    required this.templates,
+    required this.showCountdown,
+  });
+
+  final String stage;
+  final Map<String, String> templates;
+  final bool showCountdown;
+
+  @override
+  State<_ExpandedIslandPreview> createState() => _ExpandedIslandPreviewState();
+}
+
+class _ExpandedIslandPreviewState extends State<_ExpandedIslandPreview> {
+  static const _courseName = '高等数学';
+  static const _shortName = '高数';
+  static const _location = '教科A-101';
+  static const _teacher = '张老师';
+  static const _startTime = '08:00';
+  static const _endTime = '09:40';
+
+  late final DateTime _anchor = DateTime.now();
+  // 模拟时间轴：pre=5 分钟后上课；active=已上 12 分钟、还剩 33 分钟；post=刚下课。
+  late final DateTime _simStart = switch (widget.stage) {
+    'pre' => _anchor.add(const Duration(minutes: 5)),
+    'active' => _anchor.subtract(const Duration(minutes: 12)),
+    _ => _anchor.subtract(const Duration(minutes: 1)),
+  };
+  late final DateTime _simEnd = switch (widget.stage) {
+    'pre' => _anchor.add(const Duration(minutes: 105)),
+    'active' => _anchor.add(const Duration(minutes: 33)),
+    _ => _anchor,
+  };
+
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  String get _countdownText {
+    if (widget.stage == 'post') return '';
+    return _formatCountdown(_simEnd.difference(DateTime.now()));
+  }
+
+  String get _elapsedText {
+    if (widget.stage != 'active') return '';
+    return _formatCountdown(DateTime.now().difference(_simStart));
+  }
+
+  /// 与 HyperFocusTemplates.resolveTemplate 的逗号列表分支一致。
+  String _resolveList(String tpl) {
+    final variableMap = <String, String>{
+      '课名': _courseName,
+      '短课名': _shortName.isEmpty ? _courseName : _shortName,
+      '教室': _location.isEmpty ? _courseName : _location,
+      '教师': _teacher,
+      '开始': _startTime,
+      '结束': _endTime,
+      '倒计时': _countdownText,
+      '正计时': _elapsedText,
+    };
+    return tpl
+        .split(',')
+        .map((token) => token.trim())
+        .where((token) => token.isNotEmpty)
+        .map((token) => variableMap[token] ?? token)
+        .where((resolved) => resolved.isNotEmpty)
+        .join(' ');
+  }
+
+  /// 与 HyperFocusTemplates.resolveTemplate 一致：含花括号走替换，否则走列表。
+  String _resolve(String tpl) {
+    if (tpl.contains('{')) {
+      var result = tpl;
+      result = result.replaceAll('{课名}', _courseName);
+      result = result.replaceAll(
+        '{短课名}',
+        _shortName.isEmpty ? _courseName : _shortName,
+      );
+      result = result.replaceAll(
+        '{教室}',
+        _location.isEmpty ? _courseName : _location,
+      );
+      result = result.replaceAll('{教师}', _teacher);
+      result = result.replaceAll('{开始}', _startTime);
+      result = result.replaceAll('{结束}', _endTime);
+      result = result.replaceAll('{倒计时}', _countdownText);
+      result = result.replaceAll('{正计时}', _elapsedText);
+      return result;
+    }
+    return _resolveList(tpl);
+  }
+
+  String get _mainTitle => _resolve(widget.templates['baseTitle'] ?? '');
+
+  // 文本组件2：次要文本1 / 次要文本2 两个槽位（渲染端以 " · " 连接为 content）。
+  String get _secondaryFirst => _resolve(widget.templates['baseContent'] ?? '');
+
+  String get _secondarySecond =>
+      _resolve(widget.templates['baseSubcontent'] ?? '');
+
+  bool get _showTimer => widget.showCountdown && widget.stage != 'post';
+
+  // 按钮组件2：前置文本1 = 运行时剩余时间（timerInfo 驱动，空时回退主要小文本1）。
+  String get _prefixFirst {
+    if (_showTimer) return _countdownText;
+    return _resolve(widget.templates['hintTitle'] ?? '');
+  }
+
+  // 前置文本2 = hintContent（payload 中 extraTitle 承载）。
+  String get _prefixSecond => _resolve(widget.templates['hintContent'] ?? '');
+
+  // 主要小文本1 = hintTitle；主要小文本2 = hintSubtitle。
+  String get _hintMainFirst => _resolve(widget.templates['hintTitle'] ?? '');
+
+  String get _hintMainSecond =>
+      _resolve(widget.templates['hintSubtitle'] ?? '');
+
+  /// 参考图槽位框：有值显示解析后的值，无值灰显槽位名（与标注线框一致）。
+  Widget _slotBox(
+    String slotName,
+    String value, {
+    double fontSize = 14,
+    FontWeight fontWeight = FontWeight.w500,
+  }) {
+    final filled = value.isNotEmpty;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: filled
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.04),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: filled ? 0.25 : 0.12),
+          ),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          filled ? value : slotName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: filled ? 0.95 : 0.30),
+            fontSize: filled ? fontSize : 10,
+            fontWeight: fontWeight,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101010),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        children: [
+          // ── 文本组件2 ──
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _slotBox('主要文本1', _mainTitle,
+                            fontSize: 15, fontWeight: FontWeight.w700),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        _slotBox('次要文本1', _secondaryFirst, fontSize: 12),
+                        if (_secondarySecond.isNotEmpty)
+                          const SizedBox(width: 6),
+                        _slotBox('次要文本2', _secondarySecond, fontSize: 12),
+                        const SizedBox(width: 6),
+                        _slotBox('功能图标', '', fontSize: 10),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Image.asset(
+                  'assets/branding/launcher_icon.png',
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // ── 按钮组件2 ──
+          Container(
+            padding: const EdgeInsets.only(top: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          _slotBox('前置文本1', _prefixFirst, fontSize: 11),
+                          const SizedBox(width: 6),
+                          _slotBox('前置文本2', _prefixSecond, fontSize: 11),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _slotBox('主要小文本1', _hintMainFirst, fontSize: 13),
+                          const SizedBox(width: 6),
+                          _slotBox('主要小文本2', _hintMainSecond, fontSize: 13),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: Image.asset(
+                          'assets/branding/launcher_icon.png',
+                          width: 13,
+                          height: 13,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '查看课表',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatCountdown(Duration duration) {
+  if (duration.inMilliseconds <= 0) return '00:00';
+  final totalSeconds = duration.inSeconds;
+  final hours = totalSeconds ~/ 3600;
+  final minutes = (totalSeconds % 3600) ~/ 60;
+  final seconds = totalSeconds % 60;
+  final mm = minutes.toString().padLeft(2, '0');
+  final ss = seconds.toString().padLeft(2, '0');
+  return hours > 0 ? '$hours:$mm:$ss' : '$mm:$ss';
 }
