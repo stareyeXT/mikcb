@@ -326,6 +326,9 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         val resolve: (String) -> String = { template -> resolveTemplate(template, state.courseName, state.shortCourseNameRaw, state.location, state.teacher, state.startTimeText, state.endTimeText, countdownText, elapsedText) }
         FocusNotification.buildV3 {
             business = "course_schedule"; updatable = true; enableFloat = true
+            // 同 id 通知被 cancel 后重发需显式申请重新上岛（系统默认 close，
+            // 否则重装/暂停恢复/服务重启后岛永远不再显示）
+            reopen = "reopen"
             ticker = resolve(templates["ticker_$key"] ?: "{课名}"); aodTitle = ticker; islandFirstFloat = true
             outEffectSrc = if (settings.outEffectEnabled) "outer_glow" else ""
             outEffectColor = if (settings.outEffectEnabled) settings.outEffectColor else ""
@@ -379,6 +382,8 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             put("business", "class_schedule")
             put("updatable", true)
             put("enableFloat", true)
+            // 与 buildHyperFocusBundle 一致：同 id cancel 后重发需显式重新上岛
+            put("reopen", "reopen")
             put("ticker", state.title)
             put(
                 "baseInfo",

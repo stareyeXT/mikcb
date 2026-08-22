@@ -1448,6 +1448,8 @@ class MainActivity : FlutterActivity() {
                 business = "course_schedule"
                 updatable = true
                 enableFloat = true
+                // 与 XiaomiSuperIslandNotificationRenderer 同步：同 id cancel 后重发需显式重新上岛
+                reopen = "reopen"
                 ticker = tickerText
                 aodTitle = tickerText
                 islandFirstFloat = true
