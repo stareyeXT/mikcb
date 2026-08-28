@@ -36,6 +36,8 @@ class StorageService {
   static const String _htmlImportBaseUrlKey = 'html_import_base_url';
   static const String _htmlImportWeekFetchTimesKey =
       'html_import_week_fetch_times';
+  static const String _htmlImportFirstCourseWeekKey =
+      'html_import_first_course_week';
 
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
@@ -1083,6 +1085,34 @@ class StorageService {
     if (_prefs == null) await init();
     await _prefs?.remove(
       _profileScopedKey(_htmlImportWeekFetchTimesKey, profileId),
+    );
+  }
+
+  /// First course week chosen at import time, used to shift freshly fetched
+  /// 教务 week numbers into semester-week space on every refresh.
+  Future<int> getHtmlImportFirstCourseWeek(String profileId) async {
+    if (_prefs == null) await init();
+    final raw = _prefs?.getInt(
+      _profileScopedKey(_htmlImportFirstCourseWeekKey, profileId),
+    );
+    return raw ?? 1;
+  }
+
+  Future<void> saveHtmlImportFirstCourseWeek(
+    String profileId,
+    int firstCourseWeek,
+  ) async {
+    if (_prefs == null) await init();
+    await _prefs?.setInt(
+      _profileScopedKey(_htmlImportFirstCourseWeekKey, profileId),
+      firstCourseWeek,
+    );
+  }
+
+  Future<void> clearHtmlImportFirstCourseWeek(String profileId) async {
+    if (_prefs == null) await init();
+    await _prefs?.remove(
+      _profileScopedKey(_htmlImportFirstCourseWeekKey, profileId),
     );
   }
 }

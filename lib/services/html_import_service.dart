@@ -28,6 +28,10 @@ class HtmlWeekFetchProgress {
 class HtmlImportService {
   static final _uuid = const Uuid();
 
+  /// 进程级共享客户端：复用 TCP/TLS 连接（http 顶层 get() 每次新建连接，
+  /// 7 天页面就是 7 次完整握手）。仅用于本服务，不手动关闭。
+  static final http.Client _sharedClient = http.Client();
+
   static String buildUrlWithDate(String baseUrl, String dateStr) {
     final uri = Uri.tryParse(baseUrl.trim());
     if (uri == null) return baseUrl;
@@ -45,12 +49,13 @@ class HtmlImportService {
     String baseUrl,
     DateTime weekStartDate, {
     void Function(HtmlWeekFetchProgress progress)? onProgress,
+    Duration timeout = const Duration(seconds: 30),
   }) async {
     final totalDays = 7;
 
     final futures = <Future<List<Course>>>[];
     for (var i = 0; i < totalDays; i++) {
-      futures.add(_fetchDayCourses(baseUrl, weekStartDate, i));
+      futures.add(_fetchDayCourses(baseUrl, weekStartDate, i, timeout: timeout));
     }
 
     final results = await Future.wait(futures);
@@ -71,15 +76,16 @@ class HtmlImportService {
   Future<List<Course>> _fetchDayCourses(
     String baseUrl,
     DateTime weekStartDate,
-    int dayIndex,
-  ) async {
+    int dayIndex, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     final date = weekStartDate.add(Duration(days: dayIndex));
     final dateStr =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final url = buildUrlWithDate(baseUrl, dateStr);
 
     try {
-      final htmlContent = await fetchHtmlContent(url);
+      final htmlContent = await fetchHtmlContent(url, timeout: timeout);
       final result = parseHtml(htmlContent, sourceUrl: url);
       final dayOfWeek = dayIndex + 1;
       return result.courses.map((c) {
@@ -90,7 +96,10 @@ class HtmlImportService {
     }
   }
 
-  Future<String> fetchHtmlContent(String url) async {
+  Future<String> fetchHtmlContent(
+    String url, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     final uri = Uri.tryParse(url.trim());
     if (uri == null || uri.host.isEmpty) {
       throw const FormatException('网址格式不正确');
@@ -99,7 +108,7 @@ class HtmlImportService {
       throw const FormatException('仅支持 http 或 https 网址');
     }
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 30));
+    final response = await _sharedClient.get(uri).timeout(timeout);
 
     if (response.statusCode != 200) {
       throw FormatException('请求失败，状态码：${response.statusCode}');

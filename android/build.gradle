@@ -17,14 +17,16 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 
     // These plugins assume AGP 9 built-in Kotlin, which is disabled until all
-    // Flutter plugins in this project support it.
-    if (project.name in ["file_picker", "workmanager_android"]) {
+    // Flutter plugins in this project support it. JDK 24 下 Kotlin 默认取运行时
+    // 版本(24)，与 AGP 的 Java toolchain(17) 或某些库的 1.8 冲突；显式对齐。
+    def kotlinLibs = ["file_picker", "workmanager_android", "device_info_plus",
+                      "mobile_scanner", "package_info_plus", "share_plus"]
+    if (project.name in kotlinLibs) {
         project.pluginManager.withPlugin("com.android.library") {
             project.pluginManager.apply("org.jetbrains.kotlin.android")
-            if (project.name == "workmanager_android") {
-                project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
-                }
+            def target = (project.name == "workmanager_android") ? JavaVersion.VERSION_1_8 : JavaVersion.VERSION_17
+            project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                kotlinOptions.jvmTarget = target
             }
         }
     }

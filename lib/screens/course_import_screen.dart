@@ -6639,16 +6639,29 @@ class _HtmlCourseImportScreenState extends State<HtmlCourseImportScreen> {
       );
       if (!mounted) return;
 
-      await provider.setHtmlImportSource(url);
+      await provider.setHtmlImportSource(
+        url,
+        firstCourseWeek: semesterConfig.firstCourseWeek,
+      );
       if (!mounted) return;
 
       if (importedCount > 0) {
+        // 与 ICS/表格/AI 导入一致：pop 前先给成功 toast，让用户明确知道课表已刷新
+        showAppToast(
+          context,
+          message: buildImportResultMessage(
+            l10n: l10n,
+            importedCount: importedCount,
+            replaceExisting: replaceExisting,
+          ),
+          kind: AppToastKind.success,
+        );
         Navigator.of(context).pop(true);
       } else {
         showAppToast(
           context,
           message: l10n.importNoCourseChanges,
-          kind: AppToastKind.error,
+          kind: AppToastKind.info,
         );
       }
     } on FormatException catch (e) {

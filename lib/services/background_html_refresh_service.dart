@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../models/course.dart';
+import 'html_import_merge.dart';
 import 'html_import_service.dart';
 
 @pragma('vm:entry-point')
@@ -21,17 +23,7 @@ void backgroundHtmlRefreshCallback() {
       final url = prefs.getString(urlKey);
       if (url == null || url.isEmpty) return true;
 
-      // Fetch the HTML courses
-      final htmlImportService = HtmlImportService();
-      final weekStartDate = HtmlImportService.startOfWeek(DateTime.now());
-      final newCourses = await htmlImportService.fetchWeekCourses(
-        url,
-        weekStartDate,
-      );
-
-      if (newCourses.isEmpty) return true;
-
-      // Read existing courses from profiles
+      // Read existing profiles to resolve semester start / current week.
       final rawProfiles = prefs.getString('timetable_profiles');
       if (rawProfiles == null || rawProfiles.isEmpty) return true;
 
@@ -45,20 +37,47 @@ void backgroundHtmlRefreshCallback() {
       if (profileIndex == -1) return true;
 
       final profile = Map<String, dynamic>.from(profiles[profileIndex]);
-      final existingCourses =
+
+      final semesterStartStr =
+          (profile['settings'] as Map<String, dynamic>?)?['semesterStartDate'] as String?;
+      final currentWeek = _calculateCurrentWeek(semesterStartStr);
+      final semesterStart = semesterStartStr != null
+          ? DateTime.tryParse(semesterStartStr)
+          : null;
+      final weekStartDate = semesterStart != null
+          ? HtmlImportService.startOfWeek(semesterStart)
+              .add(Duration(days: 7 * (currentWeek - 1)))
+          : HtmlImportService.startOfWeek(DateTime.now());
+
+      // Fetch the HTML courses
+      final htmlImportService = HtmlImportService();
+      final newCourses = await htmlImportService.fetchWeekCourses(
+        url,
+        weekStartDate,
+      );
+
+      if (newCourses.isEmpty) return true;
+
+      final existingCourseMaps =
           (profile['courses'] as List<dynamic>? ?? const [])
               .cast<Map<String, dynamic>>();
-
-      // Remove old HTML-imported courses, keep non-HTML courses
-      final nonHtmlCourses = existingCourses
-          .where((c) => !(c['id'] as String).startsWith('html-'))
+      final existingCourses = existingCourseMaps
+          .map((m) => Course.fromJson(Map<String, dynamic>.from(m)))
           .toList();
 
-      // Add new HTML courses
-      final mergedCourses = [
-        ...nonHtmlCourses,
-        ...newCourses.map((c) => c.toJson()),
-      ];
+      // Align newly fetched 教务 weeks to the import's semester-week space, and
+      // only replace the courses active in the refreshed week so other weeks
+      // (and non-HTML courses) survive the background refresh.
+      final firstCourseWeekKey =
+          '${activeProfileId}_html_import_first_course_week';
+      final firstCourseWeek = prefs.getInt(firstCourseWeekKey) ?? 1;
+
+      final mergedCourses = mergeHtmlImportCourses(
+        existingCourses: existingCourses,
+        fetchedCourses: newCourses,
+        refreshWeek: currentWeek,
+        firstCourseWeek: firstCourseWeek,
+      ).map((c) => c.toJson()).toList();
 
       profile['courses'] = mergedCourses;
       profiles[profileIndex] = profile;
@@ -69,9 +88,6 @@ void backgroundHtmlRefreshCallback() {
       // Update the fetch time
       final fetchTimesKey = '${activeProfileId}_html_import_week_fetch_times';
       final now = DateTime.now();
-      // calculate current week
-      final semesterStartStr = (profile['settings'] as Map<String, dynamic>?)?['semesterStartDate'] as String?;
-      final currentWeek = _calculateCurrentWeek(semesterStartStr);
       final fetchTimesRaw = prefs.getString(fetchTimesKey);
       final fetchTimes = fetchTimesRaw != null
           ? Map<String, dynamic>.from(jsonDecode(fetchTimesRaw) as Map)
