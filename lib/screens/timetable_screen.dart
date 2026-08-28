@@ -176,6 +176,8 @@ class _TimetableScreenState extends State<TimetableScreen>
   int? _pendingSettledWeek;
   int? _pendingCommittedWeek;
   bool _isCommittingWeek = false;
+  // 切周触发的 HTML 源刷新进行中：驱动「正在获取新课程」胶囊指示器
+  bool _isHtmlWeekRefreshing = false;
   late int _visibleWeek;
   late final ValueNotifier<int> _visibleWeekListenable;
   final GlobalKey _timetableSurfaceKey = GlobalKey();
@@ -622,6 +624,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                             if (_isHomePullQuickImportRunning ||
                                 _homePullDragDistance > 0)
                               _buildHomePullQuickImportIndicator(l10n),
+                            if (_isHtmlWeekRefreshing)
+                              _buildHtmlWeekRefreshIndicator(l10n),
                             ValueListenableBuilder<int>(
                               valueListenable: _visibleWeekListenable,
                               builder: (context, visibleWeek, child) {
@@ -2453,6 +2457,52 @@ class _TimetableScreenState extends State<TimetableScreen>
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 切周 HTML 源刷新指示：样式与下拉快捷导入胶囊一致，仅展示进度不可点击。
+  Widget _buildHtmlWeekRefreshIndicator(AppLocalizations l10n) {
+    // Sit just under the weekday (Mon–Sun) row so the bar is not covered.
+    const indicatorTopInset = _weekDayHeaderHeight + 8;
+    return Positioned(
+      top: indicatorTopInset,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  l10n.homePullQuickImportFetchingCourses,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ],
             ),
           ),
@@ -6383,10 +6433,43 @@ class _TimetableScreenState extends State<TimetableScreen>
         }
         _pendingCommittedWeek = null;
         _maybeSelectionClick(provider.settings);
-        await provider.setCurrentWeek(targetWeek, notify: false);
+        await _setCurrentWeekWithHtmlRefreshFeedback(provider, targetWeek);
       }
     } finally {
       _isCommittingWeek = false;
+    }
+  }
+
+  /// 切周提交：配置了 HTML 源时展示「正在获取新课程」胶囊指示器，
+  /// 刷新实际带来课程变化时轻提示，让用户明确知道该周课表已更新。
+  Future<void> _setCurrentWeekWithHtmlRefreshFeedback(
+    TimetableProvider provider,
+    int targetWeek,
+  ) async {
+    // 切周必定触发 HTML 刷新（绕过节流），有源即展示「正在获取」提示，
+    // 刷新整批完成（setCurrentWeek 已 await）后才收起，避免一闪而过。
+    final showIndicator = provider.hasHtmlImportSource;
+    if (showIndicator && mounted) {
+      setState(() {
+        _isHtmlWeekRefreshing = true;
+      });
+    }
+    try {
+      final changedCount =
+          await provider.setCurrentWeek(targetWeek, notify: false);
+      if (changedCount > 0 && mounted) {
+        showAppLightTip(
+          context,
+          message: AppLocalizations.of(context)!
+              .importUpdatedCount(changedCount),
+        );
+      }
+    } finally {
+      if (showIndicator && mounted) {
+        setState(() {
+          _isHtmlWeekRefreshing = false;
+        });
+      }
     }
   }
 
