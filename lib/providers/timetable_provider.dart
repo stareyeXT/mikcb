@@ -35,7 +35,7 @@ import '../services/storage_service.dart';
 import '../services/sync_operation_gate.dart';
 import '../services/user_data_sync_hooks.dart';
 import '../services/ics_import_service.dart';
-import '../services/html_import_merge.dart';
+import '../services/html_import_refresh.dart';
 import '../services/html_import_service.dart';
 import '../services/miui_live_activities_service.dart';
 import '../utils/home_page_background.dart';
@@ -217,6 +217,10 @@ class TimetableProvider with ChangeNotifier {
   Map<int, DateTime> _htmlImportWeekFetchTimes = {};
   int _htmlImportFirstCourseWeek = 1;
   bool _isHtmlImportRefreshing = false;
+
+  /// 正在进行中的 HTML 周抓取（按周号）。用于并行刷新时跳过已在飞的周，
+  /// 避免快速来回切周造成重复请求堆积。
+  final Set<int> _htmlInFlightWeeks = {};
 
   /// 切周刷新节流窗口：窗口内已拉取过的周不重复发请求。
   /// 课表数据日内极少变化，放宽窗口让切周基本命中缓存；
@@ -1927,24 +1931,92 @@ class TimetableProvider with ChangeNotifier {
       notifyListeners();
     }
     await persistFuture;
-    var htmlChangedCount = 0;
     if (hasHtmlImportSource) {
-      htmlChangedCount = await refreshHtmlImportForWeek(_currentWeek);
-      // 后台预取相邻周：配合节流窗口，来回切周时直接命中缓存秒开
-      unawaited(_prefetchAdjacentWeeksHtml(_currentWeek));
+      // 切周并行刷新：当前周 + 相邻周并行抓取，不阻塞切周。每次切周都刷新，
+      // 绕过节流窗口（[needsHtmlImportRefresh] 的节流仍用于其它触发路径）。
+      _refreshHtmlOnSwitch(_currentWeek);
     }
     await _updateLiveActivity();
-    return htmlChangedCount;
+    return 0;
   }
 
-  /// 依次预取相邻周的 HTML 课程。内部复用 [refreshHtmlImportForWeek] 的
-  /// 节流与并发保护；只预取一层，不级联扩散。
-  Future<void> _prefetchAdjacentWeeksHtml(int week) async {
+  /// 切周触发的 HTML 并行刷新：当前周 + 相邻周并行抓取，再串行（同步、原子）
+  /// 合并写回 [_courses]。抓取阶段多周网络 IO 真正并行；合并在单次事件循环内
+  /// 同步完成（循环内无 await），避免并发写 [_courses] 互相覆盖。
+  ///
+  /// 绕过节流、保证「每次切周都刷新」；已在飞的周会被跳过，避免快速来回切周
+  /// 造成重复请求堆积。
+  void _refreshHtmlOnSwitch(int week) {
+    if (_htmlImportBaseUrl == null || _htmlImportBaseUrl!.isEmpty) return;
+    if (_settings.semesterStartDate == null) return;
     final maxWeek = _settings.semesterWeekCount;
-    for (final candidate in [week - 1, week + 1]) {
-      if (candidate < 1 || candidate > maxWeek) continue;
-      await refreshHtmlImportForWeek(candidate);
-    }
+    final candidates = <int>{week, week - 1, week + 1}
+        .where((w) => w >= 1 && w <= maxWeek)
+        .toList();
+    final toFetch = candidates.where((w) => !_htmlInFlightWeeks.contains(w)).toList();
+    if (toFetch.isEmpty) return;
+
+    _htmlInFlightWeeks.addAll(toFetch);
+    _isHtmlImportRefreshing = true;
+    notifyListeners();
+
+    unawaited(() async {
+      try {
+        final semesterStart = _settings.semesterStartDate!;
+        final fetchedByWeek = <int, List<Course>>{};
+        // 1) 并行抓取：多周网络请求同时发出
+        await Future.wait(toFetch.map((w) async {
+          final weekStartDate = _startOfWeek(semesterStart)
+              .add(Duration(days: 7 * (w - 1)));
+          try {
+            fetchedByWeek[w] = await HtmlImportService().fetchWeekCourses(
+              _htmlImportBaseUrl!,
+              weekStartDate,
+              timeout: const Duration(seconds: 10),
+            );
+          } catch (_) {
+            fetchedByWeek[w] = const [];
+          }
+        }));
+
+        // 2) 串行合并：循环内无 await，对 _courses 的读-改-写原子完成
+        for (final w in toFetch) {
+          _applyHtmlWeekMerge(w, fetchedByWeek[w] ?? const []);
+        }
+
+        notifyListeners();
+        unawaited(_persistActiveProfileState());
+        // 记录抓取时间（供其它触发路径的节流判断）
+        final now = DateTime.now();
+        for (final w in toFetch) {
+          _htmlImportWeekFetchTimes[w] = now;
+        }
+        unawaited(_saveHtmlImportWeekFetchTimes());
+      } catch (_) {
+        // 单批刷新失败不影响后续切周
+      } finally {
+        _htmlInFlightWeeks.removeAll(toFetch);
+        if (_htmlInFlightWeeks.isEmpty) {
+          _isHtmlImportRefreshing = false;
+          notifyListeners();
+        }
+      }
+    }());
+  }
+
+  /// 将单周抓取结果合并进 [_courses]（同步、原子）。空结果直接保留原课程。
+  void _applyHtmlWeekMerge(int week, List<Course> fetched) {
+    final result = mergeHtmlImportWeek(
+      week: week,
+      firstCourseWeek: _htmlImportFirstCourseWeek,
+      existingCourses: _courses,
+      fetchedCourses: fetched,
+    );
+    _courses = _syncCoursesWithEffectiveTimeSchemes(
+      result.courses,
+      settings: _settings,
+    );
+    _currentLiveCourseId = null;
   }
 
   void _notifyStateChanged() => notifyListeners();
@@ -3616,62 +3688,44 @@ class TimetableProvider with ChangeNotifier {
 
   /// 拉取并合并指定周（无节流、无刷新互斥标志管理，由调用方负责）。
   ///
-  /// 用于 [refreshHtmlImportForWeek]（切周自动刷新）与 [importHtmlFullTimetable]
-  /// （导入时逐周预填全学期）。合并逻辑已钳制为仅当周生效（见
-  /// [mergeHtmlImportCourses]），保证每周数据独立、互不串。
+  /// 复用 [refreshHtmlImportWeek]（与前台/后台刷新同一实现），保证合并与
+  /// 变化判定逻辑一致。合并已钳制为仅当周生效（见 [mergeHtmlImportCourses]），
+  /// 每周数据独立、互不串。
   Future<int> _fetchAndMergeWeek(int week) async {
     if (_htmlImportBaseUrl == null || _htmlImportBaseUrl!.isEmpty) return 0;
     final semesterStart = _settings.semesterStartDate;
     if (semesterStart == null) return 0;
     final weekStartDate = _startOfWeek(semesterStart)
         .add(Duration(days: 7 * (week - 1)));
-    final htmlImportService = HtmlImportService();
-    // 自动刷新用短超时：拖尾请求最多等 10s，避免切周指示器长时间空转
-    final newCourses = await htmlImportService.fetchWeekCourses(
-      _htmlImportBaseUrl!,
-      weekStartDate,
+
+    appDebugLog('HtmlImport', 'refresh week=$week firstCourseWeek=$_htmlImportFirstCourseWeek');
+
+    final result = await refreshHtmlImportWeek(
+      url: _htmlImportBaseUrl!,
+      weekStartDate: weekStartDate,
+      week: week,
+      firstCourseWeek: _htmlImportFirstCourseWeek,
+      existingCourses: _courses,
       timeout: const Duration(seconds: 10),
     );
 
     // 抓取成功即记录时间（含空结果周），供节流判断；失败时不记录以便重试。
     // 存储写入延后，不阻塞 UI 刷新。
     _htmlImportWeekFetchTimes[week] = DateTime.now();
+    unawaited(_saveHtmlImportWeekFetchTimes());
 
-    if (newCourses.isEmpty) {
-      unawaited(_saveHtmlImportWeekFetchTimes());
-      return 0;
-    }
-
-    final previousHtmlSignatures = _courses
-        .where((c) => c.id.startsWith('html-'))
-        .map(_htmlScheduleSignature)
-        .toSet();
-
-    final mergedCourses = mergeHtmlImportCourses(
-      existingCourses: _courses,
-      fetchedCourses: newCourses,
-      refreshWeek: week,
-      firstCourseWeek: _htmlImportFirstCourseWeek,
-    );
-
-    final newHtmlSignatures = mergedCourses
-        .where((c) => c.id.startsWith('html-'))
-        .map(_htmlScheduleSignature)
-        .toSet();
-    final changedCount =
-        previousHtmlSignatures.difference(newHtmlSignatures).length +
-            newHtmlSignatures.difference(previousHtmlSignatures).length;
+    // 空结果周无需重算/持久化，直接返回。
+    if (result.fetchedCount == 0) return 0;
 
     _courses = _syncCoursesWithEffectiveTimeSchemes(
-      mergedCourses,
+      result.courses,
       settings: _settings,
     );
     _currentLiveCourseId = null;
     // 先通知 UI 重绘，再异步补持久化写入，缩短切周到可见的延迟
     notifyListeners();
-    unawaited(_saveHtmlImportWeekFetchTimes());
     await _persistActiveProfileState();
-    return changedCount;
+    return result.changedCount;
   }
 
   /// 导入时逐周预填全学期（修法 1）：循环 1..semesterWeekCount 拉取每一周并钳制
@@ -3708,25 +3762,6 @@ class TimetableProvider with ChangeNotifier {
       );
     } catch (_) {}
   }
-
-  /// HTML 课程的课表内容签名：只含影响课表显示的字段，
-  /// 排除每次解析都会变化的 id 与本地维护的颜色/备注等。
-  String _htmlScheduleSignature(Course c) => [
-        c.name,
-        c.teacher,
-        c.location,
-        c.dayOfWeek,
-        c.startSection,
-        c.endSection,
-        c.startTime,
-        c.endTime,
-        c.startWeek,
-        c.endWeek,
-        c.isOddWeek,
-        c.isEvenWeek,
-        c.customWeeks,
-        c.suspendedWeeks,
-      ].join('\u241F');
 
   Future<void> syncCurrentWeekWithSemesterStart() async {
     final semesterStart = _settings.semesterStartDate;

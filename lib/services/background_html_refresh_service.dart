@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../models/course.dart';
-import 'html_import_merge.dart';
+import 'html_import_refresh.dart';
 import 'html_import_service.dart';
 
 @pragma('vm:entry-point')
@@ -49,37 +49,28 @@ void backgroundHtmlRefreshCallback() {
               .add(Duration(days: 7 * (currentWeek - 1)))
           : HtmlImportService.startOfWeek(DateTime.now());
 
-      // Fetch the HTML courses
-      final htmlImportService = HtmlImportService();
-      final newCourses = await htmlImportService.fetchWeekCourses(
-        url,
-        weekStartDate,
-      );
-
-      if (newCourses.isEmpty) return true;
-
-      final existingCourseMaps =
-          (profile['courses'] as List<dynamic>? ?? const [])
-              .cast<Map<String, dynamic>>();
-      final existingCourses = existingCourseMaps
-          .map((m) => Course.fromJson(Map<String, dynamic>.from(m)))
-          .toList();
-
-      // Align newly fetched 教务 weeks to the import's semester-week space, and
-      // only replace the courses active in the refreshed week so other weeks
-      // (and non-HTML courses) survive the background refresh.
       final firstCourseWeekKey =
           '${activeProfileId}_html_import_first_course_week';
       final firstCourseWeek = prefs.getInt(firstCourseWeekKey) ?? 1;
 
-      final mergedCourses = mergeHtmlImportCourses(
-        existingCourses: existingCourses,
-        fetchedCourses: newCourses,
-        refreshWeek: currentWeek,
-        firstCourseWeek: firstCourseWeek,
-      ).map((c) => c.toJson()).toList();
+      final existingCourses = (profile['courses'] as List<dynamic>? ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map((m) => Course.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
 
-      profile['courses'] = mergedCourses;
+      // 复用与前台一致的刷新合并逻辑（fetch + 周隔离 merge + 变化判定），
+      // 避免后台 worker 自己再实现一遍 merge。
+      final result = await refreshHtmlImportWeek(
+        url: url,
+        weekStartDate: weekStartDate,
+        week: currentWeek,
+        firstCourseWeek: firstCourseWeek,
+        existingCourses: existingCourses,
+      );
+
+      if (result.fetchedCount == 0) return true;
+
+      profile['courses'] = result.courses.map((c) => c.toJson()).toList();
       profiles[profileIndex] = profile;
 
       // Save updated profiles
