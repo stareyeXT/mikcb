@@ -1942,20 +1942,18 @@ class TimetableProvider with ChangeNotifier {
     return htmlChangedCount;
   }
 
-  /// 切周触发的 HTML 并行刷新：当前周 + 相邻周并行抓取，再串行（同步、原子）
-  /// 合并写回 [_courses]。抓取阶段多周网络 IO 真正并行；合并在单次事件循环内
-  /// 同步完成（循环内无 await），避免并发写 [_courses] 互相覆盖。
+  /// 切周触发的 HTML 刷新：只抓取**当前周**课程（本周 7 天在 [HtmlImportService]
+  /// 内部并行），再原子合并写回 [_courses]。不预取相邻周、不拉整个学期，
+  /// 每次切周只取当周，最省请求。
   ///
   /// 绕过节流、保证「每次切周都刷新」；已在飞的周会被跳过，避免快速来回切周
-  /// 造成重复请求堆积。返回**主周（被切换到的周）**的变化条数，供 UI 轻提示。
+  /// 造成重复请求堆积。返回该周的变化条数，供 UI 轻提示。
   Future<int> _refreshHtmlOnSwitch(int week) async {
     if (_htmlImportBaseUrl == null || _htmlImportBaseUrl!.isEmpty) return 0;
     if (_settings.semesterStartDate == null) return 0;
     final maxWeek = _settings.semesterWeekCount;
-    final candidates = <int>{week, week - 1, week + 1}
-        .where((w) => w >= 1 && w <= maxWeek)
-        .toList();
-    final toFetch = candidates.where((w) => !_htmlInFlightWeeks.contains(w)).toList();
+    if (week < 1 || week > maxWeek) return 0;
+    final toFetch = _htmlInFlightWeeks.contains(week) ? <int>[] : [week];
     if (toFetch.isEmpty) return 0;
 
     _htmlInFlightWeeks.addAll(toFetch);
@@ -3628,8 +3626,8 @@ class TimetableProvider with ChangeNotifier {
       );
     }
     _scheduleBackgroundHtmlRefresh();
-    // 逐周预填全学期，使每周数据独立（修法 1）。
-    unawaited(importHtmlFullTimetable());
+    // 只拉当前周：导入即刷新当周课程，其它周切过去再现拉（不再整学期预填）。
+    unawaited(_refreshHtmlOnSwitch(_currentWeek));
     notifyListeners();
   }
 
@@ -3731,30 +3729,6 @@ class TimetableProvider with ChangeNotifier {
     notifyListeners();
     await _persistActiveProfileState();
     return result.changedCount;
-  }
-
-  /// 导入时逐周预填全学期（修法 1）：循环 1..semesterWeekCount 拉取每一周并钳制
-  /// 单周合并，使整学期课表由"每周独立一份"拼成。完成后某周教务变化只影响该周，
-  /// 不会污染其他周。后台异步执行，不阻塞导入流程。
-  Future<void> importHtmlFullTimetable() async {
-    if (_htmlImportBaseUrl == null || _htmlImportBaseUrl!.isEmpty) return;
-    if (_settings.semesterStartDate == null) return;
-    _isHtmlImportRefreshing = true;
-    notifyListeners();
-    try {
-      final maxWeek = _settings.semesterWeekCount;
-      for (var w = 1; w <= maxWeek; w++) {
-        try {
-          await _fetchAndMergeWeek(w);
-        } catch (_) {
-          // 单周失败不影响其他周预填
-        }
-        await Future.delayed(const Duration(milliseconds: 250));
-      }
-    } finally {
-      _isHtmlImportRefreshing = false;
-      notifyListeners();
-    }
   }
 
   /// 持久化各周抓取时间（节流依据），失败静默——仅影响下次是否重复拉取。

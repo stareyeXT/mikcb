@@ -37,8 +37,9 @@ String htmlCourseSignature(Course c) => [
 /// 周隔离（修法 1）：HTML 课程解析出的周次通常是整学期范围（如 1–20 周都上），
 /// 若直接按 `isActiveInWeek` 隔离，刷新任意一周都会把整份课程当成"该周活跃"而整批
 /// 替换，导致后面周的变化污染前面周。因此这里把 fetched 课程的生效周**强制钳制为
-/// 仅 [refreshWeek] 单周**，使每一周的数据完全独立、互不串。配合逐周拉取
-/// （见 [importHtmlFullTimetable]），整学期课表由"每周一份"拼成，某周变化不影响其他周。
+  /// 仅 [refreshWeek] 单周**，使每一周的数据完全独立、互不串。每次刷新只拉
+  /// 当前周（见 [TimetableProvider._refreshHtmlOnSwitch]），逐周独立合并，
+  /// 某周变化不影响其他周。
 List<Course> mergeHtmlImportCourses({
   required List<Course> existingCourses,
   required List<Course> fetchedCourses,
