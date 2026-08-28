@@ -134,3 +134,66 @@ internal fun islandLabelWithoutTimerTokens(rawTemplate: String): String {
         .filter { it.isNotEmpty() && it != "倒计时" && it != "{倒计时}" }
         .joinToString(",")
 }
+
+/** buildV3 的 reopen 字段取值：同 id 通知 cancel 后重发需显式申请重新上岛。 */
+internal const val HYPER_FOCUS_REOPEN_VALUE = "reopen"
+
+/**
+ * 计时目标是否可安全交给 HyperOS 渲染系统走秒：目标未设置（0）或已过期时
+ * 发 timerInfo 会被判为已过期直接下岛，必须退回静态分支。
+ */
+internal fun hyperFocusTimerTargetIsValid(timerWhenMillis: Long, nowMillis: Long): Boolean {
+    return timerWhenMillis > 0L && timerWhenMillis > nowMillis
+}
+
+/** hintInfo 区系统走秒开关：与岛右侧无关，仅由总开关、阶段和目标有效性决定。 */
+internal fun hyperFocusHintWantsSystemTimer(
+    showCountdown: Boolean,
+    isPost: Boolean,
+    timerWhenMillis: Long,
+    nowMillis: Long,
+): Boolean = showCountdown && !isPost && hyperFocusTimerTargetIsValid(timerWhenMillis, nowMillis)
+
+/** 岛右侧（B 区）最终渲染槽位。 */
+internal sealed class IslandBSlot {
+    /** 系统走秒数字：sameWidthDigitInfo + timerInfo，[label] 为数字旁小字（可为空）。 */
+    data class SystemTimerDigits(val label: String, val timerWhenMillis: Long) : IslandBSlot()
+
+    /** 静态纯数字：sameWidthDigitInfo（该组件只接受数字内容）。 */
+    data class StaticDigits(val content: String) : IslandBSlot()
+
+    /** 纯文字：imageTextInfoRight——非数字文字严禁进入 sameWidthDigitInfo（digit is empty）。 */
+    data class IslandText(val content: String) : IslandBSlot()
+
+    /** 模板为空/解析为空：不渲染 B 区。 */
+    object None : IslandBSlot()
+}
+
+private val islandBDigitsOnly = Regex("[0-9.:：\\-]+")
+
+/**
+ * 岛右侧（B 区）槽位决策：正式路径（XiaomiSuperIslandNotificationRenderer）与
+ * 测试路径（MainActivity.sendTestFocusNotificationInner）必须共用本函数，
+ * 禁止两侧各自写分支判断——历史上守卫条件漂移导致「测试和正式不一样」。
+ */
+internal fun resolveIslandBSlot(
+    rawTemplate: String,
+    showCountdown: Boolean,
+    isPost: Boolean,
+    timerWhenMillis: Long,
+    nowMillis: Long,
+    resolve: (String) -> String,
+): IslandBSlot {
+    if (rawTemplate.isBlank()) return IslandBSlot.None
+    if (islandWantsSystemTimer(rawTemplate, showCountdown, isPost) &&
+        hyperFocusTimerTargetIsValid(timerWhenMillis, nowMillis)
+    ) {
+        return IslandBSlot.SystemTimerDigits(
+            label = resolve(islandLabelWithoutTimerTokens(rawTemplate)),
+            timerWhenMillis = timerWhenMillis,
+        )
+    }
+    val text = resolve(rawTemplate)
+    if (text.isEmpty()) return IslandBSlot.None
+    return if (text.matches(islandBDigitsOnly)) IslandBSlot.StaticDigits(text) else IslandBSlot.IslandText(text)
+}

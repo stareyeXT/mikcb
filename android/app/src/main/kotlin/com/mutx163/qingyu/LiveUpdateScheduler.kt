@@ -932,7 +932,7 @@ object LiveUpdateScheduler {
             validateAgainstSchedule =
                 data["validateAgainstSchedule"] as? Boolean ?: false,
             superIslandEngine =
-                data["superIslandEngine"] as? String ?: "hyperFocusApi",
+                data["superIslandEngine"] as? String ?: "builtIn",
             islandTimeoutPre = (islandConfig["hfIslandTimeoutPre"] as? Number)?.toInt() ?: 300,
             islandTimeoutActive = (islandConfig["hfIslandTimeoutActive"] as? Number)?.toInt() ?: 600,
             islandTimeoutPost = (islandConfig["hfIslandTimeoutPost"] as? Number)?.toInt() ?: 600,

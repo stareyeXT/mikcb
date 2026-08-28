@@ -1442,7 +1442,6 @@ class MainActivity : FlutterActivity() {
             val tickerText = r(templates["ticker_$templateStage"] ?: "")
             val islandAText = r(templates["islandA_$templateStage"] ?: "")
             val islandBRaw = templates["islandB_$templateStage"] ?: ""
-            val islandBText = r(islandBRaw)
             val baseTitleText = r(templates["baseTitle_$templateStage"] ?: "")
             val baseContentText = r(templates["baseContent_$templateStage"] ?: "")
             val baseSubcontentText = r(templates["baseSubcontent_$templateStage"] ?: "")
@@ -1458,16 +1457,28 @@ class MainActivity : FlutterActivity() {
             }
             val openAppUri = launchAppIntent.toUri(Intent.URI_INTENT_SCHEME)
 
-            // 与 renderer 同步：走秒仅在模板含「倒计时」token 时渲染，标签去掉该 token
-            val islandBWantTimer = islandWantsSystemTimer(islandBRaw, showCountdown, templateStage == "post")
-            val islandBLabel = if (islandBWantTimer) r(islandLabelWithoutTimerTokens(islandBRaw)) else islandBText
-            val hasTimer = islandBWantTimer && timerTarget > 0L && timerTarget > now
+            // 与 XiaomiSuperIslandNotificationRenderer 同步：B 区槽位决策与 hint 区
+            // 计时有效性判定共用 HyperFocusTemplates 中的同一实现（同步纪律）
+            val islandBSlot = resolveIslandBSlot(
+                rawTemplate = islandBRaw,
+                showCountdown = showCountdown,
+                isPost = templateStage == "post",
+                timerWhenMillis = timerTarget,
+                nowMillis = now,
+                resolve = r,
+            )
+            val hintWantsSystemTimer = hyperFocusHintWantsSystemTimer(
+                showCountdown = showCountdown,
+                isPost = templateStage == "post",
+                timerWhenMillis = timerTarget,
+                nowMillis = now,
+            )
             val extras = FocusNotification.buildV3 {
                 business = "course_schedule"
                 updatable = true
                 enableFloat = true
                 // 与 XiaomiSuperIslandNotificationRenderer 同步：同 id cancel 后重发需显式重新上岛
-                reopen = "reopen"
+                reopen = HYPER_FOCUS_REOPEN_VALUE
                 ticker = tickerText
                 aodTitle = tickerText
                 islandFirstFloat = true
@@ -1500,7 +1511,7 @@ class MainActivity : FlutterActivity() {
                     extraTitle = hintContentText
                     specialTitle = hintSubcontentText
 
-                    if (hasTimer) {
+                    if (hintWantsSystemTimer) {
                         timerInfo {
                             timerType = -1
                             timerWhen = timerTarget
@@ -1543,30 +1554,29 @@ class MainActivity : FlutterActivity() {
                             }
                         }
 
-                        if (hasTimer) {
-                            sameWidthDigitInfo {
+                        when (val slot = islandBSlot) {
+                            is IslandBSlot.SystemTimerDigits -> sameWidthDigitInfo {
                                 timerInfo {
                                     timerType = -1
-                                    timerWhen = timerTarget
+                                    timerWhen = slot.timerWhenMillis
                                     timerSystemCurrent = now
                                 }
-                                if (islandBLabel.isNotEmpty()) content = islandBLabel
+                                if (slot.label.isNotEmpty()) content = slot.label
                                 turnAnim = true
                                 showHighlightColor = true
                             }
-                        } else if (islandBText.isNotEmpty() && islandBText.matches(Regex("[0-9.:：\\-]+"))) {
-                            sameWidthDigitInfo {
-                                content = islandBText
+                            is IslandBSlot.StaticDigits -> sameWidthDigitInfo {
+                                content = slot.content
                                 turnAnim = true
                                 showHighlightColor = true
                             }
-                        } else if (islandBText.isNotEmpty()) {
-                            imageTextInfoRight {
+                            is IslandBSlot.IslandText -> imageTextInfoRight {
                                 textInfo {
-                                    title = islandBText
+                                    title = slot.content
                                     showHighlightColor = true
                                 }
                             }
+                            IslandBSlot.None -> {}
                         }
                     }
 
@@ -1624,11 +1634,25 @@ class MainActivity : FlutterActivity() {
                 .build()
 
             notificationManager.notify(10001, notification)
-            if (timerTarget > 0L) {
-                val dismissAt = minOf(timerTarget, now + 30 * 60_000L)
-                TestFocusNotificationDismiss.schedule(applicationContext, dismissAt)
+            val dismissAt = if (timerTarget > 0L) {
+                minOf(timerTarget, now + 30 * 60_000L)
+            } else {
+                // post 阶段无计时目标：按课后岛超时调度取消，
+                // 否则 ongoing 通知在岛消失后永久残留且无法划掉
+                now +
+                    (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600)
+                        .coerceIn(60, 3600) * 1000L
             }
+            TestFocusNotificationDismiss.schedule(applicationContext, dismissAt)
             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
+            // 正式岛（id=2001）与测试岛同包 focus 互斥（HyperOS FocusPlugin.isSameModule）：
+            // 服务运行中时测试通知可能被系统拒绝上岛，提前告知原因而不是只报"未显示"
+            val liveIslandActive =
+                notificationManager.activeNotifications.any { it.id == 2001 }
+            if (liveIslandActive) {
+                return "测试通知已提交，但正式岛正在运行，系统可能互斥拦截；" +
+                    "可先在实时上课设置中暂停服务后再测"
+            }
             null
         } catch (e: Exception) {
             Log.e("HyperFocusApi", "sendTestFocus failed", e)

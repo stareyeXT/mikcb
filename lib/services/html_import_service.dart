@@ -7,10 +7,7 @@ class HtmlImportResult {
   final List<Course> courses;
   final String? sourceUrl;
 
-  const HtmlImportResult({
-    required this.courses,
-    this.sourceUrl,
-  });
+  const HtmlImportResult({required this.courses, this.sourceUrl});
 }
 
 class HtmlWeekFetchProgress {
@@ -96,11 +93,13 @@ class HtmlImportService {
       allCourses.addAll(courses);
     }
 
-    onProgress?.call(HtmlWeekFetchProgress(
-      completedDays: totalDays,
-      totalDays: totalDays,
-      currentDayLabel: '',
-    ));
+    onProgress?.call(
+      HtmlWeekFetchProgress(
+        completedDays: totalDays,
+        totalDays: totalDays,
+        currentDayLabel: '',
+      ),
+    );
 
     return allCourses;
   }
@@ -204,10 +203,14 @@ class HtmlImportService {
   }
 
   int? _parseDayOfWeek(String html) {
-    final centerMatch = RegExp(r'<div\s+class="center">.*?<p>(.*?)</p>', dotAll: true).firstMatch(html);
-    if (centerMatch == null) return null;
-
-    final text = _stripHtmlTags(centerMatch.group(1)!).trim();
+    // The ECJTU page has changed whitespace/attributes several times. Read
+    // the centered heading when present, then fall back to the document text.
+    final centerMatch = RegExp(
+      r"""<div\b[^>]*\bclass\s*=\s*["'][^"']*\bcenter\b[^"']*["'][^>]*>.*?<p\b[^>]*>(.*?)</p>""",
+      dotAll: true,
+      caseSensitive: false,
+    ).firstMatch(html);
+    final text = _stripHtmlTags(centerMatch?.group(1) ?? html).trim();
     final dateMatch = RegExp(r'(\d{4})-(\d{2})-(\d{2})').firstMatch(text);
     if (dateMatch != null) {
       final year = int.parse(dateMatch.group(1)!);
@@ -217,13 +220,20 @@ class HtmlImportService {
     }
 
     final weekdayMap = {
-      '星期一': 1, '周一': 1,
-      '星期二': 2, '周二': 2,
-      '星期三': 3, '周三': 3,
-      '星期四': 4, '周四': 4,
-      '星期五': 5, '周五': 5,
-      '星期六': 6, '周六': 6,
-      '星期日': 7, '周日': 7,
+      '星期一': 1,
+      '周一': 1,
+      '星期二': 2,
+      '周二': 2,
+      '星期三': 3,
+      '周三': 3,
+      '星期四': 4,
+      '周四': 4,
+      '星期五': 5,
+      '周五': 5,
+      '星期六': 6,
+      '周六': 6,
+      '星期日': 7,
+      '周日': 7,
     };
     for (final entry in weekdayMap.entries) {
       if (text.contains(entry.key)) {
@@ -234,11 +244,19 @@ class HtmlImportService {
   }
 
   List<String> _extractLiEntries(String html) {
-    final ulMatch = RegExp(r'<ul\s+class="rl_info">(.*?)</ul>', dotAll: true).firstMatch(html);
+    final ulMatch = RegExp(
+      r"""<ul\b[^>]*\bclass\s*=\s*["'][^"']*\brl_info\b[^"']*["'][^>]*>(.*?)</ul>""",
+      dotAll: true,
+      caseSensitive: false,
+    ).firstMatch(html);
     if (ulMatch == null) return const [];
 
     final ulContent = ulMatch.group(1)!;
-    final liRegExp = RegExp(r'<li>(.*?)</li>', dotAll: true);
+    final liRegExp = RegExp(
+      r'<li\b[^>]*>(.*?)</li>',
+      dotAll: true,
+      caseSensitive: false,
+    );
     return liRegExp
         .allMatches(ulContent)
         .map((match) => match.group(1)!)
@@ -246,23 +264,44 @@ class HtmlImportService {
   }
 
   Course? _parseCourseEntry(String liContent, int dayOfWeek, int index) {
-    final pMatch = RegExp(r'<p>(.*?)</p>', dotAll: true).firstMatch(liContent);
+    final pMatch = RegExp(
+      r'<p\b[^>]*>(.*?)</p>',
+      dotAll: true,
+      caseSensitive: false,
+    ).firstMatch(liContent);
     if (pMatch == null) return null;
 
     final pContent = pMatch.group(1)!;
-    final spanMatch = RegExp(r'<span[^>]*class="class_span"[^>]*>(.*?)</span>', dotAll: true).firstMatch(pContent);
+    final spanMatch = RegExp(
+      r"""<span\b[^>]*\bclass\s*=\s*["'][^"']*\bclass_span\b[^"']*["'][^>]*>(.*?)</span>""",
+      dotAll: true,
+      caseSensitive: false,
+    ).firstMatch(pContent);
     if (spanMatch == null) return null;
 
     final sectionText = _stripHtmlTags(spanMatch.group(1)!).trim();
-    final sectionMatch = RegExp(r'(\d+)\s*[-—]\s*(\d+)\s*节').firstMatch(sectionText);
+    final sectionMatch = RegExp(
+      r'(\d+)\s*[-—~～至]\s*(\d+)\s*节',
+    ).firstMatch(sectionText);
     if (sectionMatch == null) return null;
 
     final startSection = int.parse(sectionMatch.group(1)!);
     final endSection = int.parse(sectionMatch.group(2)!);
 
-    final afterSpan = pContent.replaceFirst(RegExp(r'<span[^>]*class="class_span"[^>]*>.*?</span>', dotAll: true), '');
+    final afterSpan = pContent.replaceFirst(
+      RegExp(
+        r"""<span\b[^>]*\bclass\s*=\s*["'][^"']*\bclass_span\b[^"']*["'][^>]*>.*?</span>""",
+        dotAll: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
     final plainText = _stripHtmlTags(afterSpan).trim();
-    final lines = plainText.split(RegExp(r'\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final lines = plainText
+        .split(RegExp(r'\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
 
     if (lines.isEmpty) return null;
 
@@ -309,13 +348,25 @@ class HtmlImportService {
     final parts = timeValue.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty) return null;
 
-    final weekPart = parts[0];
-    final weekRanges = weekPart.split(',');
+    // Accept both the compact form (1-8) and labels such as "第1-8周".
+    final weekPart = parts[0]
+        .replaceAll('第', '')
+        .replaceAll('周', '')
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('（', '')
+        .replaceAll('）', '')
+        .replaceAll('(', '')
+        .replaceAll(')', '')
+        .trim();
+    final weekRanges = weekPart.split(RegExp(r'[,，、]'));
 
     final allWeeks = <int>[];
     for (final range in weekRanges) {
       final rangeTrimmed = range.trim();
-      final rangeMatch = RegExp(r'^(\d+)\s*[-—]\s*(\d+)$').firstMatch(rangeTrimmed);
+      final rangeMatch = RegExp(
+        r'^(\d+)\s*[-—]\s*(\d+)$',
+      ).firstMatch(rangeTrimmed);
       if (rangeMatch != null) {
         final start = int.parse(rangeMatch.group(1)!);
         final end = int.parse(rangeMatch.group(2)!);
@@ -335,8 +386,10 @@ class HtmlImportService {
     allWeeks.sort();
     final uniqueWeeks = allWeeks.toSet().toList()..sort();
 
-    final isAllOdd = uniqueWeeks.isNotEmpty && uniqueWeeks.every((w) => w.isOdd);
-    final isAllEven = uniqueWeeks.isNotEmpty && uniqueWeeks.every((w) => w.isEven);
+    final isAllOdd =
+        uniqueWeeks.isNotEmpty && uniqueWeeks.every((w) => w.isOdd);
+    final isAllEven =
+        uniqueWeeks.isNotEmpty && uniqueWeeks.every((w) => w.isEven);
 
     if (isAllOdd) {
       return _WeekInfo(
@@ -353,12 +406,10 @@ class HtmlImportService {
       );
     }
 
-    final isContiguous = uniqueWeeks.length == (uniqueWeeks.last - uniqueWeeks.first + 1);
+    final isContiguous =
+        uniqueWeeks.length == (uniqueWeeks.last - uniqueWeeks.first + 1);
     if (isContiguous) {
-      return _WeekInfo(
-        startWeek: uniqueWeeks.first,
-        endWeek: uniqueWeeks.last,
-      );
+      return _WeekInfo(startWeek: uniqueWeeks.first, endWeek: uniqueWeeks.last);
     }
 
     return _WeekInfo(
@@ -369,7 +420,7 @@ class HtmlImportService {
   }
 
   String _stripHtmlTags(String html) {
-    return html
+    var text = html
         .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
         .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll('&amp;', '&')
@@ -378,6 +429,15 @@ class HtmlImportService {
         .replaceAll('&nbsp;', ' ')
         .replaceAll('&#39;', "'")
         .replaceAll('&quot;', '"');
+    text = text.replaceAllMapped(
+      RegExp(r'&#x([0-9a-f]+);', caseSensitive: false),
+      (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'&#(\d+);'),
+      (m) => String.fromCharCode(int.parse(m.group(1)!)),
+    );
+    return text;
   }
 }
 

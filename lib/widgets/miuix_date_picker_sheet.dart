@@ -240,7 +240,7 @@ class _MiuixDatePickerSheetBodyState extends State<_MiuixDatePickerSheetBody> {
 /// 点月历标题时叠在 sheet 上的年/月/日滚轮。
 ///
 /// 不用再套一层 modal，避免双 sheet 手势冲突；半透明遮罩 + 卡片即可。
-class _YearMonthWheelDialog extends StatelessWidget {
+class _YearMonthWheelDialog extends StatefulWidget {
   const _YearMonthWheelDialog({
     required this.year,
     required this.month,
@@ -272,6 +272,32 @@ class _YearMonthWheelDialog extends StatelessWidget {
   final String title;
   final String cancelLabel;
   final String confirmLabel;
+
+  @override
+  State<_YearMonthWheelDialog> createState() => _YearMonthWheelDialogState();
+}
+
+class _YearMonthWheelDialogState extends State<_YearMonthWheelDialog> {
+  // 滚轮松手后有惯性衰减：确认前须经 controller 提交投影落点，
+  // 否则甩动途中点「确定」返回旧值（与 time/number picker sheet 同款修复）。
+  final _yearController = MiuixFlingNumberPickerController();
+  final _monthController = MiuixFlingNumberPickerController();
+  final _dayController = MiuixFlingNumberPickerController();
+
+  int get year => widget.year;
+  int get month => widget.month;
+  int get day => widget.day;
+  int get minYear => widget.minYear;
+  int get maxYear => widget.maxYear;
+  ValueChanged<int> get onYearChanged => widget.onYearChanged;
+  ValueChanged<int> get onMonthChanged => widget.onMonthChanged;
+  ValueChanged<int> get onDayChanged => widget.onDayChanged;
+  VoidCallback get onCancel => widget.onCancel;
+  VoidCallback get onConfirm => widget.onConfirm;
+  Color get surfaceColor => widget.surfaceColor;
+  String get title => widget.title;
+  String get cancelLabel => widget.cancelLabel;
+  String get confirmLabel => widget.confirmLabel;
 
   int get _maxDay => DateTime(year, month + 1, 0).day;
 
@@ -316,6 +342,7 @@ class _YearMonthWheelDialog extends StatelessWidget {
                               Expanded(
                                 child: MiuixFlingNumberPicker(
                                   value: year,
+                                  controller: _yearController,
                                   min: minYear,
                                   max: maxYear,
                                   textStyle: pickerStyle,
@@ -326,6 +353,7 @@ class _YearMonthWheelDialog extends StatelessWidget {
                               Expanded(
                                 child: MiuixFlingNumberPicker(
                                   value: month,
+                                  controller: _monthController,
                                   min: 1,
                                   max: 12,
                                   wrapAround: true,
@@ -337,6 +365,7 @@ class _YearMonthWheelDialog extends StatelessWidget {
                               Expanded(
                                 child: MiuixFlingNumberPicker(
                                   value: day.clamp(1, _maxDay),
+                                  controller: _dayController,
                                   min: 1,
                                   max: _maxDay,
                                   wrapAround: true,
@@ -367,7 +396,17 @@ class _YearMonthWheelDialog extends StatelessWidget {
                                 variant: HyperosButtonVariant.primary,
                                 expand: true,
                                 fitLabel: true,
-                                onPressed: onConfirm,
+                                onPressed: () {
+                                  // 惯性可能仍在衰减：按年→月→日顺序提交投影
+                                  // 落点（父层会按新年月钳制日），再执行确认。
+                                  final y = _yearController.settle();
+                                  final m = _monthController.settle();
+                                  final d = _dayController.settle();
+                                  if (y != null) onYearChanged(y);
+                                  if (m != null) onMonthChanged(m);
+                                  if (d != null) onDayChanged(d);
+                                  onConfirm();
+                                },
                               ),
                             ),
                           ],

@@ -39,6 +39,11 @@ class _MiuixTimePickerSheetBodyState extends State<_MiuixTimePickerSheetBody> {
   late int _hour;
   late int _minute;
 
+  // 滚轮松手后有惯性衰减动画：确认时通过 controller 提交投影落点，
+  // 否则甩动途中点「确定」会返回滚动前的旧时间（与 miuix_number_picker_sheet 同款修复）。
+  final _hourController = MiuixFlingNumberPickerController();
+  final _minuteController = MiuixFlingNumberPickerController();
+
   /// 滚轮可见行数（奇数，至少 3）；5 行更接近系统数字选择器手感。
   static const int _visibleItemCount = 5;
 
@@ -75,6 +80,7 @@ class _MiuixTimePickerSheetBodyState extends State<_MiuixTimePickerSheetBody> {
                 Expanded(
                   child: MiuixFlingNumberPicker(
                     value: _hour,
+                    controller: _hourController,
                     min: 0,
                     max: 23,
                     wrapAround: true,
@@ -87,6 +93,7 @@ class _MiuixTimePickerSheetBodyState extends State<_MiuixTimePickerSheetBody> {
                 Expanded(
                   child: MiuixFlingNumberPicker(
                     value: _minute,
+                    controller: _minuteController,
                     min: 0,
                     max: 59,
                     wrapAround: true,
@@ -118,9 +125,18 @@ class _MiuixTimePickerSheetBodyState extends State<_MiuixTimePickerSheetBody> {
                   variant: HyperosButtonVariant.primary,
                   expand: true,
                   fitLabel: true,
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).pop(TimeOfDay(hour: _hour, minute: _minute)),
+                  onPressed: () {
+                    // 惯性可能仍在衰减：先提交投影落点再关闭，
+                    // 不能使用 onValueChanged 最后一次送达的旧值。
+                    final settledHour = _hourController.settle();
+                    final settledMinute = _minuteController.settle();
+                    Navigator.of(context).pop(
+                      TimeOfDay(
+                        hour: settledHour ?? _hour,
+                        minute: settledMinute ?? _minute,
+                      ),
+                    );
+                  },
                 ),
               ),
             ],

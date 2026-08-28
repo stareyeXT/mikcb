@@ -1630,7 +1630,9 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
         if (!mounted) return;
         for (final key in _controllers.keys) {
           final v = decoded[key];
-          if (v is String && v.isNotEmpty) {
+          // 空字符串也是有效保存值（用户清空的模板），必须回填，
+          // 否则重新保存时默认值会覆盖用户的清空操作
+          if (v is String) {
             _controllers[key]?.text = v;
           }
         }
@@ -1644,9 +1646,13 @@ class _HyperFocusStatusIslandScreenState extends State<HyperFocusStatusIslandScr
     if (!mounted) return;
     var migrated = false;
     for (final key in _controllers.keys) {
-      if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
-        _controllers[key]?.text = saved[key]!;
-        migrated = true;
+      final v = saved[key];
+      // 空字符串同样是有效保存值（用户清空的模板）
+      if (v != null) {
+        if (_controllers[key]?.text != v) {
+          _controllers[key]?.text = v;
+          migrated = true;
+        }
       }
     }
     if (migrated) {
@@ -1908,7 +1914,9 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
         if (!mounted) return;
         for (final key in _controllers.keys) {
           final v = decoded[key];
-          if (v is String && v.isNotEmpty) {
+          // 空字符串也是有效保存值（用户清空的模板），必须回填，
+          // 否则重新保存时默认值会覆盖用户的清空操作
+          if (v is String) {
             _controllers[key]?.text = v;
           }
         }
@@ -1922,9 +1930,13 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     if (!mounted) return;
     var migrated = false;
     for (final key in _controllers.keys) {
-      if (saved.containsKey(key) && saved[key]!.isNotEmpty) {
-        _controllers[key]?.text = saved[key]!;
-        migrated = true;
+      final v = saved[key];
+      // 空字符串同样是有效保存值（用户清空的模板）
+      if (v != null) {
+        if (_controllers[key]?.text != v) {
+          _controllers[key]?.text = v;
+          migrated = true;
+        }
       }
     }
     if (migrated) {
@@ -2145,6 +2157,29 @@ Color _parseColor(String hexColor) {
   return parseHexColorOrFallback(hexColor, fallback: const Color(0xFF2563EB));
 }
 
+/// 与 HyperFocusTemplates.resolveTemplate 同逻辑：含花括号走逐 token 替换，
+/// 否则按逗号列表解析（剔除空 token 与解析为空的项，空格连接）。
+/// 展开态预览与 Kotlin 渲染端必须保持一致，改动需同步两侧并补单测。
+String resolveHyperFocusPreviewTemplate(
+  String tpl,
+  Map<String, String> variables,
+) {
+  if (tpl.contains('{')) {
+    var result = tpl;
+    variables.forEach((token, value) {
+      result = result.replaceAll('{$token}', value);
+    });
+    return result;
+  }
+  return tpl
+      .split(',')
+      .map((token) => token.trim())
+      .where((token) => token.isNotEmpty)
+      .map((token) => variables[token] ?? token)
+      .where((resolved) => resolved.isNotEmpty)
+      .join(' ');
+}
+
 /// 展开态参考样式的实时渲染：字段角色与 XiaomiSuperIslandNotificationRenderer
 /// 的 buildHyperFocusBundle 一致，变量解析与 HyperFocusTemplates.resolveTemplate
 /// 逐条对齐（含花括号模式与逗号列表模式），倒计时逐秒走字模拟系统 timerInfo。
@@ -2211,49 +2246,20 @@ class _ExpandedIslandPreviewState extends State<_ExpandedIslandPreview> {
     return _formatCountdown(DateTime.now().difference(_simStart));
   }
 
-  /// 与 HyperFocusTemplates.resolveTemplate 的逗号列表分支一致。
-  String _resolveList(String tpl) {
-    final variableMap = <String, String>{
-      '课名': _courseName,
-      '短课名': _shortName.isEmpty ? _courseName : _shortName,
-      '教室': _location.isEmpty ? _courseName : _location,
-      '教师': _teacher,
-      '开始': _startTime,
-      '结束': _endTime,
-      '倒计时': _countdownText,
-      '正计时': _elapsedText,
-    };
-    return tpl
-        .split(',')
-        .map((token) => token.trim())
-        .where((token) => token.isNotEmpty)
-        .map((token) => variableMap[token] ?? token)
-        .where((resolved) => resolved.isNotEmpty)
-        .join(' ');
-  }
+  /// 与 HyperFocusTemplates.resolveTemplate 的变量表一致（空值兜底同 Kotlin）。
+  Map<String, String> get _templateVariables => <String, String>{
+        '课名': _courseName,
+        '短课名': _shortName.isEmpty ? _courseName : _shortName,
+        '教室': _location.isEmpty ? _courseName : _location,
+        '教师': _teacher,
+        '开始': _startTime,
+        '结束': _endTime,
+        '倒计时': _countdownText,
+        '正计时': _elapsedText,
+      };
 
-  /// 与 HyperFocusTemplates.resolveTemplate 一致：含花括号走替换，否则走列表。
-  String _resolve(String tpl) {
-    if (tpl.contains('{')) {
-      var result = tpl;
-      result = result.replaceAll('{课名}', _courseName);
-      result = result.replaceAll(
-        '{短课名}',
-        _shortName.isEmpty ? _courseName : _shortName,
-      );
-      result = result.replaceAll(
-        '{教室}',
-        _location.isEmpty ? _courseName : _location,
-      );
-      result = result.replaceAll('{教师}', _teacher);
-      result = result.replaceAll('{开始}', _startTime);
-      result = result.replaceAll('{结束}', _endTime);
-      result = result.replaceAll('{倒计时}', _countdownText);
-      result = result.replaceAll('{正计时}', _elapsedText);
-      return result;
-    }
-    return _resolveList(tpl);
-  }
+  String _resolve(String tpl) =>
+      resolveHyperFocusPreviewTemplate(tpl, _templateVariables);
 
   String get _mainTitle => _resolve(widget.templates['baseTitle'] ?? '');
 

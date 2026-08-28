@@ -147,6 +147,25 @@ void main() {
       expect(result.courses[0].dayOfWeek, 5);
     });
 
+    test('accepts attributes, full-width punctuation, and labelled weeks', () {
+      const html = '''
+<html><body>
+<section><div id="date" class="calendar center"><p>2026-08-31 星期一（第1周）</p></div></section>
+<ul data-role="courses" class="foo rl_info bar">
+  <li data-index="1"><p><span data-x="1" class="foo class_span">1～2节<br></span>
+    操作系统&nbsp;(上课)<br>时间：第1-8周 1,2<br>地点：31-530<br>教师：叶云青</p></li>
+</ul>
+</body></html>''';
+
+      final result = service.parseHtml(html);
+      expect(result.courses, hasLength(1));
+      expect(result.courses.single.name, '操作系统 (上课)');
+      expect(result.courses.single.startSection, 1);
+      expect(result.courses.single.endSection, 2);
+      expect(result.courses.single.startWeek, 1);
+      expect(result.courses.single.endWeek, 8);
+    });
+
     test('parses single week as odd week', () {
       const html = '''
 <html><body>

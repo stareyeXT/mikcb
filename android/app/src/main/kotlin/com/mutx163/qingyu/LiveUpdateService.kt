@@ -45,6 +45,14 @@ class LiveUpdateService : Service() {
         private const val POST_PROMOTED_NOTIFICATIONS_PERMISSION =
             "android.permission.POST_PROMOTED_NOTIFICATIONS"
 
+        /** 岛会话身份：课程+阶段+起止时间。相同 key 的重复启动视为同一次会话。 */
+        fun buildIslandSessionKey(
+            courseName: String,
+            stage: String,
+            startAtMillis: Long,
+            endAtMillis: Long,
+        ): String = "$courseName|$stage|$startAtMillis|$endAtMillis"
+
         @Volatile
         private var isServiceRunning = false
 
@@ -293,6 +301,9 @@ class LiveUpdateService : Service() {
     private var islandTimeoutPost = 600
     private var islandSessionStartedAt = 0L
     private var islandSuppressed = false
+
+    /** 当前岛会话身份：同课程同阶段的重复启动不重置计时与抑制状态 */
+    private var islandSessionKey: String? = null
     private var iconAEnabled = false
     private var outEffectStatusEnabled = false
     private var outEffectStatusColor = ""
@@ -472,8 +483,21 @@ class LiveUpdateService : Service() {
             lastRemainingText = "-1"
             lastProgressUnits = -1
             lastCriticalTimeText = ""
-            islandSessionStartedAt = System.currentTimeMillis()
-            islandSuppressed = false
+            // Workmanager 周期任务/系统重投递会用相同 payload 重启本服务：
+            // 同课程同阶段不重置会话计时与抑制状态，否则「岛消失时间」到期
+            // 主动下岛后 15 分钟内必被重新拉起，超时设置形同虚设。
+            val incomingSessionKey =
+                buildIslandSessionKey(
+                    courseName = courseName,
+                    stage = activityStage,
+                    startAtMillis = startAtMillis,
+                    endAtMillis = endAtMillis,
+                )
+            if (incomingSessionKey != islandSessionKey) {
+                islandSessionStartedAt = System.currentTimeMillis()
+                islandSuppressed = false
+                islandSessionKey = incomingSessionKey
+            }
             markServiceRunning()
 
             UmengDiagnosticReporter.record(
@@ -1427,6 +1451,7 @@ class LiveUpdateService : Service() {
     }
 
     private fun stopAndRemoveNotification() {
+        islandSessionKey = null
         restoreBeforeClassQuickActionIfClassEnded()
         markServiceStopped(getString(R.string.stop_reminder_ended))
         UmengDiagnosticReporter.record(

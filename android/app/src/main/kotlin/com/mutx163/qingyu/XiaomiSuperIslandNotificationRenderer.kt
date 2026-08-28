@@ -328,7 +328,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             business = "course_schedule"; updatable = true; enableFloat = true
             // 同 id 通知被 cancel 后重发需显式申请重新上岛（系统默认 close，
             // 否则重装/暂停恢复/服务重启后岛永远不再显示）
-            reopen = "reopen"
+            reopen = HYPER_FOCUS_REOPEN_VALUE
             ticker = resolve(templates["ticker_$key"] ?: "{课名}"); aodTitle = ticker; islandFirstFloat = true
             outEffectSrc = if (settings.outEffectEnabled) "outer_glow" else ""
             outEffectColor = if (settings.outEffectEnabled) settings.outEffectColor else ""
@@ -337,30 +337,24 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             hintInfo {
                 type = 2; title = resolve(templates["hintTitle_$key"] ?: ""); content = remaining.ifBlank { title }
                 subTitle = resolve(templates["hintSubtitle_$key"] ?: ""); extraTitle = resolve(templates["hintContent_$key"] ?: ""); specialTitle = resolve(templates["hintSubcontent_$key"] ?: "")
-                if (settings.showCountdown && !isPost) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
+                if (hyperFocusHintWantsSystemTimer(settings.showCountdown, isPost, target, state.nowMillis)) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
                 actionInfo { actionIntentType = 1; actionIntent = launch.toUri(Intent.URI_INTENT_SCHEME); actionTitle = "查看课表" }
             }
             island {
                 islandProperty = 1; islandTimeout = when (key) { "pre" -> settings.timeoutPre; "post" -> settings.timeoutPost; else -> settings.timeoutActive }
                 bigIslandArea {
                     imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor.ifBlank { "#FFFFFFFF" } } } }
-                    // 岛右侧严格按模板：只有模板含「倒计时」token 才渲染系统走秒数字，
-                    // 其余 token 解析为数字旁标签；纯文字模板走 imageTextInfoRight。
+                    // 岛右侧严格按模板：槽位决策与测试路径共用 resolveIslandBSlot（同步纪律）
                     val bRaw = templates["islandB_$key"] ?: ""
-                    val wantTimer = islandWantsSystemTimer(bRaw, settings.showCountdown, isPost)
-                    val b = resolve(if (wantTimer) islandLabelWithoutTimerTokens(bRaw) else bRaw)
-                    if (wantTimer) {
-                        sameWidthDigitInfo {
-                            timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
-                            if (b.isNotEmpty()) content = b
+                    when (val slot = resolveIslandBSlot(bRaw, settings.showCountdown, isPost, target, state.nowMillis, resolve)) {
+                        is IslandBSlot.SystemTimerDigits -> sameWidthDigitInfo {
+                            timerInfo { timerType = -1; timerWhen = slot.timerWhenMillis; timerSystemCurrent = state.nowMillis }
+                            if (slot.label.isNotEmpty()) content = slot.label
                             turnAnim = true; showHighlightColor = true
                         }
-                    } else if (b.isNotEmpty()) {
-                        if (b.matches(Regex("[0-9.:：\\-]+"))) {
-                            sameWidthDigitInfo { content = b; turnAnim = true; showHighlightColor = true }
-                        } else {
-                            imageTextInfoRight { textInfo { title = b; showHighlightColor = true } }
-                        }
+                        is IslandBSlot.StaticDigits -> sameWidthDigitInfo { content = slot.content; turnAnim = true; showHighlightColor = true }
+                        is IslandBSlot.IslandText -> imageTextInfoRight { textInfo { title = slot.content; showHighlightColor = true } }
+                        IslandBSlot.None -> {}
                     }
                 }
                 smallIslandArea {
@@ -391,7 +385,7 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             put("updatable", true)
             put("enableFloat", true)
             // 与 buildHyperFocusBundle 一致：同 id cancel 后重发需显式重新上岛
-            put("reopen", "reopen")
+            put("reopen", HYPER_FOCUS_REOPEN_VALUE)
             put("ticker", state.title)
             put(
                 "baseInfo",

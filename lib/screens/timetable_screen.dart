@@ -6455,14 +6455,19 @@ class _TimetableScreenState extends State<TimetableScreen>
       });
     }
     try {
+      final sw = Stopwatch()..start();
       final changedCount =
           await provider.setCurrentWeek(targetWeek, notify: false);
+      final elapsedMs = sw.elapsedMilliseconds;
       if (changedCount > 0 && mounted) {
         showAppLightTip(
           context,
-          message: AppLocalizations.of(context)!
-              .importUpdatedCount(changedCount),
+          message: '${AppLocalizations.of(context)!.importUpdatedCount(changedCount)}'
+              '（耗时 ${elapsedMs}ms）',
         );
+      } else if (mounted) {
+        // 无变化也提示耗时，便于观察刷新链路时长
+        showAppLightTip(context, message: '刷新耗时 ${elapsedMs}ms');
       }
     } finally {
       if (showIndicator && mounted) {

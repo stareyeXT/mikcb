@@ -150,7 +150,16 @@ void _liveCheckActivityStageTransition(TimetableProvider host) {
   if (host._lastLiveActivityStageKey != null &&
       host._lastLiveActivityStageKey != key) {
     host._currentLiveCourseId = null;
-    unawaited(_liveUpdateActivity(host));
+    final previousStageKey = host._lastLiveActivityStageKey;
+    unawaited(
+      _liveUpdateActivity(host).then((ok) {
+        if (!ok) {
+          // 推送失败：回滚阶段键，让下一轮 tick 重试，
+          // 而不是让该阶段的岛静默丢失到下一次课程切换。
+          host._lastLiveActivityStageKey = previousStageKey;
+        }
+      }),
+    );
   }
   host._lastLiveActivityStageKey = key;
 }
@@ -440,7 +449,7 @@ HomeWidgetSnapshot? _liveBuildHomeWidgetSnapshot(
   );
 }
 
-Future<void> _liveUpdateActivity(
+Future<bool> _liveUpdateActivity(
   TimetableProvider host, {
   bool syncScheduleSnapshot = true,
 }) {
@@ -452,19 +461,21 @@ Future<void> _liveUpdateActivity(
   );
 }
 
-Future<void> _liveUpdateActivityBody(
+/// 返回 false 表示推送通道失败（调用方可回滚去重键以便重试）；
+/// 其余情形（功能关闭/挂起/假期停止/去重跳过/正常停止/推送成功）均为 true。
+Future<bool> _liveUpdateActivityBody(
   TimetableProvider host, {
   bool syncScheduleSnapshot = true,
 }) async {
   await _liveSyncHomeWidgetSnapshot(host);
   if (!host._enableLiveActivitySync) {
-    return;
+    return true;
   }
 
   final suspendedUntil = host._liveActivitySuspendedUntil;
   if (suspendedUntil != null) {
     if (DateTime.now().isBefore(suspendedUntil)) {
-      return;
+      return true;
     }
     host._liveActivitySuspendedUntil = null;
   }
@@ -477,7 +488,7 @@ Future<void> _liveUpdateActivityBody(
     host._currentLiveCourseId = null;
     host._lastLiveActivityStageKey = null;
     await host._liveActivitiesService.stopLiveUpdate();
-    return;
+    return true;
   }
 
   final selection = host.getLiveActivityCourseSelection();
@@ -497,7 +508,7 @@ Future<void> _liveUpdateActivityBody(
     final liveActivityKey =
         '${liveCourse.id}:${activeSelection.stage.name}:${liveCourse.name}:${liveCourse.startSection}:${liveCourse.endSection}:${liveCourse.location}:${liveCourse.teacher}:$nextCourseKey:${settings.hashCode}';
     if (host._currentLiveCourseId == liveActivityKey) {
-      return;
+      return true;
     }
     // 先置 key 防止推送进行中被并发 tick 重复触发；失败时回滚以便下一轮重试。
     final previousLiveActivityKey = host._currentLiveCourseId;
@@ -597,17 +608,20 @@ Future<void> _liveUpdateActivityBody(
       hfIconAEnabled: settings.hfIconAEnabled,
       hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
       hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
+      superIslandEngine: settings.superIslandEngine.value,
     );
     if (!startedOk) {
       // 通道异常已被服务层吞掉并上报：回滚去重 key，让下一次 tick 重试推送，
       // 否则岛会一直丢失到阶段/课程切换。
       host._currentLiveCourseId = previousLiveActivityKey;
+      return false;
     }
   } else {
     host._currentLiveCourseId = null;
     host._lastLiveActivityStageKey = null;
     await host._liveActivitiesService.stopLiveUpdate();
   }
+  return true;
 }
 
 Future<void> _liveSyncScheduleSnapshot(TimetableProvider host) async {
