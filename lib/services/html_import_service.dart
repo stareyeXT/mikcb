@@ -32,6 +32,35 @@ class HtmlImportService {
   /// 7 天页面就是 7 次完整握手）。仅用于本服务，不手动关闭。
   static final http.Client _sharedClient = http.Client();
 
+  /// 按 host 复用 JSESSIONID 会话，避免 7 个并行请求各自新建会话。
+  static final Map<String, String> _hostCookies = {};
+
+  /// 同时进行的天数请求数：降低移动网络下并行 TLS 握手争用导致的个别慢请求。
+  static const int _maxConcurrent = 5;
+
+  static Future<List<R>> _concurrentMap<E, R>(
+    List<E> items,
+    int maxConcurrent,
+    Future<R> Function(E) task,
+  ) async {
+    final results = List<R?>.filled(items.length, null);
+    var next = 0;
+    Future<void> worker() async {
+      while (true) {
+        final i = next;
+        if (i >= items.length) return;
+        next++;
+        results[i] = await task(items[i]);
+      }
+    }
+
+    final n = maxConcurrent < 1 ? 1 : maxConcurrent;
+    await Future.wait(
+      List.generate(n < items.length ? n : items.length, (_) => worker()),
+    );
+    return results.cast<R>();
+  }
+
   static String buildUrlWithDate(String baseUrl, String dateStr) {
     final uri = Uri.tryParse(baseUrl.trim());
     if (uri == null) return baseUrl;
@@ -53,12 +82,15 @@ class HtmlImportService {
   }) async {
     final totalDays = 7;
 
-    final futures = <Future<List<Course>>>[];
+    final closures = <Future<List<Course>> Function()>[];
     for (var i = 0; i < totalDays; i++) {
-      futures.add(_fetchDayCourses(baseUrl, weekStartDate, i, timeout: timeout));
+      final idx = i;
+      closures.add(
+        () => _fetchDayCourses(baseUrl, weekStartDate, idx, timeout: timeout),
+      );
     }
 
-    final results = await Future.wait(futures);
+    final results = await _concurrentMap(closures, _maxConcurrent, (c) => c());
     final allCourses = <Course>[];
     for (final courses in results) {
       allCourses.addAll(courses);
@@ -78,22 +110,31 @@ class HtmlImportService {
     DateTime weekStartDate,
     int dayIndex, {
     Duration timeout = const Duration(seconds: 30),
+    int maxRetries = 3,
   }) async {
     final date = weekStartDate.add(Duration(days: dayIndex));
     final dateStr =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final url = buildUrlWithDate(baseUrl, dateStr);
 
-    try {
-      final htmlContent = await fetchHtmlContent(url, timeout: timeout);
-      final result = parseHtml(htmlContent, sourceUrl: url);
-      final dayOfWeek = dayIndex + 1;
-      return result.courses.map((c) {
-        return c.copyWith(dayOfWeek: dayOfWeek);
-      }).toList();
-    } catch (_) {
-      return const [];
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        final htmlContent = await fetchHtmlContent(url, timeout: timeout);
+        final result = parseHtml(htmlContent, sourceUrl: url);
+        // 解析成功但当天无课表条目：视为该天确无课，不再重试
+        final dayOfWeek = dayIndex + 1;
+        return result.courses
+            .map((c) => c.copyWith(dayOfWeek: dayOfWeek))
+            .toList();
+      } catch (e) {
+        if (attempt < maxRetries - 1) {
+          await Future.delayed(Duration(seconds: attempt + 1));
+          continue;
+        }
+        return const [];
+      }
     }
+    return const [];
   }
 
   Future<String> fetchHtmlContent(
@@ -108,7 +149,13 @@ class HtmlImportService {
       throw const FormatException('仅支持 http 或 https 网址');
     }
 
-    final response = await _sharedClient.get(uri).timeout(timeout);
+    final headers = <String, String>{};
+    final cachedCookie = _hostCookies[uri.host];
+    if (cachedCookie != null && cachedCookie.isNotEmpty) {
+      headers['Cookie'] = cachedCookie;
+    }
+
+    final response = await _sharedClient.get(uri, headers: headers).timeout(timeout);
 
     if (response.statusCode != 200) {
       throw FormatException('请求失败，状态码：${response.statusCode}');
@@ -119,6 +166,15 @@ class HtmlImportService {
         !contentType.contains('text/') &&
         !contentType.contains('application/xhtml')) {
       throw const FormatException('返回的内容不是 HTML 页面');
+    }
+
+    // 服务器用 JSESSIONID 会话；http.Client 不自动存 cookie，
+    // 这里复用同一会话，避免 7 个并行请求各自新建会话（设备侧新建会话可能很慢）。
+    // 页面链接里直接带 ;jsessionid=，比解析 set-cookie 头更可靠。
+    final sidMatch =
+        RegExp(r'jsessionid=([0-9A-Fa-f]+)').firstMatch(response.body);
+    if (sidMatch != null) {
+      _hostCookies[uri.host] = 'JSESSIONID=${sidMatch.group(1)}';
     }
 
     return response.body;
