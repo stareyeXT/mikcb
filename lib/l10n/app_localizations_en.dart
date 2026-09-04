@@ -10133,4 +10133,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get icsExportShareSubject => 'Qingyu Timetable calendar';
+
+  @override
+  String get tomorrowBriefingTitle => 'Early Class Reminder';
+
+  @override
+  String get tomorrowBriefingSubtitle =>
+      'Daily 22:00 preview of tomorrow\'s classes, early class first';
+
+  @override
+  String get tomorrowBriefingTestTitle => 'Test early class reminder';
 }

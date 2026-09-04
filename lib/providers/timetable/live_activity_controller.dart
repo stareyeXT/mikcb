@@ -602,9 +602,6 @@ Future<bool> _liveUpdateActivityBody(
       progressMilestoneTimeTexts: progressMilestones
           .map((milestone) => milestone['timeText'] as String)
           .toList(),
-      hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
-      hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
-      hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
       hfIconAEnabled: settings.hfIconAEnabled,
       hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
       hfOutEffectStatusColor: settings.hfOutEffectStatusColor,

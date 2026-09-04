@@ -1965,19 +1965,22 @@ class TimetableProvider with ChangeNotifier {
       final semesterStart = _settings.semesterStartDate!;
       final fetchedByWeek = <int, List<Course>>{};
       // 1) 并行抓取：多周网络请求同时发出
-      await Future.wait(toFetch.map((w) async {
-        final weekStartDate = _startOfWeek(semesterStart)
-            .add(Duration(days: 7 * (w - 1)));
-        try {
-          fetchedByWeek[w] = await HtmlImportService().fetchWeekCourses(
-            _htmlImportBaseUrl!,
-            weekStartDate,
-            timeout: const Duration(seconds: 10),
-          );
-        } catch (_) {
-          fetchedByWeek[w] = const [];
-        }
-      }));
+      await Future.wait(
+        toFetch.map((w) async {
+          final weekStartDate = _startOfWeek(
+            semesterStart,
+          ).add(Duration(days: 7 * (w - 1)));
+          try {
+            fetchedByWeek[w] = await HtmlImportService().fetchWeekCourses(
+              _htmlImportBaseUrl!,
+              weekStartDate,
+              timeout: const Duration(seconds: 10),
+            );
+          } catch (_) {
+            fetchedByWeek[w] = const [];
+          }
+        }),
+      );
 
       // 2) 串行合并：循环内无 await，对 _courses 的读-改-写原子完成
       for (final w in toFetch) {
@@ -3189,6 +3192,11 @@ class TimetableProvider with ChangeNotifier {
         exams: _exams,
         resolveCourse: getCourseForExam,
         scheduleItems: _scheduleItems,
+        courses: _courses,
+        semesterStartDate: _settings.semesterStartDate,
+        semesterWeekCount: _settings.semesterWeekCount,
+        tomorrowBriefingEnabled: _settings.tomorrowBriefingEnabled,
+        sections: _settings.sections,
       );
     } catch (error) {
       appDebugLog('ExamReminder', 'sync failed: $error');
@@ -3540,6 +3548,7 @@ class TimetableProvider with ChangeNotifier {
       await precacheHomePageBackdropImage(_settings);
     }
     notifyListeners();
+    unawaited(_syncExamReminders());
     unawaited(_syncLiveScheduleSnapshot());
     unawaited(_updateLiveActivity(syncScheduleSnapshot: false));
     return null;
@@ -3650,9 +3659,7 @@ class TimetableProvider with ChangeNotifier {
       'html_course_refresh',
       'html_course_refresh',
       frequency: const Duration(hours: 6),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
+      constraints: Constraints(networkType: NetworkType.connected),
       existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
     );
   }
@@ -3668,8 +3675,7 @@ class TimetableProvider with ChangeNotifier {
     if (_isHtmlImportRefreshing) return false;
     final lastFetch = _htmlImportWeekFetchTimes[week];
     if (lastFetch == null) return true;
-    return DateTime.now().difference(lastFetch) >=
-        _htmlImportRefreshThrottle;
+    return DateTime.now().difference(lastFetch) >= _htmlImportRefreshThrottle;
   }
 
   /// 刷新指定周的 HTML 导入课程，返回实际新增或变化的课程条数（无变化为 0）。
@@ -3698,10 +3704,14 @@ class TimetableProvider with ChangeNotifier {
     if (_htmlImportBaseUrl == null || _htmlImportBaseUrl!.isEmpty) return 0;
     final semesterStart = _settings.semesterStartDate;
     if (semesterStart == null) return 0;
-    final weekStartDate = _startOfWeek(semesterStart)
-        .add(Duration(days: 7 * (week - 1)));
+    final weekStartDate = _startOfWeek(
+      semesterStart,
+    ).add(Duration(days: 7 * (week - 1)));
 
-    appDebugLog('HtmlImport', 'refresh week=$week firstCourseWeek=$_htmlImportFirstCourseWeek');
+    appDebugLog(
+      'HtmlImport',
+      'refresh week=$week firstCourseWeek=$_htmlImportFirstCourseWeek',
+    );
 
     final result = await refreshHtmlImportWeek(
       url: _htmlImportBaseUrl!,

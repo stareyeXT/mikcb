@@ -20,6 +20,8 @@ import '../providers/timetable_provider.dart';
 import '../utils/locale_utils.dart';
 import '../services/home_widget_service.dart';
 import '../services/miui_live_activities_service.dart';
+import '../providers/timetable/live_activity_logic.dart';
+import '../services/exam_reminder_service.dart';
 import '../services/umeng_analytics_service.dart';
 import '../utils/app_toast.dart';
 import '../utils/hex_color.dart';
@@ -461,6 +463,50 @@ class TimetableSettingsScreen extends StatelessWidget {
           HyperosSectionLabel(text: l10n.settingsReminderDesktopSectionTitle),
           HyperosListGroup(
             children: [
+              HyperosSwitchTile(
+                icon: Icons.notifications_active_outlined,
+                title: l10n.tomorrowBriefingTitle,
+                subtitle: l10n.tomorrowBriefingSubtitle,
+                value: settings.tomorrowBriefingEnabled,
+                onChanged: (value) {
+                  final provider = context.read<TimetableProvider>();
+                  unawaited(
+                    provider.updateTimetableSettings(
+                      provider.settings.copyWith(tomorrowBriefingEnabled: value),
+                    ),
+                  );
+                },
+              ),
+              HyperosActionTile(
+                icon: Icons.schedule_outlined,
+                title: l10n.tomorrowBriefingTestTitle,
+                onTap: () async {
+                  final provider = context.read<TimetableProvider>();
+                  final result = await _sendTomorrowBriefingTest(provider);
+                  if (context.mounted && result != null) {
+                    showAppToast(context, message: result);
+                  }
+                },
+              ),
+              HyperosActionTile(
+                icon: Icons.event_available_outlined,
+                title: '添加早八课程到系统日历',
+                onTap: () async {
+                  final opened = await ExamReminderService()
+                      .openSystemCalendarEvent(
+                        hour: 8,
+                        minute: 0,
+                        message: '早八课程',
+                      );
+                  if (!opened && context.mounted) {
+                    showAppToast(
+                      context,
+                      message: '未找到可用的系统日历',
+                      kind: AppToastKind.warning,
+                    );
+                  }
+                },
+              ),
               _LiveEntryTile(onTap: openLiveSettings),
               _MiuixSettingsPreference(
                 startAction: _settingsIconBadge(
@@ -774,6 +820,65 @@ class _SemesterSettingsScreen extends StatelessWidget {
       await provider.setCurrentWeek(selected);
     }
   }
+}
+
+/// Sends a one-off tomorrow-briefing test notification based on tomorrow's
+/// real course data; returns a toast hint, or null when posted cleanly.
+Future<String?> _sendTomorrowBriefingTest(TimetableProvider provider) async {
+  final now = DateTime.now();
+  final tomorrow = now.add(const Duration(days: 1));
+  final semesterStart = provider.settings.semesterStartDate;
+  final week = semesterStart == null
+      ? provider.currentWeek
+      : provider.getWeekIndex(tomorrow, semesterStart) ?? provider.currentWeek;
+  final courses = provider.getActiveCoursesForDay(tomorrow.weekday, week: week);
+  if (courses.isEmpty) {
+    return '明天没有课程，无提醒可测';
+  }
+  final sections = provider.settings.sections;
+  final first = courses.first;
+  final startText = LiveActivityLogic.resolveRealTime(first, true, sections);
+  final startParts = startText.split(':');
+  final startMinutes =
+      (int.tryParse(startParts.isNotEmpty ? startParts[0] : '') ?? 8) * 60 +
+          (int.tryParse(startParts.length > 1 ? startParts[1] : '') ?? 0);
+  final hasEarlyClass = startMinutes >= 8 * 60 && startMinutes <= 8 * 60 + 59;
+  final lines = <String>[];
+  for (final course in courses.take(6)) {
+    final start = LiveActivityLogic.resolveRealTime(course, true, sections);
+    final end = LiveActivityLogic.resolveRealTime(course, false, sections);
+    final location = course.location.trim();
+    lines.add(
+      location.isEmpty
+          ? '$start-$end ${course.name.trim()}'
+          : '$start-$end ${course.name.trim()} · $location',
+    );
+  }
+  if (courses.length > 6) {
+    lines.add('等共 ${courses.length} 门课程');
+  }
+  final displayName = first.shortName?.trim().isNotEmpty == true
+      ? first.shortName!.trim()
+      : first.name.trim();
+  return ExamReminderService().sendTomorrowBriefingTest(
+    title: hasEarlyClass
+        ? '明天有早八 · $displayName $startText'
+        : '明天有 ${courses.length} 门课程',
+    body: lines.join('\n'),
+    hasEarlyClass: hasEarlyClass,
+    firstClassStartMillis: DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+      startMinutes ~/ 60,
+      startMinutes % 60,
+    ).millisecondsSinceEpoch,
+    islandA: hasEarlyClass ? '早八 $displayName' : '${courses.length} 门课程',
+    islandB: hasEarlyClass ? '$startText $displayName' : '首课 $startText',
+    calendarHour: startMinutes ~/ 60,
+    calendarMinute: startMinutes % 60,
+    calendarTitle: hasEarlyClass ? '$displayName（明日早八）' : displayName,
+  );
 }
 
 /// 超级岛入口，带通知权限状态。

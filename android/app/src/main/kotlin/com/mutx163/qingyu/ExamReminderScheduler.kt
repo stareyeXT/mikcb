@@ -25,12 +25,14 @@ object ExamReminderScheduler {
     private const val PREFS_NAME = "exam_reminder_prefs"
     private const val KEY_SNAPSHOT_JSON = "snapshot_json"
     const val CHANNEL_ID = "exam_reminder_channel"
+    private const val LEGACY_EARLY_CLASS_ALARM_CHANNEL_ID = "early_class_alarm_channel"
     const val ACTION_FIRE = "com.mutx163.qingyu.ACTION_EXAM_REMINDER_FIRE"
     private const val EXTRA_REQUEST_CODE = "requestCode"
     private const val EXTRA_EXAM_ID = "examId"
     private const val EXTRA_OFFSET_MINUTES = "offsetMinutes"
     private const val EXTRA_TITLE = "title"
     private const val EXTRA_BODY = "body"
+    private const val EXTRA_OPEN_ROUTE = "openRoute"
     private const val OVERDUE_DELIVERY_WINDOW_MILLIS = 24L * 60L * 60L * 1000L
 
     data class Fire(
@@ -41,6 +43,15 @@ object ExamReminderScheduler {
         val title: String,
         val body: String,
         val requestCode: Int,
+        val openRoute: String = "/exams",
+        val style: String = "normal",
+        val tapAction: String = "openApp",
+        val calendarHour: Int = 8,
+        val calendarMinute: Int = 0,
+        val calendarTitle: String = "",
+        val islandA: String = "",
+        val islandB: String = "",
+        val firstClassStartMillis: Long = 0L,
     )
 
     fun ensureChannel(context: Context) {
@@ -49,17 +60,20 @@ object ExamReminderScheduler {
         }
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         val existing = manager.getNotificationChannel(CHANNEL_ID)
-        if (existing != null) {
-            return
+        if (existing == null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.notification_channel_exam_reminder_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = context.getString(R.string.notification_channel_exam_reminder_desc)
+            }
+            manager.createNotificationChannel(channel)
         }
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            context.getString(R.string.notification_channel_exam_reminder_name),
-            NotificationManager.IMPORTANCE_DEFAULT,
-        ).apply {
-            description = context.getString(R.string.notification_channel_exam_reminder_desc)
-        }
-        manager.createNotificationChannel(channel)
+        // The automatic early-class alarm feature was removed. Delete its
+        // notification channel during upgrade so it is not retained in system
+        // notification settings.
+        manager.deleteNotificationChannel(LEGACY_EARLY_CLASS_ALARM_CHANNEL_ID)
     }
 
     fun reconcile(
@@ -77,7 +91,7 @@ object ExamReminderScheduler {
         val nowMillis = System.currentTimeMillis()
         val futureFires = newFires.filter { it.fireAtMillis > nowMillis - 30_000L }
         val futureRequestCodes = futureFires.mapTo(mutableSetOf()) { it.requestCode }
-        val failedOverdueFires = oldFires.mapNotNull { fire ->
+        val failedOverdueFires = oldFires.filterNot(::isLegacyEarlyCourseFire).mapNotNull { fire ->
             val originalFireAt = originalFireAtMillis(fire)
             val isRecentFailure = originalFireAt <= nowMillis &&
                 originalFireAt > nowMillis - OVERDUE_DELIVERY_WINDOW_MILLIS
@@ -125,7 +139,7 @@ object ExamReminderScheduler {
         }
         cancelFires(appContext, fires)
         val nowMillis = System.currentTimeMillis()
-        val rearmed = fires.mapNotNull { fire ->
+        val rearmed = fires.filterNot(::isLegacyEarlyCourseFire).mapNotNull { fire ->
             val fireAt = originalFireAtMillis(fire)
             if (fireAt <= nowMillis - OVERDUE_DELIVERY_WINDOW_MILLIS) {
                 null
@@ -154,6 +168,11 @@ object ExamReminderScheduler {
         return "${fire.examId}#${fire.offsetMinutes}"
     }
 
+    /** Drops snapshots written by the removed automatic early-class alarm feature. */
+    private fun isLegacyEarlyCourseFire(fire: Fire): Boolean {
+        return fire.examId.startsWith("early_course:")
+    }
+
     fun handleFire(context: Context, intent: Intent) {
         ensureChannel(context)
         val appContext = context.applicationContext
@@ -173,6 +192,11 @@ object ExamReminderScheduler {
             Log.w(TAG, "drop fire: not scheduled requestCode=$requestCode examId=$examId")
             return
         }
+        if (isLegacyEarlyCourseFire(matched)) {
+            cancelFires(appContext, listOf(matched))
+            Log.i(TAG, "drop legacy early-class alarm requestCode=$requestCode")
+            return
+        }
 
         // Prefer persisted copy over Intent extras so spoofed payloads cannot override.
         val title = matched.title.takeIf { it.isNotBlank() }
@@ -180,13 +204,29 @@ object ExamReminderScheduler {
         val body = matched.body.ifBlank {
             appContext.getString(R.string.notification_exam_reminder_default_body)
         }
-
-        val posted = postNotification(
-            context = appContext,
-            notificationId = if (matched.requestCode != 0) matched.requestCode else matched.examId.hashCode(),
-            title = title,
-            body = body,
-        )
+        val posted = if (matched.style == TomorrowBriefingNotificationBuilder.STYLE_AUTO) {
+            TomorrowBriefingNotificationBuilder.post(
+                context = appContext,
+                notificationId = if (matched.requestCode != 0) matched.requestCode else matched.examId.hashCode(),
+                title = title,
+                body = body,
+                tapAction = matched.tapAction,
+                calendarHour = matched.calendarHour,
+                calendarMinute = matched.calendarMinute,
+                calendarTitle = matched.calendarTitle,
+                islandA = matched.islandA,
+                islandB = matched.islandB,
+                firstClassStartMillis = matched.firstClassStartMillis,
+            )
+        } else {
+            postNotification(
+                context = appContext,
+                notificationId = if (matched.requestCode != 0) matched.requestCode else matched.examId.hashCode(),
+                title = title,
+                body = body,
+                openRoute = matched.openRoute,
+            )
+        }
 
         // Only drop the fire after a successful notify. If POST_NOTIFICATIONS is
         // denied (or NotificationManager is unavailable), keep the entry so the
@@ -207,6 +247,7 @@ object ExamReminderScheduler {
         notificationId: Int,
         title: String,
         body: String,
+        openRoute: String,
     ): Boolean {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -224,7 +265,7 @@ object ExamReminderScheduler {
             notificationId,
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("open_route", "/exams")
+                putExtra("open_route", openRoute)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -317,6 +358,7 @@ object ExamReminderScheduler {
             putExtra(EXTRA_OFFSET_MINUTES, fire.offsetMinutes)
             putExtra(EXTRA_TITLE, fire.title)
             putExtra(EXTRA_BODY, fire.body)
+            putExtra(EXTRA_OPEN_ROUTE, fire.openRoute)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -334,17 +376,27 @@ object ExamReminderScheduler {
             val fireAtMillis = (map["fireAtMillis"] as? Number)?.toLong() ?: return@mapNotNull null
             val examStartMillis = (map["examStartMillis"] as? Number)?.toLong() ?: 0L
             val title = map["title"] as? String ?: ""
-            val body = map["body"] as? String ?: ""
-            val requestCode = (map["requestCode"] as? Number)?.toInt() ?: return@mapNotNull null
-            Fire(
+        val body = map["body"] as? String ?: ""
+        val requestCode = (map["requestCode"] as? Number)?.toInt() ?: return@mapNotNull null
+        val openRoute = map["openRoute"] as? String ?: "/exams"
+        Fire(
                 examId = examId,
                 offsetMinutes = offsetMinutes,
                 fireAtMillis = fireAtMillis,
                 examStartMillis = examStartMillis,
                 title = title,
-                body = body,
-                requestCode = requestCode,
-            )
+            body = body,
+            requestCode = requestCode,
+            openRoute = openRoute,
+            style = map["style"] as? String ?: "normal",
+            tapAction = map["tapAction"] as? String ?: "openApp",
+            calendarHour = (map["calendarHour"] as? Number)?.toInt() ?: 8,
+            calendarMinute = (map["calendarMinute"] as? Number)?.toInt() ?: 0,
+            calendarTitle = map["calendarTitle"] as? String ?: "",
+            islandA = map["islandA"] as? String ?: "",
+            islandB = map["islandB"] as? String ?: "",
+            firstClassStartMillis = (map["firstClassStartMillis"] as? Number)?.toLong() ?: 0L,
+        )
         }
     }
 
@@ -367,6 +419,15 @@ object ExamReminderScheduler {
                             title = item.optString("title"),
                             body = item.optString("body"),
                             requestCode = item.optInt("requestCode"),
+                            openRoute = item.optString("openRoute", "/exams"),
+                            style = item.optString("style", "normal"),
+                            tapAction = item.optString("tapAction", "openApp"),
+                            calendarHour = item.optInt("calendarHour", 8),
+                            calendarMinute = item.optInt("calendarMinute", 0),
+                            calendarTitle = item.optString("calendarTitle"),
+                            islandA = item.optString("islandA"),
+                            islandB = item.optString("islandB"),
+                            firstClassStartMillis = item.optLong("firstClassStartMillis"),
                         ),
                     )
                 }
@@ -389,6 +450,15 @@ object ExamReminderScheduler {
                     put("title", fire.title)
                     put("body", fire.body)
                     put("requestCode", fire.requestCode)
+                    put("openRoute", fire.openRoute)
+                    put("style", fire.style)
+                    put("tapAction", fire.tapAction)
+                    put("calendarHour", fire.calendarHour)
+                    put("calendarMinute", fire.calendarMinute)
+                    put("calendarTitle", fire.calendarTitle)
+                    put("islandA", fire.islandA)
+                    put("islandB", fire.islandB)
+                    put("firstClassStartMillis", fire.firstClassStartMillis)
                 },
             )
         }

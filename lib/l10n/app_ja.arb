@@ -5684,5 +5684,8 @@
   "courseActionCoupleExpandHint": "展開して相手の授業や一緒の授業をプレビュー。タップで切り替えられます",
   "courseActionCoupleCollapseHint": "タップでカップル時間割の授業リストを折りたたみます",
   "courseActionMixedRelatedCount": "ほかに {count} 件の関連授業があります",
-  "courseActionPartnerReadOnlyNotice": "これは相手の時間割にある授業です。閲覧のみ可能で、編集や変更はできません"
+  "courseActionPartnerReadOnlyNotice": "これは相手の時間割にある授業です。閲覧のみ可能で、編集や変更はできません",
+  "tomorrowBriefingTitle": "1限リマインダー",
+  "tomorrowBriefingSubtitle": "毎日22:00に翌日の授業を通知、1限を優先表示",
+  "tomorrowBriefingTestTitle": "1限通知をテスト"
 }

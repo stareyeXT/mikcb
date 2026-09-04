@@ -57,18 +57,30 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
   Widget _buildEngineSelector() {
     return HyperosSettingsBlock(
       title: '通知形态',
-      child: HyperosListGroup(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          HyperosSelectTile<SuperIslandEngine>(
-            key: const ValueKey<String>('settings-live-engine-select'),
-            label: '超级岛引擎',
-            items: const {
-              'Live Updates': SuperIslandEngine.builtIn,
-              '小米超级岛': SuperIslandEngine.hyperFocusApi,
-            },
-            value: _draft.superIslandEngine,
-            onChanged: _onEngineChanged,
+          HyperosListGroup(
+            children: [
+              HyperosSelectTile<SuperIslandEngine>(
+                key: const ValueKey<String>('settings-live-engine-select'),
+                label: '超级岛引擎',
+                items: const {
+                  'Live Updates': SuperIslandEngine.builtIn,
+                  '小米超级岛': SuperIslandEngine.hyperFocusApi,
+                },
+                value: _draft.superIslandEngine,
+                onChanged: _onEngineChanged,
+              ),
+            ],
           ),
+          if (_draft.superIslandEngine == SuperIslandEngine.hyperFocusApi) ...[
+            const SizedBox(height: 8),
+            const HyperosHintBanner(
+              icon: Icon(Icons.warning_amber_rounded, size: 18),
+              title: Text('澎湃 OS 对于焦点通知有白名单应用限制，使用前请先安装无视白名单的 XP 模块。'),
+            ),
+          ],
         ],
       ),
     );
@@ -217,21 +229,6 @@ class _LiveSettingsScreenState extends State<_LiveSettingsScreen> {
             await HyperosNavigation.push(
               context,
               builder: (_) => const HyperFocusExpandedIslandScreen(),
-            );
-            if (!mounted) return;
-            setState(() {
-              _draft = context.read<TimetableProvider>().settings;
-            });
-          },
-        ),
-        HyperosListTile(
-          icon: Icons.timer_outlined,
-          title: '岛消失时间',
-          details: '按课前/课中/课后配置状态栏岛消失时间',
-          onTap: () async {
-            await HyperosNavigation.push(
-              context,
-              builder: (_) => const HyperFocusIslandTimeoutScreen(),
             );
             if (!mounted) return;
             setState(() {

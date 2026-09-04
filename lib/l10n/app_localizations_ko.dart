@@ -9887,4 +9887,13 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get icsExportShareSubject => '轻屿课表 캘린더';
+
+  @override
+  String get tomorrowBriefingTitle => '1교시 알림';
+
+  @override
+  String get tomorrowBriefingSubtitle => '매일 22:00에 내일 수업을 미리 알림, 1교시 우선 표시';
+
+  @override
+  String get tomorrowBriefingTestTitle => '1교시 알림 테스트';
 }

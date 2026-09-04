@@ -45,6 +45,7 @@ scheduler Wire 阶段值 ↔ 模板 key：
 ## 小米超级岛（Xiaomi Super Island）
 
 ### 引擎与模板规范
+- **开发优先使用 `ghhccghk/HyperFocusApi`**：凡涉及小米超级岛/HyperFocus 通知的新增功能、渲染逻辑或问题修复，先查阅并优先复用该库的 API、模型和模板构建方式；只有在库能力不足或与现有兼容层冲突时，才在本项目内补充实现，并说明原因。仓库：`https://github.com/ghhccghk/HyperFocusApi`
 - 引擎：`com.xzakota.hyper.notification:focus-api:1.4`（第三方逆向库，`FocusNotification.buildV3` 生成模板 JSON 作为通知 extras 的 `miui.focus.param` 交给 HyperOS）
 - 模板规范：`https://github.com/1812z/HyperIsland`「小米超级岛通知模板库」——**必读约束**：
   - `sameWidthDigitInfo` 是**等宽数字组件**：只接受数字内容或 `timerInfo`；塞非数字文字 → HyperOS 抛 `IslandParamsException: digit is empty`，展开态 view=null（岛空白）。文字必须用 `imageTextInfoRight` / `textInfo`

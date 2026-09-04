@@ -1372,127 +1372,6 @@ class _HyperFocusTimingScreenState extends State<HyperFocusTimingScreen> {
   }
 }
 
-class HyperFocusIslandTimeoutScreen extends StatefulWidget {
-  const HyperFocusIslandTimeoutScreen({super.key});
-
-  @override
-  State<HyperFocusIslandTimeoutScreen> createState() =>
-      _HyperFocusIslandTimeoutScreenState();
-}
-
-class _HyperFocusIslandTimeoutScreenState
-    extends State<HyperFocusIslandTimeoutScreen> {
-  late TimetableSettings _draft;
-  late final TextEditingController _preMinutesCtrl;
-  late final TextEditingController _activeMinutesCtrl;
-  late final TextEditingController _postMinutesCtrl;
-  Timer? _autoSaveTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _draft = context.read<TimetableProvider>().settings;
-    _preMinutesCtrl = TextEditingController(
-      text: (_draft.hfIslandTimeoutPre / 60).round().clamp(1, 60).toString(),
-    );
-    _activeMinutesCtrl = TextEditingController(
-      text: (_draft.hfIslandTimeoutActive / 60).round().clamp(1, 60).toString(),
-    );
-    _postMinutesCtrl = TextEditingController(
-      text: (_draft.hfIslandTimeoutPost / 60).round().clamp(1, 60).toString(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _preMinutesCtrl.dispose();
-    _activeMinutesCtrl.dispose();
-    _postMinutesCtrl.dispose();
-    if (_autoSaveTimer?.isActive ?? false) {
-      _autoSaveTimer?.cancel();
-      _persistDraft(_draft);
-    } else {
-      _autoSaveTimer?.cancel();
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return HyperosSubpage(
-      onBack: () => Navigator.pop(context),
-      title: const Text('岛消失时间'),
-      child: HyperosListView(
-        children: [
-          HyperosSectionLabel(text: '状态栏岛消失时间（分钟）'),
-          HyperosListGroup(
-            children: [
-              _buildTimeoutTile('课前', _preMinutesCtrl,
-                  (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPre: v))),
-              _buildTimeoutTile('课中', _activeMinutesCtrl,
-                  (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutActive: v))),
-              _buildTimeoutTile('课后', _postMinutesCtrl,
-                  (v) => _updateDraft(_draft.copyWith(hfIslandTimeoutPost: v))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeoutTile(
-    String label,
-    TextEditingController controller,
-    ValueChanged<int> onChanged,
-  ) {
-    return HyperosTextFieldTile(
-      cardTitle: label,
-      cardSubtitle: '分钟（1~60）',
-      field: HyperosTextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        onChanged: (text) {
-          final minutes = int.tryParse(text) ?? 0;
-          final clamped = minutes.clamp(1, 60);
-          onChanged(clamped * 60);
-          // 回写规范化值，避免界面显示与实际保存不一致（如输入 99 实际保存 60）
-          final normalized = clamped.toString();
-          if (controller.text != normalized) {
-            controller.text = normalized;
-            controller.selection = TextSelection.collapsed(offset: normalized.length);
-          }
-        },
-      ),
-    );
-  }
-
-  void _updateDraft(TimetableSettings next, {bool debounce = true}) {
-    setState(() => _draft = next);
-    _autoSaveTimer?.cancel();
-    if (debounce) {
-      _autoSaveTimer = Timer(
-        const Duration(milliseconds: 250),
-        () => _persistDraft(next),
-      );
-      return;
-    }
-    _persistDraft(next);
-  }
-
-  void _persistDraft(TimetableSettings next) {
-    final provider = context.read<TimetableProvider>();
-    unawaited(
-      provider.updateTimetableSettings(next).then((message) {
-        if (!mounted) return;
-        if (message != null) {
-          showAppToast(context, message: message);
-          setState(() => _draft = provider.settings);
-        }
-      }).catchError((_) {}),
-    );
-  }
-}
-
 class _VariableMultiSelectSheet extends StatefulWidget {
   const _VariableMultiSelectSheet({
     required this.variables,
@@ -1878,6 +1757,7 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
     final service = MiuiLiveActivitiesService();
     final error = await service.sendTestFocusNotification(
       courseName: '高等数学',
+      shortName: '高数',
       startTime: '08:00',
       endTime: '09:40',
       location: '教科A-101',
@@ -2081,9 +1961,8 @@ class _HyperFocusExpandedIslandScreenState extends State<HyperFocusExpandedIslan
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    // 展开卡文本为发送瞬间的快照：hintInfo 不支持系统走秒计时，
-                    // 正式上课时服务每分钟重发通知，倒计时按分钟刷新。
-                    '测试通知为单次快照，倒计时定格在发送瞬间；正式上课时每分钟自动刷新，按分钟走动',
+                    // 测试通知是发送瞬间的快照；正式通知由服务逐秒刷新倒计时。
+                    '测试通知为单次快照，倒计时定格在发送瞬间；正式通知会自动逐秒刷新',
                     style: HyperosTypography.listDetail(context).copyWith(
                       fontSize: 11,
                     ),
@@ -2269,13 +2148,8 @@ class _ExpandedIslandPreviewState extends State<_ExpandedIslandPreview> {
   String get _secondarySecond =>
       _resolve(widget.templates['baseSubcontent'] ?? '');
 
-  bool get _showTimer => widget.showCountdown && widget.stage != 'post';
-
-  // 按钮组件2：前置文本1 = 运行时剩余时间（timerInfo 驱动，空时回退主要小文本1）。
-  String get _prefixFirst {
-    if (_showTimer) return _countdownText;
-    return _resolve(widget.templates['hintTitle'] ?? '');
-  }
+  // 前置文本1使用 hintContent，主要小文本1使用 hintTitle；两者保持独立。
+  String get _prefixFirst => _resolve(widget.templates['hintContent'] ?? '');
 
   // 前置文本2 = hintContent（payload 中 extraTitle 承载）。
   String get _prefixSecond => _resolve(widget.templates['hintContent'] ?? '');

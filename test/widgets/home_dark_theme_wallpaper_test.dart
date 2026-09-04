@@ -147,8 +147,8 @@ Future<void> _pumpDarkHome(
         home: RepaintBoundary(
           key: const ValueKey('dark-home-shot'),
           child: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -320,8 +320,8 @@ void main() {
           value: provider,
           child: const TestApp(
             home: TimetableScreen(
-              enableUpdateCheck: false,
-              enableProgressTimer: false,
+
+enableProgressTimer: false,
             ),
           ),
         ),

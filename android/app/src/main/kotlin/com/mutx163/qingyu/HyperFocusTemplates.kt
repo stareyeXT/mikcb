@@ -152,7 +152,9 @@ internal fun hyperFocusHintWantsSystemTimer(
     isPost: Boolean,
     timerWhenMillis: Long,
     nowMillis: Long,
-): Boolean = showCountdown && !isPost && hyperFocusTimerTargetIsValid(timerWhenMillis, nowMillis)
+    templateRequestsTimer: Boolean = true,
+): Boolean = templateRequestsTimer && showCountdown && !isPost &&
+    hyperFocusTimerTargetIsValid(timerWhenMillis, nowMillis)
 
 /** 岛右侧（B 区）最终渲染槽位。 */
 internal sealed class IslandBSlot {

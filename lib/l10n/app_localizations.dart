@@ -17400,6 +17400,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'轻屿课表日历'**
   String get icsExportShareSubject;
+
+  /// No description provided for @tomorrowBriefingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'早八提醒'**
+  String get tomorrowBriefingTitle;
+
+  /// No description provided for @tomorrowBriefingSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'每天 22:00 提醒第二天的课程，早八优先显示'**
+  String get tomorrowBriefingSubtitle;
+
+  /// No description provided for @tomorrowBriefingTestTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试早八提醒'**
+  String get tomorrowBriefingTestTitle;
 }
 
 class _AppLocalizationsDelegate

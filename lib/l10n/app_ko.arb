@@ -5792,5 +5792,8 @@
   "courseNoteSessionLabel": "이번 수업 메모",
   "courseNoteSessionPlaceholder": "예: 3장 연습문제 제출, 노트북 지참…",
   "courseNoteTileSubtitleSession": "이번 수업 메모 있음",
-  "courseNoteDoneEditingAction": "완료"
+  "courseNoteDoneEditingAction": "완료",
+  "tomorrowBriefingTitle": "1교시 알림",
+  "tomorrowBriefingSubtitle": "매일 22:00에 내일 수업을 미리 알림, 1교시 우선 표시",
+  "tomorrowBriefingTestTitle": "1교시 알림 테스트"
 }

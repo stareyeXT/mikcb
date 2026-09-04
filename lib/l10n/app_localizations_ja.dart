@@ -9847,4 +9847,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get icsExportShareSubject => '軽屿課表カレンダー';
+
+  @override
+  String get tomorrowBriefingTitle => '1限リマインダー';
+
+  @override
+  String get tomorrowBriefingSubtitle => '毎日22:00に翌日の授業を通知、1限を優先表示';
+
+  @override
+  String get tomorrowBriefingTestTitle => '1限通知をテスト';
 }

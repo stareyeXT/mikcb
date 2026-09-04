@@ -104,8 +104,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -173,8 +173,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -228,8 +228,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -305,8 +305,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -380,8 +380,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -429,8 +429,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),
@@ -494,8 +494,8 @@ void main() {
         value: provider,
         child: const TestApp(
           home: TimetableScreen(
-            enableUpdateCheck: false,
-            enableProgressTimer: false,
+
+enableProgressTimer: false,
           ),
         ),
       ),

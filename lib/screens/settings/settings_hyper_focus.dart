@@ -19,11 +19,13 @@ class _HyperFocusTestingSettingsScreen extends StatefulWidget {
       _HyperFocusTestingScreenState();
 }
 
-class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScreen>
+class _HyperFocusTestingScreenState
+    extends State<_HyperFocusTestingSettingsScreen>
     with WidgetsBindingObserver {
   static const Duration _autoRefreshInterval = Duration(seconds: 1);
 
-  final MiuiLiveActivitiesService _hyperFocusService = MiuiLiveActivitiesService();
+  final MiuiLiveActivitiesService _hyperFocusService =
+      MiuiLiveActivitiesService();
   Map<String, dynamic>? _debugStatus;
   bool _loadingDebugStatus = true;
   bool _exportingDiagnostics = false;
@@ -127,14 +129,13 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
       endTime: course?.endTime,
       startAtMillis: startAtMillis,
       endAtMillis: endAtMillis,
-      location: (course?.location.isNotEmpty ?? false) ? course!.location : null,
+      location: (course?.location.isNotEmpty ?? false)
+          ? course!.location
+          : null,
       teacher: (course?.teacher.isNotEmpty ?? false) ? course!.teacher : null,
       stage: stage,
       showCountdown: displaySettings.showCountdown,
       progressBreakOffsetsMillis: progressBreakOffsetsMillis,
-      hfIslandTimeoutPre: settings.hfIslandTimeoutPre,
-      hfIslandTimeoutActive: settings.hfIslandTimeoutActive,
-      hfIslandTimeoutPost: settings.hfIslandTimeoutPost,
       hfIconAEnabled: settings.hfIconAEnabled,
       hfOutEffectStatusEnabled: settings.hfOutEffectStatusEnabled,
       hfOutEffectStatusColor: settings.hfOutEffectStatusColor,
@@ -409,7 +410,8 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
                               loading: _loadingDebugStatus,
                               onPressed: _loadingDebugStatus
                                   ? null
-                                  : () => _refreshDebugStatus(showLoading: true),
+                                  : () =>
+                                        _refreshDebugStatus(showLoading: true),
                             ),
                             HyperosButton(
                               label: _exportingDiagnostics
@@ -455,21 +457,21 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
         context: context,
         title: l10n.hfTestingDebugScheduling,
         entries: {
-          l10n.hfTestingNextCourse:
-              _debugValueText(scheduling['nextCourseName']),
-          l10n.hfTestingNextTrigger:
-              _formatMillis(
-                scheduling['nextTriggerAtMillis'] as int?,
-                l10n,
-              ),
-          l10n.hfTestingCurrentStage:
-              _debugValueText(scheduling['nextTriggerStage']),
+          l10n.hfTestingNextCourse: _debugValueText(
+            scheduling['nextCourseName'],
+          ),
+          l10n.hfTestingNextTrigger: _formatMillis(
+            scheduling['nextTriggerAtMillis'] as int?,
+            l10n,
+          ),
+          l10n.hfTestingCurrentStage: _debugValueText(
+            scheduling['nextTriggerStage'],
+          ),
           l10n.hfTestingBeforeClassBlockedUntil: l10n.hfTestingNone,
-          l10n.hfTestingSuspendedUntil:
-              _formatMillis(
-                scheduling['suspendedUntilMillis'] as int?,
-                l10n,
-              ),
+          l10n.hfTestingSuspendedUntil: _formatMillis(
+            scheduling['suspendedUntilMillis'] as int?,
+            l10n,
+          ),
         },
       ),
       _HyperFocusTestingSection.debugLastTest => _buildDebugSection(
@@ -485,16 +487,19 @@ class _HyperFocusTestingScreenState extends State<_HyperFocusTestingSettingsScre
           if (hasLastTest && lastTestMessage.isNotEmpty)
             l10n.hfTestingLastTestMessage: lastTestMessage,
           if (hasLastTest)
-            l10n.hfTestingLastTestTime:
-                _formatMillis(test['lastAtMillis'] as int?, l10n),
+            l10n.hfTestingLastTestTime: _formatMillis(
+              test['lastAtMillis'] as int?,
+              l10n,
+            ),
         },
       ),
       _HyperFocusTestingSection.debugEnvironment => _buildDebugSection(
         context: context,
         title: l10n.liveTestingSectionEnvironment,
         entries: {
-          for (final entry in _debugSectionMap(_debugStatus?['environment'])
-              .entries)
+          for (final entry in _debugSectionMap(
+            _debugStatus?['environment'],
+          ).entries)
             entry.key: _debugValueText(entry.value),
         },
       ),

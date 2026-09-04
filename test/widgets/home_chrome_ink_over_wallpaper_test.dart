@@ -119,8 +119,8 @@ Future<void> _pumpHome(
       value: provider,
       child: const TestApp(
         home: TimetableScreen(
-          enableUpdateCheck: false,
-          enableProgressTimer: false,
+
+enableProgressTimer: false,
         ),
       ),
     ),

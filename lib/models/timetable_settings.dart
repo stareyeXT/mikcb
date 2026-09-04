@@ -1118,9 +1118,6 @@ class TimetableSettings {
   final int liveTimeCorrectionSeconds;
   final SuperIslandEngine superIslandEngine;
   final String hfTemplatesJson;
-  final int hfIslandTimeoutPre;
-  final int hfIslandTimeoutActive;
-  final int hfIslandTimeoutPost;
   final bool hfIconAEnabled;
   final bool hfOutEffectStatusEnabled;
   final String hfOutEffectStatusColor;
@@ -1152,6 +1149,9 @@ class TimetableSettings {
   final String appUpdateMirrorUrlPrefix;
   final String pgyerApiKey;
   final String pgyerAppKey;
+
+  /// 每晚 22:00 推送「明日课程提醒」（早八优先）的总开关。
+  final bool tomorrowBriefingEnabled;
   final bool holidayOverrideEnabled;
   final String courseCardTitleColorLight;
   final String courseCardTitleColorDark;
@@ -1304,9 +1304,6 @@ class TimetableSettings {
     this.liveBeforeClassQuickAction = LiveBeforeClassQuickAction.none,
     this.superIslandEngine = SuperIslandEngine.hyperFocusApi,
     this.hfTemplatesJson = '',
-    this.hfIslandTimeoutPre = 300,
-    this.hfIslandTimeoutActive = 600,
-    this.hfIslandTimeoutPost = 600,
     this.hfIconAEnabled = true,
     this.hfOutEffectStatusEnabled = true,
     this.hfOutEffectStatusColor = '#FFFFFFFF',
@@ -1331,6 +1328,7 @@ class TimetableSettings {
     this.appUpdateMirrorUrlPrefix = defaultAppUpdateMirrorUrlPrefix,
     this.pgyerApiKey = '',
     this.pgyerAppKey = '',
+    this.tomorrowBriefingEnabled = true,
     this.holidayOverrideEnabled = false,
     this.courseCardTitleColorLight = defaultCourseCardTitleColor,
     this.courseCardTitleColorDark = defaultCourseCardTitleColor,
@@ -1492,6 +1490,9 @@ class TimetableSettings {
       appUpdateMirrorPreset: 'ghfast',
       appUpdateIncludePrerelease: false,
       appUpdateMirrorUrlPrefix: defaultAppUpdateMirrorUrlPrefix,
+      pgyerApiKey: '',
+      pgyerAppKey: '',
+      tomorrowBriefingEnabled: true,
       holidayOverrideEnabled: false,
       courseCardTitleColorLight: defaultCourseCardTitleColor,
       courseCardTitleColorDark: defaultCourseCardTitleColor,
@@ -1631,9 +1632,6 @@ class TimetableSettings {
       'liveBeforeClassQuickAction': liveBeforeClassQuickAction.value,
       'superIslandEngine': superIslandEngine.value,
       'hfTemplatesJson': hfTemplatesJson,
-      'hfIslandTimeoutPre': hfIslandTimeoutPre,
-      'hfIslandTimeoutActive': hfIslandTimeoutActive,
-      'hfIslandTimeoutPost': hfIslandTimeoutPost,
       'hfIconAEnabled': hfIconAEnabled,
       'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled,
       'hfOutEffectStatusColor': hfOutEffectStatusColor,
@@ -1660,6 +1658,7 @@ class TimetableSettings {
       'appUpdateMirrorUrlPrefix': appUpdateMirrorUrlPrefix,
       'pgyerApiKey': pgyerApiKey,
       'pgyerAppKey': pgyerAppKey,
+      'tomorrowBriefingEnabled': tomorrowBriefingEnabled,
       'holidayOverrideEnabled': holidayOverrideEnabled,
       'courseCardTitleColorLight': courseCardTitleColorLight,
       'courseCardTitleColorDark': courseCardTitleColorDark,
@@ -1968,14 +1967,6 @@ class TimetableSettings {
         json['superIslandEngine'] as String?,
       ),
       hfTemplatesJson: json['hfTemplatesJson'] as String? ?? '',
-      hfIslandTimeoutPre:
-          ((json['hfIslandTimeoutPre'] as num?)?.toInt() ?? 300).clamp(60, 3600),
-      hfIslandTimeoutActive:
-          ((json['hfIslandTimeoutActive'] as num?)?.toInt() ?? 600)
-              .clamp(60, 3600),
-      hfIslandTimeoutPost:
-          ((json['hfIslandTimeoutPost'] as num?)?.toInt() ?? 600)
-              .clamp(60, 3600),
       hfIconAEnabled: json['hfIconAEnabled'] as bool? ?? true,
       hfOutEffectStatusEnabled:
           json['hfOutEffectStatusEnabled'] as bool? ?? true,
@@ -2023,6 +2014,8 @@ class TimetableSettings {
       pgyerApiKey: json['pgyerApiKey'] as String? ?? '',
       pgyerAppKey: json['pgyerAppKey'] as String? ?? '',
       holidayOverrideEnabled: json['holidayOverrideEnabled'] as bool? ?? false,
+      tomorrowBriefingEnabled:
+          json['tomorrowBriefingEnabled'] as bool? ?? true,
       courseCardTitleColorLight:
           json['courseCardTitleColorLight'] as String? ??
           defaultCourseCardTitleColor,
@@ -2219,9 +2212,6 @@ class TimetableSettings {
     LiveBeforeClassQuickAction? liveBeforeClassQuickAction,
     SuperIslandEngine? superIslandEngine,
     String? hfTemplatesJson,
-    int? hfIslandTimeoutPre,
-    int? hfIslandTimeoutActive,
-    int? hfIslandTimeoutPost,
     bool? hfIconAEnabled,
     bool? hfOutEffectStatusEnabled,
     String? hfOutEffectStatusColor,
@@ -2248,6 +2238,7 @@ class TimetableSettings {
     String? appUpdateMirrorUrlPrefix,
     String? pgyerApiKey,
     String? pgyerAppKey,
+    bool? tomorrowBriefingEnabled,
     bool? holidayOverrideEnabled,
     String? courseCardTitleColorLight,
     String? courseCardTitleColorDark,
@@ -2491,10 +2482,6 @@ class TimetableSettings {
           liveBeforeClassQuickAction ?? this.liveBeforeClassQuickAction,
       superIslandEngine: superIslandEngine ?? this.superIslandEngine,
       hfTemplatesJson: hfTemplatesJson ?? this.hfTemplatesJson,
-      hfIslandTimeoutPre: hfIslandTimeoutPre ?? this.hfIslandTimeoutPre,
-      hfIslandTimeoutActive:
-          hfIslandTimeoutActive ?? this.hfIslandTimeoutActive,
-      hfIslandTimeoutPost: hfIslandTimeoutPost ?? this.hfIslandTimeoutPost,
       hfIconAEnabled: hfIconAEnabled ?? this.hfIconAEnabled,
       hfOutEffectStatusEnabled:
           hfOutEffectStatusEnabled ?? this.hfOutEffectStatusEnabled,
@@ -2540,6 +2527,8 @@ class TimetableSettings {
           appUpdateMirrorUrlPrefix ?? this.appUpdateMirrorUrlPrefix,
       pgyerApiKey: pgyerApiKey ?? this.pgyerApiKey,
       pgyerAppKey: pgyerAppKey ?? this.pgyerAppKey,
+      tomorrowBriefingEnabled:
+          tomorrowBriefingEnabled ?? this.tomorrowBriefingEnabled,
       holidayOverrideEnabled:
           holidayOverrideEnabled ?? this.holidayOverrideEnabled,
       courseCardTitleColorLight:

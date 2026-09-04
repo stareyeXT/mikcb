@@ -325,9 +325,6 @@ class MiuiLiveActivitiesService {
     List<int> progressBreakOffsetsMillis = const [],
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
-    int hfIslandTimeoutPre = 300,
-    int hfIslandTimeoutActive = 600,
-    int hfIslandTimeoutPost = 600,
     bool hfIconAEnabled = true,
     bool hfOutEffectStatusEnabled = true,
     String hfOutEffectStatusColor = '#FFFFFFFF',
@@ -377,12 +374,10 @@ class MiuiLiveActivitiesService {
         progressBreakOffsetsMillis: progressBreakOffsetsMillis,
         progressMilestoneLabels: progressMilestoneLabels,
         progressMilestoneTimeTexts: progressMilestoneTimeTexts,
-        hfIslandTimeoutPre: hfIslandTimeoutPre,
-        hfIslandTimeoutActive: hfIslandTimeoutActive,
-        hfIslandTimeoutPost: hfIslandTimeoutPost,
         hfIconAEnabled: hfIconAEnabled,
         hfOutEffectStatusEnabled: hfOutEffectStatusEnabled,
         hfOutEffectStatusColor: hfOutEffectStatusColor,
+        superIslandEngine: superIslandEngine,
       );
       await _channel.invokeMethod('startLiveUpdate', data);
       return true;
@@ -505,9 +500,6 @@ class MiuiLiveActivitiesService {
     List<int> progressBreakOffsetsMillis = const [],
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
-    int hfIslandTimeoutPre = 300,
-    int hfIslandTimeoutActive = 600,
-    int hfIslandTimeoutPost = 600,
     bool hfIconAEnabled = true,
     bool hfOutEffectStatusEnabled = true,
     String hfOutEffectStatusColor = '#FFFFFFFF',
@@ -555,9 +547,6 @@ class MiuiLiveActivitiesService {
         'miuiIslandLabelLogoCornerRadius': miuiIslandLabelLogoCornerRadius,
         'miuiIslandExpandedIconMode': miuiIslandExpandedIconMode.value,
         'miuiIslandExpandedIconPath': miuiIslandExpandedIconPath,
-        'hfIslandTimeoutPre': hfIslandTimeoutPre,
-        'hfIslandTimeoutActive': hfIslandTimeoutActive,
-        'hfIslandTimeoutPost': hfIslandTimeoutPost,
         'hfIconAEnabled': hfIconAEnabled,
         'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled,
         'hfOutEffectStatusColor': hfOutEffectStatusColor,
@@ -687,9 +676,6 @@ class MiuiLiveActivitiesService {
     String stage = 'pre',
     bool showCountdown = true,
     List<int> progressBreakOffsetsMillis = const [],
-    int hfIslandTimeoutPre = 300,
-    int hfIslandTimeoutActive = 600,
-    int hfIslandTimeoutPost = 600,
     bool hfIconAEnabled = true,
     bool hfOutEffectStatusEnabled = true,
     String hfOutEffectStatusColor = '#FFFFFFFF',
@@ -710,9 +696,6 @@ class MiuiLiveActivitiesService {
         'stage': stage,
         'showCountdown': showCountdown.toString(),
         'progressBreakOffsetsMillis': progressBreakOffsetsMillis.join(','),
-        'hfIslandTimeoutPre': hfIslandTimeoutPre.toString(),
-        'hfIslandTimeoutActive': hfIslandTimeoutActive.toString(),
-        'hfIslandTimeoutPost': hfIslandTimeoutPost.toString(),
         'hfIconAEnabled': hfIconAEnabled.toString(),
         'hfOutEffectStatusEnabled': hfOutEffectStatusEnabled.toString(),
         'hfOutEffectStatusColor': hfOutEffectStatusColor,
@@ -813,9 +796,6 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     List<int> progressBreakOffsetsMillis = const [],
     List<String> progressMilestoneLabels = const [],
     List<String> progressMilestoneTimeTexts = const [],
-    int hfIslandTimeoutPre = 300,
-    int hfIslandTimeoutActive = 600,
-    int hfIslandTimeoutPost = 600,
     bool hfIconAEnabled = true,
     bool hfOutEffectStatusEnabled = true,
     String hfOutEffectStatusColor = '#FFFFFFFF',
@@ -867,15 +847,13 @@ class TestMiuiLiveActivitiesService extends MiuiLiveActivitiesService {
     String stage = 'pre',
     bool showCountdown = true,
     List<int> progressBreakOffsetsMillis = const [],
-    int hfIslandTimeoutPre = 300,
-    int hfIslandTimeoutActive = 600,
-    int hfIslandTimeoutPost = 600,
     bool hfIconAEnabled = true,
     bool hfOutEffectStatusEnabled = true,
     String hfOutEffectStatusColor = '#FFFFFFFF',
   }) async {
     return null;
   }
+
   @override
   Future<Map<String, dynamic>> getHyperFocusDebugStatus() async {
     return const {

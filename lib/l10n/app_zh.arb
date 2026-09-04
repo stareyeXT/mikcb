@@ -5791,5 +5791,8 @@
     }
   },
   "icsExportShareText": "这是来自轻屿课表的日历文件",
-  "icsExportShareSubject": "轻屿课表日历"
+  "icsExportShareSubject": "轻屿课表日历",
+  "tomorrowBriefingTitle": "早八提醒",
+  "tomorrowBriefingSubtitle": "每天 22:00 提醒第二天的课程，早八优先显示",
+  "tomorrowBriefingTestTitle": "测试早八提醒"
 }

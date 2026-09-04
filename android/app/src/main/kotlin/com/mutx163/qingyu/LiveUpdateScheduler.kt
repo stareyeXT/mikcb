@@ -556,9 +556,6 @@ private data class NativeLiveSettings(
     val liveTimeCorrectionSeconds: Int,
     val liveBeforeClassQuickAction: String,
     val superIslandEngine: String = "builtIn",
-    val islandTimeoutPre: Int = 300,
-    val islandTimeoutActive: Int = 600,
-    val islandTimeoutPost: Int = 600,
     val iconAEnabled: Boolean = false,
     val outEffectStatusEnabled: Boolean = false,
     val outEffectStatusColor: String = "",
@@ -639,9 +636,6 @@ private data class LiveUpdatePayload(
     /** When true, ticker re-validates against the schedule snapshot (scheduler path). */
     val validateAgainstSchedule: Boolean = true,
     val superIslandEngine: String = "builtIn",
-    val islandTimeoutPre: Int = 300,
-    val islandTimeoutActive: Int = 600,
-    val islandTimeoutPost: Int = 600,
     val iconAEnabled: Boolean = false,
     val outEffectStatusEnabled: Boolean = false,
     val outEffectStatusColor: String = "",
@@ -933,9 +927,6 @@ object LiveUpdateScheduler {
                 data["validateAgainstSchedule"] as? Boolean ?: false,
             superIslandEngine =
                 data["superIslandEngine"] as? String ?: "builtIn",
-            islandTimeoutPre = (islandConfig["hfIslandTimeoutPre"] as? Number)?.toInt() ?: 300,
-            islandTimeoutActive = (islandConfig["hfIslandTimeoutActive"] as? Number)?.toInt() ?: 600,
-            islandTimeoutPost = (islandConfig["hfIslandTimeoutPost"] as? Number)?.toInt() ?: 600,
             iconAEnabled = islandConfig["hfIconAEnabled"] as? Boolean ?: false,
             outEffectStatusEnabled = islandConfig["hfOutEffectStatusEnabled"] as? Boolean ?: false,
             outEffectStatusColor = islandConfig["hfOutEffectStatusColor"] as? String ?: "",
@@ -1309,9 +1300,6 @@ object LiveUpdateScheduler {
                 settingsJson.optString("liveBeforeClassQuickAction", "none"),
             superIslandEngine =
                 settingsJson.optString("superIslandEngine", "builtIn"),
-            islandTimeoutPre = settingsJson.optInt("hfIslandTimeoutPre", 300),
-            islandTimeoutActive = settingsJson.optInt("hfIslandTimeoutActive", 600),
-            islandTimeoutPost = settingsJson.optInt("hfIslandTimeoutPost", 600),
             iconAEnabled = settingsJson.optBoolean("hfIconAEnabled", false),
             outEffectStatusEnabled =
                 settingsJson.optBoolean("hfOutEffectStatusEnabled", false),
@@ -1437,9 +1425,6 @@ object LiveUpdateScheduler {
             )
             putExtra("miuiIslandExpandedIconMode", payload.miuiIslandExpandedIconMode)
             putExtra("miuiIslandExpandedIconPath", payload.miuiIslandExpandedIconPath)
-            putExtra("hfIslandTimeoutPre", payload.islandTimeoutPre)
-            putExtra("hfIslandTimeoutActive", payload.islandTimeoutActive)
-            putExtra("hfIslandTimeoutPost", payload.islandTimeoutPost)
             putExtra("hfIconAEnabled", payload.iconAEnabled)
             putExtra("hfOutEffectStatusEnabled", payload.outEffectStatusEnabled)
             putExtra("hfOutEffectStatusColor", payload.outEffectStatusColor)
@@ -1873,9 +1858,6 @@ object LiveUpdateScheduler {
             progressMilestoneTimeTexts = selection.progressMilestoneTimeTexts,
             validateAgainstSchedule = true,
             superIslandEngine = snapshot.settings.superIslandEngine,
-            islandTimeoutPre = snapshot.settings.islandTimeoutPre,
-            islandTimeoutActive = snapshot.settings.islandTimeoutActive,
-            islandTimeoutPost = snapshot.settings.islandTimeoutPost,
             iconAEnabled = snapshot.settings.iconAEnabled,
             outEffectStatusEnabled = snapshot.settings.outEffectStatusEnabled,
             outEffectStatusColor = snapshot.settings.outEffectStatusColor,

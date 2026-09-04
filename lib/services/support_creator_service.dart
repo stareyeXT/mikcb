@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 
 import '../l10n/service_message_localizer.dart';
 import '../logging/app_debug_log.dart';
-import 'app_update_service.dart';
 import '../utils/async_utils.dart';
 import 'app_http_client.dart';
 
@@ -240,7 +239,7 @@ class SupportCreatorService {
   }
 
   String? _normalizeMirrorUrlPrefix(String? prefix) {
-    final candidate = (prefix ?? AppUpdateService.defaultMirrorUrlPrefix)
+    final candidate = (prefix ?? 'https://ghfast.top/')
         .trim();
     if (candidate.isEmpty) {
       return null;

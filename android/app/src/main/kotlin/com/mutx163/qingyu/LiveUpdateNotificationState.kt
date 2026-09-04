@@ -87,6 +87,8 @@ internal data class LiveUpdateNotificationState(
     val endTimeText: String,
     val startAtMillis: Long,
     val endAtMillis: Long,
+    /** 当前阶段的倒计时目标；普通课程阶段默认等于 startAtMillis。 */
+    val countdownTargetAtMillis: Long = startAtMillis,
     val stageTitle: String,
     val title: String,
     val timeRangeText: String,

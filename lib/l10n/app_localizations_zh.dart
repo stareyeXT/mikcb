@@ -9568,6 +9568,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get icsExportShareSubject => '轻屿课表日历';
+
+  @override
+  String get tomorrowBriefingTitle => '早八提醒';
+
+  @override
+  String get tomorrowBriefingSubtitle => '每天 22:00 提醒第二天的课程，早八优先显示';
+
+  @override
+  String get tomorrowBriefingTestTitle => '测试早八提醒';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -18652,6 +18661,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get icsExportShareSubject => '輕屿課表日曆';
+
+  @override
+  String get tomorrowBriefingTitle => '早八提醒';
+
+  @override
+  String get tomorrowBriefingSubtitle => '每天 22:00 提醒第二天的課程，早八優先顯示';
+
+  @override
+  String get tomorrowBriefingTestTitle => '測試早八提醒';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -27736,4 +27754,13 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get icsExportShareSubject => '輕屿課表日曆';
+
+  @override
+  String get tomorrowBriefingTitle => '早八提醒';
+
+  @override
+  String get tomorrowBriefingSubtitle => '每天 22:00 提醒第二天的課程，早八優先顯示';
+
+  @override
+  String get tomorrowBriefingTestTitle => '測試早八提醒';
 }

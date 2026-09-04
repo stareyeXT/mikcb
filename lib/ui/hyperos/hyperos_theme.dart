@@ -287,13 +287,18 @@ abstract final class HyperosColors {
         : HyperosMiuixLightColors.disabledOnSecondaryVariant;
   }
 
-  /// Status bar icons/background aligned to a solid page or header color.
+  /// Edge-to-edge system bars with icon contrast derived from the content.
   static SystemUiOverlayStyle systemOverlayForBackground(Color background) {
     final light = background.computeLuminance() > 0.5;
     return SystemUiOverlayStyle(
-      statusBarColor: background,
+      statusBarColor: Colors.transparent,
       statusBarIconBrightness: light ? Brightness.dark : Brightness.light,
       statusBarBrightness: light ? Brightness.light : Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness:
+          light ? Brightness.dark : Brightness.light,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarContrastEnforced: false,
     );
   }
 }

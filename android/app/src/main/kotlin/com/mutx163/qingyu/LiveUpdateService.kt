@@ -28,6 +28,25 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.Calendar
 
+/** 小节间歇窗口：断点按「上一小节结束、下一小节开始」成对传入。 */
+internal fun liveInternalBreakWindow(
+    nowMillis: Long,
+    startAtMillis: Long,
+    progressBreakOffsetsMillis: LongArray,
+): LongRange? {
+    if (progressBreakOffsetsMillis.size < 2) return null
+    var index = 0
+    while (index + 1 < progressBreakOffsetsMillis.size) {
+        val breakStart = startAtMillis + progressBreakOffsetsMillis[index]
+        val breakEnd = startAtMillis + progressBreakOffsetsMillis[index + 1]
+        if (breakEnd > breakStart && nowMillis >= breakStart && nowMillis < breakEnd) {
+            return breakStart..breakEnd
+        }
+        index += 2
+    }
+    return null
+}
+
 class LiveUpdateService : Service() {
     companion object {
         private const val TAG = "LiveUpdateService"
@@ -45,8 +64,11 @@ class LiveUpdateService : Service() {
         private const val POST_PROMOTED_NOTIFICATIONS_PERMISSION =
             "android.permission.POST_PROMOTED_NOTIFICATIONS"
 
-        /** 岛会话身份：课程+阶段+起止时间。相同 key 的重复启动视为同一次会话。 */
-        fun buildIslandSessionKey(
+        /** 课后通知在此固定窗口内保留；它不控制岛的展开时长。 */
+        internal const val AFTER_CLASS_DISPLAY_WINDOW_MILLIS = 10 * 60_000L
+
+        /** 用于避免每秒重推倒计时重新触发展开态。 */
+        fun buildIslandPresentationSessionKey(
             courseName: String,
             stage: String,
             startAtMillis: Long,
@@ -296,14 +318,9 @@ class LiveUpdateService : Service() {
     private var miuiIslandLabelLogoCornerRadius = 8f
     private var miuiIslandExpandedIconMode = "app_icon"
     private var miuiIslandExpandedIconPath: String? = null
-    private var islandTimeoutPre = 300
-    private var islandTimeoutActive = 600
-    private var islandTimeoutPost = 600
-    private var islandSessionStartedAt = 0L
-    private var islandSuppressed = false
-
-    /** 当前岛会话身份：同课程同阶段的重复启动不重置计时与抑制状态 */
-    private var islandSessionKey: String? = null
+    private var hasValidSessionTimeRange = true
+    private var islandPresentationSessionKey: String? = null
+    private var islandExpansionPending = false
     private var iconAEnabled = false
     private var outEffectStatusEnabled = false
     private var outEffectStatusColor = ""
@@ -326,8 +343,9 @@ class LiveUpdateService : Service() {
     private var lastCriticalTimeText = ""
     private var hasStartedForeground = false
     private var lastTickerStage: String? = null
+    private var lastTickerWasInternalBreak = false
     private var validateAgainstSchedule = true
-    private var superIslandEngine = "builtIn"
+    private var superIslandEngine = "hyperFocusApi"
     private val xiaomiSuperIslandRenderer by lazy {
         XiaomiSuperIslandNotificationRenderer(this)
     }
@@ -397,6 +415,7 @@ class LiveUpdateService : Service() {
             nextName = sanitizeTextExtra(intent?.getStringExtra("nextName"))
             activityStage = intent?.getStringExtra("stage").orEmpty()
             lastTickerStage = null
+            lastTickerWasInternalBreak = false
             endSecondsCountdownThreshold =
                 intent?.getIntExtra("endSecondsCountdownThreshold", 60) ?: 60
             showCountdown = intent?.getBooleanExtra("showCountdown", true) ?: true
@@ -433,9 +452,6 @@ class LiveUpdateService : Service() {
                 intent?.getStringExtra("miuiIslandExpandedIconMode") ?: "app_icon"
             miuiIslandExpandedIconPath =
                 intent?.getStringExtra("miuiIslandExpandedIconPath")?.takeIf { it.isNotBlank() }
-            islandTimeoutPre = intent?.getIntExtra("hfIslandTimeoutPre", 300) ?: 300
-            islandTimeoutActive = intent?.getIntExtra("hfIslandTimeoutActive", 600) ?: 600
-            islandTimeoutPost = intent?.getIntExtra("hfIslandTimeoutPost", 600) ?: 600
             iconAEnabled = intent?.getBooleanExtra("hfIconAEnabled", false) ?: false
             outEffectStatusEnabled = intent?.getBooleanExtra("hfOutEffectStatusEnabled", false) ?: false
             outEffectStatusColor = intent?.getStringExtra("hfOutEffectStatusColor") ?: ""
@@ -474,29 +490,19 @@ class LiveUpdateService : Service() {
                 intent?.getLongExtra("endAtMillis", 0L)?.takeIf { it > 0L }
                     ?: buildCourseTimeMillis(endTimeText)
                     ?: startAtMillis
-            if (endAtMillis <= startAtMillis) {
-                // extras 与时间文本解析全失败时 startAt==endAt 的零长会话：
-                // 立即判为过期，不进入最长 islandTimeoutPost 秒的课后幽灵窗口
-                islandTimeoutPost = 0
-            }
+            hasValidSessionTimeRange = endAtMillis > startAtMillis
 
             lastRemainingText = "-1"
             lastProgressUnits = -1
             lastCriticalTimeText = ""
-            // Workmanager 周期任务/系统重投递会用相同 payload 重启本服务：
-            // 同课程同阶段不重置会话计时与抑制状态，否则「岛消失时间」到期
-            // 主动下岛后 15 分钟内必被重新拉起，超时设置形同虚设。
-            val incomingSessionKey =
-                buildIslandSessionKey(
-                    courseName = courseName,
-                    stage = activityStage,
-                    startAtMillis = startAtMillis,
-                    endAtMillis = endAtMillis,
-                )
-            if (incomingSessionKey != islandSessionKey) {
-                islandSessionStartedAt = System.currentTimeMillis()
-                islandSuppressed = false
-                islandSessionKey = incomingSessionKey
+            val presentationSessionKey = buildIslandPresentationSessionKey(
+                courseName = courseName,
+                stage = activityStage,
+                startAtMillis = startAtMillis,
+                endAtMillis = endAtMillis,
+            )
+            if (presentationSessionKey != islandPresentationSessionKey) {
+                beginIslandPresentation(presentationSessionKey)
             }
             markServiceRunning()
 
@@ -529,6 +535,7 @@ class LiveUpdateService : Service() {
             val initialText = computeRemainingText(System.currentTimeMillis())
             lastRemainingText = initialText
             updateForegroundNotification(buildNotification(initialText))
+            islandExpansionPending = false
             startTicker()
             START_STICKY
         } catch (e: Exception) {
@@ -863,6 +870,7 @@ class LiveUpdateService : Service() {
                 val now = System.currentTimeMillis()
                 BeforeClassQuickActionRestore.restoreIfClassEnded(applicationContext, now)
                 val stage = resolveStage(now)
+                val internalBreak = stage == "beforeClass" && internalBreakWindow(now) != null
                 // 课后窗口调度器不感知（快照 stage 在课末即结束），跳过校验避免被提前停掉
                 if (stage != "afterClass" &&
                     validateAgainstSchedule &&
@@ -890,14 +898,20 @@ class LiveUpdateService : Service() {
                     return
                 }
 
+                var forceNotificationRefresh = false
                 // When stage transitions, reschedule so onStartCommand re-reads
                 // the correct displaySettings for the new stage.
                 if (lastTickerStage != null && stage != lastTickerStage) {
                     lastTickerStage = stage
-                    if (stage == "afterClass") {
-                        // 课后窗口本地渲染（模板与超时都在本服务内），不重读 intent
-                        islandSessionStartedAt = now
-                        islandSuppressed = false
+                    val internalBreakTransition = internalBreak || lastTickerWasInternalBreak
+                    if (internalBreakTransition) {
+                        // 小节间歇是同一课程内部的课前窗口，直接重推以重新展开岛。
+                        beginIslandPresentation("$courseName|$stage|$startAtMillis|$endAtMillis")
+                        forceNotificationRefresh = true
+                    } else if (stage == "afterClass") {
+                        // 课后窗口本地渲染，直接重推以重新展开岛。
+                        beginIslandPresentation("$courseName|$stage|$startAtMillis|$endAtMillis")
+                        forceNotificationRefresh = true
                     } else {
                         val rescheduled = LiveUpdateScheduler.reschedule(
                             applicationContext,
@@ -918,6 +932,7 @@ class LiveUpdateService : Service() {
                     }
                 }
                 lastTickerStage = stage
+                lastTickerWasInternalBreak = internalBreak
 
                 // 课后窗口让位于已激活的下一节课（含其课前提醒），避免吞掉连堂课程
                 if (stage == "afterClass" &&
@@ -935,34 +950,6 @@ class LiveUpdateService : Service() {
                     return
                 }
 
-                val stageTimeoutSeconds = when (stage) {
-                    "beforeClass" -> islandTimeoutPre
-                    "afterClass" -> islandTimeoutPost
-                    else -> islandTimeoutActive
-                }
-                // 岛消失时间到期：主动下岛（含 dismiss bundle），避免每次重推刷新系统超时
-                if (!islandSuppressed &&
-                    stageTimeoutSeconds > 0 &&
-                    now - islandSessionStartedAt >= stageTimeoutSeconds * 1000L
-                ) {
-                    islandSuppressed = true
-                    getSystemService(NotificationManager::class.java)
-                        ?.notify(NOTIFICATION_ID, buildNotification(computeRemainingText(now)))
-                }
-
-                if (now >= endAtMillis + islandTimeoutPost * 1000L + 30_000L) {
-                    // Auto-remove 30s after the post window, especially for tests.
-                    if (!LiveUpdateScheduler.reschedule(
-                            applicationContext,
-                            allowImmediateStart = true,
-                            stopStaleSessions = validateAgainstSchedule,
-                        )
-                    ) {
-                        stopAndRemoveNotification()
-                    }
-                    return
-                }
-
                 val currentText = computeRemainingText(now)
                 val currentDuringClassProgress = if (stage == "duringClass") {
                     buildDuringClassProgress(now)
@@ -970,6 +957,7 @@ class LiveUpdateService : Service() {
                     null
                 }
                 val currentCriticalTimeText = currentDuringClassProgress?.criticalTimeText ?: currentText
+                val hintTimerRequestsSecondRefresh = shouldRefreshHintTimerEverySecond(stage)
                 val shouldRefreshProgressThisTick =
                     currentDuringClassProgress?.updatesEverySecond == true
                 val currentProgress =
@@ -980,16 +968,27 @@ class LiveUpdateService : Service() {
                     }
                 if (currentText != lastRemainingText ||
                     currentProgress != lastProgressUnits ||
-                    currentCriticalTimeText != lastCriticalTimeText
+                    currentCriticalTimeText != lastCriticalTimeText ||
+                    hintTimerRequestsSecondRefresh ||
+                    forceNotificationRefresh
                 ) {
                     lastRemainingText = currentText
                     lastProgressUnits = currentProgress
                     lastCriticalTimeText = currentCriticalTimeText
                     getSystemService(NotificationManager::class.java)
                         ?.notify(NOTIFICATION_ID, buildNotification(currentText))
+                    islandExpansionPending = false
                 }
 
-                handler.postDelayed(this, computeNextTickDelayMillis(now, stage, currentDuringClassProgress))
+                handler.postDelayed(
+                    this,
+                    computeNextTickDelayMillis(
+                        now,
+                        stage,
+                        currentDuringClassProgress,
+                        hintTimerRequestsSecondRefresh,
+                    ),
+                )
             }
         }
         handler.post(ticker!!)
@@ -1000,6 +999,11 @@ class LiveUpdateService : Service() {
             handler.removeCallbacks(runnable)
         }
         ticker = null
+    }
+
+    private fun beginIslandPresentation(sessionKey: String) {
+        islandPresentationSessionKey = sessionKey
+        islandExpansionPending = true
     }
 
     private fun computeRemainingText(now: Long): String {
@@ -1014,7 +1018,8 @@ class LiveUpdateService : Service() {
         } else {
             when (stage) {
                 "beforeClass" -> {
-                    val timeUntilStart = (startAtMillis - now).coerceAtLeast(0L)
+                    val target = internalBreakWindow(now)?.last ?: startAtMillis
+                    val timeUntilStart = (target - now).coerceAtLeast(0L)
                     "${prefixTextStart}${formatCountdownDuration(
                         durationMillis = timeUntilStart,
                         secondsThresholdMillis = 60_000L,
@@ -1035,8 +1040,8 @@ class LiveUpdateService : Service() {
 
     private fun resolveStage(now: Long): String? {
         if (now >= endAtMillis) {
-            // 课后窗口：下课后的 islandTimeoutPost 秒内继续展示"已下课"
-            if (islandTimeoutPost > 0 && now < endAtMillis + islandTimeoutPost * 1000L) {
+            // 课后窗口独立于岛展开时长，固定保留通知与状态栏岛。
+            if (hasValidSessionTimeRange && now < endAtMillis + AFTER_CLASS_DISPLAY_WINDOW_MILLIS) {
                 return "afterClass"
             }
             return null
@@ -1046,6 +1051,10 @@ class LiveUpdateService : Service() {
         // legacy behavior of trusting the start intent in that case.)
         if (beforeClassLeadMillis > 0L && now < startAtMillis - beforeClassLeadMillis) {
             return null
+        }
+        // 多小节课程的课间休息属于下一小节的课前窗口。
+        if (internalBreakWindow(now) != null) {
+            return if (enableBeforeClass) "beforeClass" else "duringClass"
         }
 
         val reminderStart = if (liveClassReminderStartMinutes == 0) {
@@ -1076,10 +1085,21 @@ class LiveUpdateService : Service() {
         return enableDuringClass && (promoteDuringClass || showNotificationDuringClass)
     }
 
+    private fun internalBreakWindow(nowMillis: Long): LongRange? = liveInternalBreakWindow(
+        nowMillis = nowMillis,
+        startAtMillis = startAtMillis,
+        progressBreakOffsetsMillis = progressBreakOffsetsMillis,
+    )
+
     private fun buildNotification(remainingText: String): Notification {
         val now = System.currentTimeMillis()
         val stage = LiveUpdateNotificationStage.fromWireValue(resolveStage(now))
             ?: return buildBootstrapNotification(courseName)
+        val stageCountdownTarget = if (stage == LiveUpdateNotificationStage.BEFORE_CLASS) {
+            internalBreakWindow(now)?.last ?: startAtMillis
+        } else {
+            startAtMillis
+        }
         val progress = if (stage == LiveUpdateNotificationStage.DURING_CLASS) {
             buildDuringClassProgress(now)
         } else {
@@ -1284,6 +1304,7 @@ class LiveUpdateService : Service() {
             endTimeText = endTimeText,
             startAtMillis = startAtMillis,
             endAtMillis = endAtMillis,
+            countdownTargetAtMillis = stageCountdownTarget,
             stageTitle = stageTitle,
             title = title,
             timeRangeText = timeRangeText,
@@ -1318,26 +1339,18 @@ class LiveUpdateService : Service() {
             labelLogoCornerRadius = miuiIslandLabelLogoCornerRadius,
             expandedIconMode = miuiIslandExpandedIconMode,
             expandedIconPath = miuiIslandExpandedIconPath,
-            timeoutPre = islandTimeoutPre,
-            timeoutActive = islandTimeoutActive,
-            timeoutPost = islandTimeoutPost,
+            startExpanded = islandExpansionPending,
             iconAEnabled = iconAEnabled,
             outEffectEnabled = outEffectStatusEnabled,
             outEffectColor = outEffectStatusColor,
         )
 
-        val xiaomi = if (islandSuppressed) {
-            // 消失时间到期后持续携带 dismiss 参数（hyperFocusApi）或不再附加焦点参数（builtIn），
-            // 防止每分钟重推把岛重新唤起——两种引擎统一走 renderDismiss。
-            xiaomiSuperIslandRenderer.renderDismiss(superIslandEngine)
-        } else {
-            xiaomiSuperIslandRenderer.render(state, xiaomiSettings)
-        }
+        val xiaomi = xiaomiSuperIslandRenderer.render(state, xiaomiSettings)
         val decoration = xiaomi.decoration
         val android = androidLiveUpdateRenderer.render(
             state = state,
             decoration = decoration,
-            requestPromotion = !islandSuppressed && shouldRequestAndroidLiveUpdatePromotion(
+            requestPromotion = shouldRequestAndroidLiveUpdatePromotion(
                 shouldPromote = state.shouldPromote,
                 vendorSurfaceReady = decoration.isVendorSurfaceReady,
             ),
@@ -1425,7 +1438,6 @@ class LiveUpdateService : Service() {
                     "hasPromotableCharacteristics" to android.hasPromotableCharacteristics,
                     "miuiFocusParamPresent" to (xiaomi.legacyFocusParam != null),
                     "hyperFocusPresent" to (xiaomi.hyperFocusExtras != null),
-                    "islandSuppressed" to islandSuppressed,
                     "androidPromotionRequested" to android.requestedPromotion,
                     "notificationTitle" to title,
                     "notificationContentText" to if (shouldPromote) {
@@ -1451,7 +1463,8 @@ class LiveUpdateService : Service() {
     }
 
     private fun stopAndRemoveNotification() {
-        islandSessionKey = null
+        islandPresentationSessionKey = null
+        islandExpansionPending = false
         restoreBeforeClassQuickActionIfClassEnded()
         markServiceStopped(getString(R.string.stop_reminder_ended))
         UmengDiagnosticReporter.record(
@@ -1644,10 +1657,14 @@ class LiveUpdateService : Service() {
         now: Long,
         stage: String?,
         duringClassProgress: LiveUpdateProgressState?,
+        hintTimerRequestsSecondRefresh: Boolean = false,
     ): Long {
+        if (hintTimerRequestsSecondRefresh) {
+            return 1_000L
+        }
         val refreshEverySecond = when (stage) {
             "beforeClass" -> shouldRefreshEverySecond(
-                durationMillis = (startAtMillis - now).coerceAtLeast(0L),
+                durationMillis = ((internalBreakWindow(now)?.last ?: startAtMillis) - now).coerceAtLeast(0L),
                 secondsThresholdMillis = 60_000L,
             )
             "beforeEnd" -> shouldRefreshEverySecond(
@@ -1662,9 +1679,9 @@ class LiveUpdateService : Service() {
         }
         val stageDelay = when (stage) {
             "beforeClass" -> minOf(
-                (startAtMillis - now).coerceAtLeast(1_000L),
+                ((internalBreakWindow(now)?.last ?: startAtMillis) - now).coerceAtLeast(1_000L),
                 nextCountdownTextChangeDelayMillis(
-                    durationMillis = (startAtMillis - now).coerceAtLeast(0L),
+                    durationMillis = ((internalBreakWindow(now)?.last ?: startAtMillis) - now).coerceAtLeast(0L),
                     secondsThresholdMillis = 60_000L,
                 ),
             )
@@ -1702,5 +1719,26 @@ class LiveUpdateService : Service() {
             else -> 60_000L
         }
         return stageDelay.coerceIn(1_000L, 60_000L)
+    }
+
+    /** hintInfo 的 timerInfo 在 HyperOS 展开态是快照，倒计时模板需由应用逐秒刷新。 */
+    private fun shouldRefreshHintTimerEverySecond(stage: String?): Boolean {
+        if (!showCountdown || stage == null || superIslandEngine != "hyperFocusApi") return false
+        if (stage == "duringClassStatusBar") return false
+        val notificationStage = LiveUpdateNotificationStage.fromWireValue(stage) ?: return false
+        val key = hyperFocusTemplateStage(notificationStage)
+        if (key == "post") return false
+        val templates = loadHyperFocusTemplates(this)
+        val hintRequestsTimer = islandWantsSystemTimer(
+            templates["hintTitle_$key"] ?: "",
+            showCountdown,
+            isPost = false,
+        )
+        val islandRequestsTimer = islandWantsSystemTimer(
+            templates["islandB_$key"] ?: "",
+            showCountdown,
+            isPost = false,
+        )
+        return hintRequestsTimer || islandRequestsTimer
     }
 }

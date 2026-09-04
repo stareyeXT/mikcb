@@ -53,6 +53,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import com.xzakota.hyper.notification.common.model.TimerInfo
 import com.xzakota.hyper.notification.focus.FocusNotification
 import com.xzakota.hyper.notification.focus.model.ActionInfo
@@ -86,6 +87,7 @@ class MainActivity : FlutterActivity() {
         private const val MIGRATION_CHANNEL = "com.mutx163.qingyu/migration"
         private const val CHANNEL_ID = "live_update_channel"
         const val HYPERFOCUS_TEST_CHANNEL_ID = "hyperfocus_test_channel"
+        private const val TOMORROW_BRIEFING_TEST_NOTIFICATION_ID = 10002
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val PREFS_NAME = "native_runtime_prefs"
         private const val KEY_HIDE_FROM_RECENTS = "hide_from_recents"
@@ -156,6 +158,9 @@ class MainActivity : FlutterActivity() {
         )
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Match Flutter's edge-to-edge mode on Android versions before the
+        // target-SDK enforcement introduced by Android 15.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         // Debug deep links first so automation routes never fall into import.
         handleDebugDeepLinkIntent(intent)
         handleExternalImportIntent(intent)
@@ -671,6 +676,113 @@ class MainActivity : FlutterActivity() {
                     "clear" -> {
                         ExamReminderScheduler.clear(applicationContext)
                         result.success(true)
+                    }
+                    "sendTomorrowBriefingTest" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val title = args?.get("title") as? String ?: "明天有早八"
+                        val body = args?.get("body") as? String ?: ""
+                        val hasEarlyClass = args?.get("hasEarlyClass") as? Boolean ?: false
+                        val firstClassStartMillis =
+                            (args?.get("firstClassStartMillis") as? Number)?.toLong() ?: 0L
+                        val islandA = args?.get("islandA") as? String ?: ""
+                        val islandB = args?.get("islandB") as? String ?: ""
+                        val calendarHour = (args?.get("calendarHour") as? Number)?.toInt() ?: 8
+                        val calendarMinute = (args?.get("calendarMinute") as? Number)?.toInt() ?: 0
+                        val calendarTitle = args?.get("calendarTitle") as? String ?: "早八课程"
+                        val manager =
+                            notificationManager ?: getSystemService(
+                                Context.NOTIFICATION_SERVICE,
+                            ) as? NotificationManager
+                        if (manager == null) {
+                            result.error("SEND_BRIEFING_TEST_FAILED", "No NotificationManager", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            manager.createNotificationChannel(
+                                NotificationChannel(
+                                    HYPERFOCUS_TEST_CHANNEL_ID,
+                                    "HyperFocusApi Test",
+                                    NotificationManager.IMPORTANCE_HIGH,
+                                ),
+                            )
+                            val posted = TomorrowBriefingNotificationBuilder.post(
+                                context = applicationContext,
+                                notificationId = TOMORROW_BRIEFING_TEST_NOTIFICATION_ID,
+                                title = title,
+                                body = body,
+                                tapAction = if (hasEarlyClass) {
+                                    TomorrowBriefingNotificationBuilder.TAP_ACTION_OPEN_CALENDAR
+                                } else {
+                                    TomorrowBriefingNotificationBuilder.TAP_ACTION_OPEN_APP
+                                },
+                                calendarHour = calendarHour,
+                                calendarMinute = calendarMinute,
+                                calendarTitle = calendarTitle,
+                                islandA = islandA,
+                                islandB = islandB,
+                                firstClassStartMillis = firstClassStartMillis,
+                            )
+                            if (!posted) {
+                                result.success("通知权限未授予，无法发送测试通知")
+                                return@setMethodCallHandler
+                            }
+                            // 正式岛（id=2001）与测试通知同包 focus 互斥（HyperOS
+                            // FocusPlugin.isSameModule），提前告知原因而不是只报"未显示"
+                            val liveIslandActive =
+                                manager.activeNotifications.any { it.id == 2001 }
+                            result.success(
+                                if (liveIslandActive) {
+                                    "测试通知已提交，但正式岛正在运行，系统可能互斥拦截；" +
+                                        "可先在实时上课设置中暂停服务后再测"
+                                } else {
+                                    null
+                                },
+                            )
+                        } catch (e: Exception) {
+                            Log.e("ExamReminder", "sendTomorrowBriefingTest failed", e)
+                            result.error("SEND_BRIEFING_TEST_FAILED", e.message, null)
+                        }
+                    }
+                    "openSystemCalendarEvent" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val hour = (args?.get("hour") as? Number)?.toInt()
+                        val minute = (args?.get("minute") as? Number)?.toInt()
+                        val message = args?.get("message") as? String
+                        if (hour == null || minute == null || hour !in 0..23 || minute !in 0..59) {
+                            result.error("INVALID_ARGUMENTS", "Invalid calendar event time", null)
+                            return@setMethodCallHandler
+                        }
+                        val now = Calendar.getInstance()
+                        val begin = Calendar.getInstance().apply {
+                            set(Calendar.HOUR_OF_DAY, hour)
+                            set(Calendar.MINUTE, minute)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                            if (!after(now)) {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                            }
+                        }
+                        val end = (begin.clone() as Calendar).apply {
+                            add(Calendar.HOUR_OF_DAY, 1)
+                        }
+                        val intent = Intent(Intent.ACTION_INSERT).apply {
+                            data = android.provider.CalendarContract.Events.CONTENT_URI
+                            putExtra(android.provider.CalendarContract.Events.TITLE, message ?: "早八课程")
+                            putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin.timeInMillis)
+                            putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, end.timeInMillis)
+                            putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "早八课程起床提醒")
+                            putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, false)
+                        }
+                        try {
+                            if (intent.resolveActivity(packageManager) == null) {
+                                result.success(false)
+                                return@setMethodCallHandler
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (_: ActivityNotFoundException) {
+                            result.success(false)
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -1467,12 +1579,6 @@ class MainActivity : FlutterActivity() {
                 nowMillis = now,
                 resolve = r,
             )
-            val hintWantsSystemTimer = hyperFocusHintWantsSystemTimer(
-                showCountdown = showCountdown,
-                isPost = templateStage == "post",
-                timerWhenMillis = timerTarget,
-                nowMillis = now,
-            )
             val extras = FocusNotification.buildV3 {
                 business = "course_schedule"
                 updatable = true
@@ -1501,23 +1607,16 @@ class MainActivity : FlutterActivity() {
                 }
 
                 // 字段映射与 XiaomiSuperIslandNotificationRenderer.buildHyperFocusBundle 保持一致：
-                // content ← 运行时剩余/状态文本（兜底 hintTitle），extraTitle ← hintContent 模板，
-                // specialTitle ← hintSubcontent 模板，subTitle ← hintSubtitle 模板。
+                // title ← 主要小文本1，content ← 前置文本1；
+                // specialTitle ← 前置文本2，subTitle ← 主要小文本2。
                 hintInfo {
                     type = 2
+                    // 测试路径与正式路径一致：倒计时模板由 title 承载；正式
+                    // 服务会按秒重发通知，避免 HyperOS 的 hintInfo 计时快照停滞。
                     title = hintTitleText
-                    content = hintText.ifBlank { hintTitleText }
+                    content = hintContentText.ifBlank { hintText }
                     subTitle = hintSubtitleText
-                    extraTitle = hintContentText
                     specialTitle = hintSubcontentText
-
-                    if (hintWantsSystemTimer) {
-                        timerInfo {
-                            timerType = -1
-                            timerWhen = timerTarget
-                            timerSystemCurrent = now
-                        }
-                    }
 
                     actionInfo {
                         actionIntentType = 1
@@ -1528,11 +1627,6 @@ class MainActivity : FlutterActivity() {
 
                 island {
                     islandProperty = 1
-                    islandTimeout = when (templateStage) {
-                        "pre" -> (args?.get("hfIslandTimeoutPre")?.toIntOrNull() ?: 300).coerceIn(60, 3600)
-                        "post" -> (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600).coerceIn(60, 3600)
-                        else -> (args?.get("hfIslandTimeoutActive")?.toIntOrNull() ?: 600).coerceIn(60, 3600)
-                    }
 
                     bigIslandArea {
                         imageTextInfoLeft {
@@ -1637,11 +1731,8 @@ class MainActivity : FlutterActivity() {
             val dismissAt = if (timerTarget > 0L) {
                 minOf(timerTarget, now + 30 * 60_000L)
             } else {
-                // post 阶段无计时目标：按课后岛超时调度取消，
-                // 否则 ongoing 通知在岛消失后永久残留且无法划掉
-                now +
-                    (args?.get("hfIslandTimeoutPost")?.toIntOrNull() ?: 600)
-                        .coerceIn(60, 3600) * 1000L
+                // post 阶段无计时目标：与正式路径一致，保留固定课后窗口。
+                now + LiveUpdateService.AFTER_CLASS_DISPLAY_WINDOW_MILLIS
             }
             TestFocusNotificationDismiss.schedule(applicationContext, dismissAt)
             Log.d("HyperFocusApi", "notify(10001) called, stage=$stage")
@@ -2271,4 +2362,3 @@ internal fun liveShouldMirrorStatusIntoMiuiFocusHint(
 ): Boolean {
     return !(sdkInt >= 36 && shouldPromote)
 }
-

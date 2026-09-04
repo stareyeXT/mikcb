@@ -208,6 +208,7 @@ void main() {
       TestApp(
         home: UserGuideScreen(
           onImportCourses: () async => false,
+          onImportHtmlCourses: () async => false,
           onRestoreBackup: () async => false,
         ),
       ),
@@ -217,6 +218,7 @@ void main() {
     expect(find.text('轻屿课表'), findsOneWidget);
     expect(find.text('开始使用'), findsOneWidget);
     expect(find.text('导入课表'), findsOneWidget);
+    expect(find.text('从网址导入'), findsOneWidget);
     expect(find.text('从备份恢复'), findsOneWidget);
   });
 }

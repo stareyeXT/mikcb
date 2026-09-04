@@ -26,7 +26,6 @@ double _maxMenuTitleHeight({
 }
 
 enum HomeTopMenuAction {
-  update,
   overview,
   statistics,
   addCourse,
@@ -39,25 +38,20 @@ enum HomeTopMenuAction {
 
 /// Shows the home screen top-right action menu with Forui sheet styling.
 Future<HomeTopMenuAction?> showHomeTopMenuSheet(
-  BuildContext context, {
-  required bool hasAvailableUpdate,
-}) {
+  BuildContext context,
+) {
   return showHomeHyperosSheet<HomeTopMenuAction>(
     context: context,
-    builder: (sheetContext) =>
-        _HomeTopMenuSheet(hasAvailableUpdate: hasAvailableUpdate),
+    builder: (sheetContext) => const _HomeTopMenuSheet(),
   );
 }
 
 class _HomeTopMenuSheet extends StatelessWidget {
-  const _HomeTopMenuSheet({required this.hasAvailableUpdate});
-
-  final bool hasAvailableUpdate;
+  const _HomeTopMenuSheet();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
     final colors = context.theme.colors;
     final typo = context.theme.typography;
     const tileSpacing = 10.0;
@@ -68,7 +62,6 @@ class _HomeTopMenuSheet extends StatelessWidget {
     const columnsPerRow = 3;
 
     final menuTitles = [
-      l10n.homeMenuUpdateTitle,
       l10n.homeMenuOverviewTitle,
       l10n.homeMenuStatisticsTitle,
       l10n.homeMenuAddCourseTitle,
@@ -155,13 +148,6 @@ class _HomeTopMenuSheet extends StatelessWidget {
             children: [
               menuRow([
                 tile(
-                  icon: Icons.system_update_alt_rounded,
-                  title: l10n.homeMenuUpdateTitle,
-                  action: HomeTopMenuAction.update,
-                  badgeText: hasAvailableUpdate ? l10n.updateLabel : null,
-                  accentColor: hasAvailableUpdate ? colorScheme.primary : null,
-                ),
-                tile(
                   icon: Icons.dashboard_customize_rounded,
                   title: l10n.homeMenuOverviewTitle,
                   action: HomeTopMenuAction.overview,
@@ -170,6 +156,11 @@ class _HomeTopMenuSheet extends StatelessWidget {
                   icon: Icons.bar_chart_rounded,
                   title: l10n.homeMenuStatisticsTitle,
                   action: HomeTopMenuAction.statistics,
+                ),
+                tile(
+                  icon: Icons.school_outlined,
+                  title: l10n.examListTitle,
+                  action: HomeTopMenuAction.exams,
                 ),
               ]),
               const SizedBox(height: tileSpacing),
@@ -180,23 +171,18 @@ class _HomeTopMenuSheet extends StatelessWidget {
                   action: HomeTopMenuAction.addCourse,
                 ),
                 tile(
-                  icon: Icons.school_outlined,
-                  title: l10n.examListTitle,
-                  action: HomeTopMenuAction.exams,
-                ),
-                tile(
                   icon: Icons.file_upload_outlined,
                   title: l10n.homeMenuImportTitle,
                   action: HomeTopMenuAction.importCourses,
                 ),
-              ]),
-              const SizedBox(height: tileSpacing),
-              menuRow([
                 tile(
                   icon: Icons.task_alt_outlined,
                   title: l10n.homeMenuTasksTitle,
                   action: HomeTopMenuAction.tasks,
                 ),
+              ]),
+              const SizedBox(height: tileSpacing),
+              menuRow([
                 tile(
                   icon: Icons.tune_rounded,
                   title: l10n.homeMenuSettingsTitle,

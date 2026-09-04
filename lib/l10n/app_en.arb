@@ -4468,7 +4468,7 @@
   },
   "serviceMsgWarehouseFetchFailedGithub": "Unable to read the adapter repository on GitHub. Check your network or switch to a mirror in Version Update.",
   "serviceMsgManualInputCaptcha": "Enter the captcha manually, then tap Continue.",
-  "serviceMsgManualInputPassword": "Enter the password manually. If it was auto-filled, tap Continue.",
+  "serviceMsgManualInputPassword": "Enter the login credentials manually. If they were auto-filled, tap Continue.",
   "serviceMsgMacroNoSteps": "No recorded steps.",
   "serviceMsgMacroUserCancelled": "Cancelled by user.",
   "serviceMsgMacroStepFailed": "Step {stepIndex}/{totalSteps} failed: {detail}",
@@ -5791,5 +5791,8 @@
     }
   },
   "icsExportShareText": "Calendar file from Qingyu Timetable",
-  "icsExportShareSubject": "Qingyu Timetable calendar"
+  "icsExportShareSubject": "Qingyu Timetable calendar",
+  "tomorrowBriefingTitle": "Early Class Reminder",
+  "tomorrowBriefingSubtitle": "Daily 22:00 preview of tomorrow's classes, early class first",
+  "tomorrowBriefingTestTitle": "Test early class reminder"
 }

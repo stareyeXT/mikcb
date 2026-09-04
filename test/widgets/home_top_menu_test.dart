@@ -19,7 +19,7 @@ void main() {
               return Center(
                 child: ElevatedButton(
                   onPressed: () {
-                    showHomeTopMenuSheet(context, hasAvailableUpdate: true);
+                    showHomeTopMenuSheet(context);
                   },
                   child: const Text('Open'),
                 ),
@@ -33,7 +33,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(SingleChildScrollView), findsOneWidget);
-      expect(find.byType(HyperosFrostedSurface), findsNWidgets(9));
+      expect(find.byType(HyperosFrostedSurface), findsNWidgets(8));
       // The modal capture owns the only backdrop filter. No tile adds a
       // second live filter while its rounded surface moves in the scroll view.
       expect(find.byType(BackdropFilter), findsOneWidget);
@@ -43,11 +43,10 @@ void main() {
               widget is ClipRRect &&
               widget.borderRadius == HyperosTheme.cardBorderRadius,
         ),
-        findsNWidgets(9),
+        findsNWidgets(8),
       );
 
       for (final title in const [
-        '软件更新',
         '课程总览',
         '课程统计',
         '添加课程',
@@ -74,7 +73,6 @@ void main() {
                 onPressed: () {
                   menuResult = showHomeTopMenuSheet(
                     context,
-                    hasAvailableUpdate: false,
                   );
                 },
                 child: const Text('Open'),
@@ -88,10 +86,10 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('软件更新'));
+    await tester.tap(find.text('课程总览'));
     await tester.pumpAndSettle();
 
-    expect(await menuResult, HomeTopMenuAction.update);
+    expect(await menuResult, HomeTopMenuAction.overview);
   });
 
   testWidgets(
@@ -117,7 +115,7 @@ void main() {
                 builder: (context) => Center(
                   child: ElevatedButton(
                     onPressed: () {
-                      showHomeTopMenuSheet(context, hasAvailableUpdate: false);
+                      showHomeTopMenuSheet(context);
                     },
                     child: const Text('Open'),
                   ),

@@ -7,9 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/timetable_provider.dart';
+import '../models/timetable_settings.dart';
 import '../services/miui_live_activities_service.dart';
 import '../widgets/third_party_disclaimer_card.dart';
 import 'course_overview_screen.dart';
+import 'course_import_screen.dart';
 import 'timetable_settings_screen.dart';
 
 enum GuideAction { startUsing, importCourses, restoreBackup }
@@ -18,6 +20,7 @@ class UserGuideScreen extends StatefulWidget {
   final bool requirePrivacyConsent;
   final bool initialPrivacyChecked;
   final Future<bool> Function()? onImportCourses;
+  final Future<bool> Function()? onImportHtmlCourses;
   final Future<bool> Function()? onRestoreBackup;
 
   const UserGuideScreen({
@@ -25,6 +28,7 @@ class UserGuideScreen extends StatefulWidget {
     this.requirePrivacyConsent = false,
     this.initialPrivacyChecked = false,
     this.onImportCourses,
+    this.onImportHtmlCourses,
     this.onRestoreBackup,
   });
 
@@ -345,6 +349,8 @@ class _UserGuideScreenState extends State<UserGuideScreen>
         const HyperosSectionGap(),
         _buildLanguageSelector(l10n),
         const HyperosSectionGap(),
+        _buildLivePresentationSelector(),
+        const HyperosSectionGap(),
         HyperosListGroup(
           children: [
             _GuideActionTile(
@@ -360,6 +366,14 @@ class _UserGuideScreenState extends State<UserGuideScreen>
                 subtitle: l10n.importTimetableSubtitle,
                 onTap: () => _runWelcomeAction(widget.onImportCourses!),
               ),
+            _GuideActionTile(
+              icon: Icons.language_rounded,
+              title: l10n.importMethodHtmlTitle,
+              subtitle: l10n.importMethodHtmlSubtitle,
+              onTap: () => _runWelcomeAction(
+                widget.onImportHtmlCourses ?? _openHtmlImportScreen,
+              ),
+            ),
             if (widget.onRestoreBackup != null)
               _GuideActionTile(
                 icon: Icons.restore_page_rounded,
@@ -369,6 +383,45 @@ class _UserGuideScreenState extends State<UserGuideScreen>
               ),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildLivePresentationSelector() {
+    final provider = context.watch<TimetableProvider?>();
+    final selectedEngine =
+        provider?.settings.superIslandEngine ?? SuperIslandEngine.hyperFocusApi;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const HyperosSectionLabel(text: '通知形态'),
+        HyperosListGroup(
+          children: [
+            HyperosSelectTile<SuperIslandEngine>(
+              key: const ValueKey<String>('user-guide-live-engine-select'),
+              label: '超级岛引擎',
+              items: const {
+                'Live Updates': SuperIslandEngine.builtIn,
+                '小米超级岛': SuperIslandEngine.hyperFocusApi,
+              },
+              value: selectedEngine,
+              onChanged: (engine) {
+                if (provider == null) return;
+                provider.updateTimetableSettings(
+                  provider.settings.copyWith(superIslandEngine: engine),
+                );
+              },
+            ),
+          ],
+        ),
+        if (selectedEngine == SuperIslandEngine.hyperFocusApi) ...[
+          const SizedBox(height: 8),
+          const HyperosHintBanner(
+            icon: Icon(Icons.warning_amber_rounded, size: 18),
+            title: Text('澎湃 OS 对于焦点通知有白名单应用限制，使用前请先安装无视白名单的 XP 模块。'),
+          ),
+        ],
       ],
     );
   }
@@ -389,6 +442,16 @@ class _UserGuideScreenState extends State<UserGuideScreen>
     if (imported && mounted) {
       Navigator.of(context).pop(GuideAction.importCourses);
     }
+  }
+
+  Future<bool> _openHtmlImportScreen() async {
+    final imported = await Navigator.of(context).push<bool>(
+      HyperosPageRoute(
+        settings: const RouteSettings(name: '/courses/import/html'),
+        builder: (_) => const HtmlCourseImportScreen(),
+      ),
+    );
+    return imported == true;
   }
 
   /// Body copy matching about-page「项目定位」sheet ([AboutInfoSheetBody]).

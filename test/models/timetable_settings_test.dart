@@ -877,17 +877,4 @@ void main() {
       isFalse,
     );
   });
-
-  test('island timeout legacy values clamp into minutes range on load', () {
-    final restored = TimetableSettings.fromJson({
-      ...TimetableSettings.defaults().toJson(),
-      'hfIslandTimeoutPre': 30,
-      'hfIslandTimeoutActive': 5,
-      'hfIslandTimeoutPost': 86400,
-    });
-
-    expect(restored.hfIslandTimeoutPre, 60);
-    expect(restored.hfIslandTimeoutActive, 60);
-    expect(restored.hfIslandTimeoutPost, 3600);
-  });
 }

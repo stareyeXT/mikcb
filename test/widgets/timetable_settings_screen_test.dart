@@ -128,6 +128,10 @@ void main() {
     );
     expect(select.label, '超级岛引擎');
     expect(select.value, SuperIslandEngine.hyperFocusApi);
+    expect(
+      find.text('澎湃 OS 对于焦点通知有白名单应用限制，使用前请先安装无视白名单的 XP 模块。'),
+      findsOneWidget,
+    );
 
     await tester.tap(engineSelector);
     await tester.pumpAndSettle();
@@ -139,6 +143,10 @@ void main() {
       engineSelector,
     );
     expect(updatedSelect.value, SuperIslandEngine.builtIn);
+    expect(
+      find.text('澎湃 OS 对于焦点通知有白名单应用限制，使用前请先安装无视白名单的 XP 模块。'),
+      findsNothing,
+    );
     expect(find.text('状态栏岛自定义'), findsNothing);
   });
 

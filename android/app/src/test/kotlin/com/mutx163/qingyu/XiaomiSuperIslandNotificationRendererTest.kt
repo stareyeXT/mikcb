@@ -20,9 +20,11 @@ class XiaomiSuperIslandNotificationRendererTest {
     }
 
     @Test
-    fun selectsLegacyEngineForBuiltInMode() {
+    fun builtInEngineNeverBuildsIslandPayload() {
+        // "builtIn"（Live Updates）不得携带任何焦点 payload，否则 HyperOS
+        // 会按超级岛渲染，Live Updates 档位失去原生样式。
         assertEquals(
-            XiaomiSuperIslandPayloadMode.LEGACY_FOCUS,
+            XiaomiSuperIslandPayloadMode.NONE,
             selectXiaomiSuperIslandPayloadMode(
                 isXiaomiDevice = true,
                 shouldPromote = true,
@@ -133,6 +135,31 @@ class XiaomiSuperIslandNotificationRendererTest {
         assertFalse(islandWantsSystemTimer("倒计时", showCountdown = false, isPost = false))
         // 课后阶段永不走秒
         assertFalse(islandWantsSystemTimer("倒计时", showCountdown = true, isPost = true))
+    }
+
+    @Test
+    fun hintSystemTimerDoesNotOverrideCustomHintTitle() {
+        val now = 1_000_000L
+        val target = now + 5 * 60_000L
+
+        assertFalse(
+            hyperFocusHintWantsSystemTimer(
+                showCountdown = true,
+                isPost = false,
+                timerWhenMillis = target,
+                nowMillis = now,
+                templateRequestsTimer = false,
+            ),
+        )
+        assertTrue(
+            hyperFocusHintWantsSystemTimer(
+                showCountdown = true,
+                isPost = false,
+                timerWhenMillis = target,
+                nowMillis = now,
+                templateRequestsTimer = true,
+            ),
+        )
     }
 
     @Test

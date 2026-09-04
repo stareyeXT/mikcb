@@ -141,6 +141,11 @@ Future<void> main() async {
       Workmanager().initialize(backgroundHtmlRefreshCallback);
       WidgetsBinding.instance.addObserver(AppLifecycleLogObserver());
       FairMemoryService.instance.ensureInitialized();
+      // Keep pre-Android 15 devices on the same edge-to-edge path as the
+      // Android 15+ target-SDK behavior.
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+      );
 
       FlutterError.onError = (details) {
         // Debug 构建下 presentError 会把异常重新抛进 zone，中断当前帧导致
@@ -772,6 +777,7 @@ class _AppEntryScreenState extends State<AppEntryScreen>
           requirePrivacyConsent: requirePrivacyConsent,
           initialPrivacyChecked: initialPrivacyChecked,
           onImportCourses: _runCourseImportFlow,
+          onImportHtmlCourses: _runHtmlCourseImportFlow,
           onRestoreBackup: () => _runBackupImportFlow(
             forcedMode: _BackupImportMode.replaceCurrent,
           ),
@@ -907,6 +913,16 @@ class _AppEntryScreenState extends State<AppEntryScreen>
       HyperosPageRoute(
         settings: const RouteSettings(name: '/courses/import'),
         builder: (_) => const CourseImportScreen(),
+      ),
+    );
+    return imported == true;
+  }
+
+  Future<bool> _runHtmlCourseImportFlow() async {
+    final imported = await Navigator.of(context).push<bool>(
+      HyperosPageRoute(
+        settings: const RouteSettings(name: '/courses/import/html'),
+        builder: (_) => const HtmlCourseImportScreen(),
       ),
     );
     return imported == true;

@@ -135,3 +135,12 @@ tool/chrome-devtools-mcp-guide.md
 
 # Local clone of flutter_miuix used via dependency_overrides for the system-font-weight PR
 .vendor/
+
+# Mimosa scan state (local tooling artifacts)
+.mimosa/
+**/.mimosa/
+
+# machine-specific local dev helpers (Mimosa line-hash FPs)
+tool/_run_gradle_build.py
+tool/append_service_msg_arb.py
+tool/sync_schools_json.py

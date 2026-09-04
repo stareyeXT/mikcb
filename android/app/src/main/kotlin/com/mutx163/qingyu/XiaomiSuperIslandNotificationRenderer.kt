@@ -21,7 +21,6 @@ import android.util.Log
 import android.util.TypedValue
 import com.xzakota.hyper.notification.focus.FocusNotification
 import org.json.JSONObject
-import java.util.Locale
 import kotlin.math.ceil
 
 internal enum class XiaomiSuperIslandPayloadMode { NONE, HYPER_FOCUS, LEGACY_FOCUS }
@@ -35,7 +34,9 @@ internal fun selectXiaomiSuperIslandPayloadMode(
     if (!isXiaomiDevice || !shouldPromote || statusBarOnly) return XiaomiSuperIslandPayloadMode.NONE
     return when (engine) {
         "hyperFocusApi" -> XiaomiSuperIslandPayloadMode.HYPER_FOCUS
-        "builtIn" -> XiaomiSuperIslandPayloadMode.LEGACY_FOCUS
+        // "builtIn"（Live Updates）不发任何焦点 payload：HyperOS 看到
+        // miui.focus.param 就会按超级岛渲染，会让 Live Updates 档位
+        // 仍显示超级岛样式。保持 NONE 让通知走系统原生 Live Updates。
         else -> XiaomiSuperIslandPayloadMode.NONE
     }
 }
@@ -79,9 +80,7 @@ internal data class XiaomiSuperIslandSettings(
     val labelLogoCornerRadius: Float,
     val expandedIconMode: String,
     val expandedIconPath: String?,
-    val timeoutPre: Int,
-    val timeoutActive: Int,
-    val timeoutPost: Int,
+    val startExpanded: Boolean,
     val iconAEnabled: Boolean,
     val outEffectEnabled: Boolean,
     val outEffectColor: String,
@@ -146,6 +145,8 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
                 )
             }
             XiaomiSuperIslandPayloadMode.LEGACY_FOCUS -> {
+                // 当前无路径会选到 LEGACY_FOCUS（builtIn 已改为 NONE）。
+                // 保留实现作为老 HyperOS 不支持 V3 模板时的兜底，勿删。
                 val param = buildMiuiFocusParam(state, settings, hint)
                 XiaomiSuperIslandRenderResult(
                     payloadMode = mode,
@@ -169,62 +170,8 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         }
     }
 
-    private fun isXiaomiFamilyDevice(): Boolean {
-        val brand = Build.BRAND.lowercase(Locale.ROOT)
-        val manufacturer = Build.MANUFACTURER.lowercase(Locale.ROOT)
-        return manufacturer.contains("xiaomi") || brand.contains("xiaomi") ||
-            brand.contains("redmi") || brand.contains("poco")
-    }
-
-    /**
-     * 岛消失时间到期后使用的渲染结果：hyperFocusApi 引擎持续携带 dismiss
-     * 参数防止重推把岛重新唤起；builtIn 引擎则不再附加焦点参数。
-     */
-    fun renderDismiss(engine: String): XiaomiSuperIslandRenderResult {
-        val isXiaomi = isXiaomiFamilyDevice()
-        return when (engine) {
-            "hyperFocusApi" -> XiaomiSuperIslandRenderResult(
-                payloadMode = XiaomiSuperIslandPayloadMode.HYPER_FOCUS,
-                isXiaomiDevice = isXiaomi,
-                hyperFocusExtras = buildDismissBundle(),
-                isIslandReady = true,
-            )
-            else -> XiaomiSuperIslandRenderResult(
-                payloadMode = XiaomiSuperIslandPayloadMode.NONE,
-                isXiaomiDevice = isXiaomi,
-            )
-        }
-    }
-
-    private fun buildDismissBundle(): Bundle? = try {
-        FocusNotification.buildV3 {
-            business = "course_schedule"
-            updatable = false
-            enableFloat = false
-            ticker = ""
-            aodTitle = ""
-            baseInfo {
-                type = 2
-                title = ""
-                content = ""
-            }
-            picInfo { type = 1 }
-            hintInfo {
-                type = 2
-                title = ""
-                content = ""
-            }
-            island {
-                islandProperty = 0
-                islandTimeout = 0
-                bigIslandArea { }
-                smallIslandArea { }
-            }
-        }
-    } catch (error: Exception) {
-        Log.e(TAG, "buildDismissBundle failed", error)
-        null
-    }
+    private fun isXiaomiFamilyDevice(): Boolean =
+        XiaomiDeviceFamily.isXiaomiFamilyDevice()
 
     private fun dp(value: Float): Float = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, value, context.resources.displayMetrics,
@@ -307,13 +254,13 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         val activeTarget = state.progress?.nextMilestoneAtMillis ?: state.endAtMillis
         // 课后阶段不再倒计时：目标时间设为课后窗口结束，避免被判为已过期而下岛
         val target = when {
-            isPost -> state.endAtMillis + settings.timeoutPost * 1000L
-            key == "pre" -> state.startAtMillis
+            isPost -> state.endAtMillis + LiveUpdateService.AFTER_CLASS_DISPLAY_WINDOW_MILLIS
+            key == "pre" -> state.countdownTargetAtMillis
             else -> activeTarget
         }
         val countdownText = when {
             isPost -> ""
-            key == "pre" -> formatCountdownForTemplate((state.startAtMillis - state.nowMillis).coerceAtLeast(0L))
+            key == "pre" -> formatCountdownForTemplate((state.countdownTargetAtMillis - state.nowMillis).coerceAtLeast(0L))
             else -> formatCountdownForTemplate((activeTarget - state.nowMillis).coerceAtLeast(0L))
         }
         val elapsedText = if (key == "active") {
@@ -321,27 +268,35 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         } else {
             ""
         }
+        val hintTitleRaw = templates["hintTitle_$key"] ?: ""
+        val hintContentRaw = templates["hintContent_$key"] ?: ""
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
             ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = Uri.fromParts("package", context.packageName, null) }
         val resolve: (String) -> String = { template -> resolveTemplate(template, state.courseName, state.shortCourseNameRaw, state.location, state.teacher, state.startTimeText, state.endTimeText, countdownText, elapsedText) }
         FocusNotification.buildV3 {
-            business = "course_schedule"; updatable = true; enableFloat = true
-            // 同 id 通知被 cancel 后重发需显式申请重新上岛（系统默认 close，
-            // 否则重装/暂停恢复/服务重启后岛永远不再显示）
-            reopen = HYPER_FOCUS_REOPEN_VALUE
-            ticker = resolve(templates["ticker_$key"] ?: "{课名}"); aodTitle = ticker; islandFirstFloat = true
+            business = "course_schedule"; updatable = true
+            // HyperOS 对 enableFloat=true 的每次更新都会重新展开岛。
+            // 只在阶段首条通知设为 true，后续走秒更新保持摘要态。
+            enableFloat = settings.startExpanded
+            reopen = if (settings.startExpanded) HYPER_FOCUS_REOPEN_VALUE else ""
+            ticker = resolve(templates["ticker_$key"] ?: "{课名}"); aodTitle = ticker; islandFirstFloat = settings.startExpanded
             outEffectSrc = if (settings.outEffectEnabled) "outer_glow" else ""
             outEffectColor = if (settings.outEffectEnabled) settings.outEffectColor else ""
             baseInfo { type = 2; title = resolve(templates["baseTitle_$key"] ?: "{课名}"); content = listOfNotNull(resolve(templates["baseContent_$key"] ?: "").ifBlank { null }, resolve(templates["baseSubcontent_$key"] ?: "").ifBlank { null }).joinToString(" · ") }
             picInfo { if (settings.iconAEnabled) type = 1 }
             hintInfo {
-                type = 2; title = resolve(templates["hintTitle_$key"] ?: ""); content = remaining.ifBlank { title }
-                subTitle = resolve(templates["hintSubtitle_$key"] ?: ""); extraTitle = resolve(templates["hintContent_$key"] ?: ""); specialTitle = resolve(templates["hintSubcontent_$key"] ?: "")
-                if (hyperFocusHintWantsSystemTimer(settings.showCountdown, isPost, target, state.nowMillis)) timerInfo { timerType = -1; timerWhen = target; timerSystemCurrent = state.nowMillis }
+                type = 2
+                // HyperOS 不会持续刷新 hintInfo.timerInfo。倒计时模板改用服务
+                // 每秒重发的动态 title，避免展开态停在发送瞬间的快照。
+                title = resolve(hintTitleRaw)
+                content = resolve(hintContentRaw).ifBlank { remaining }
+                subTitle = resolve(templates["hintSubtitle_$key"] ?: ""); specialTitle = resolve(templates["hintSubcontent_$key"] ?: "")
                 actionInfo { actionIntentType = 1; actionIntent = launch.toUri(Intent.URI_INTENT_SCHEME); actionTitle = "查看课表" }
             }
             island {
-                islandProperty = 1; islandTimeout = when (key) { "pre" -> settings.timeoutPre; "post" -> settings.timeoutPost; else -> settings.timeoutActive }
+                islandProperty = 1
+                // 保留完整大岛模板，以供用户从摘要态点按展开；收起动画由系统处理。
+                // islandTimeout 是摘要态自动消失时间，不能用它控制展开时长。
                 bigIslandArea {
                     imageTextInfoLeft { type = 1; textInfo { title = resolve(templates["islandA_$key"] ?: "{课名}"); showHighlightColor = true }; picInfo { if (settings.iconAEnabled) type = 1 }; state.progress?.let { progressInfo { progress = it.progressPercent; colorReach = settings.outEffectColor.ifBlank { "#FFFFFFFF" } } } }
                     // 岛右侧严格按模板：槽位决策与测试路径共用 resolveIslandBSlot（同步纪律）
@@ -383,9 +338,10 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
             put("protocol", 1)
             put("business", "class_schedule")
             put("updatable", true)
-            put("enableFloat", true)
-            // 与 buildHyperFocusBundle 一致：同 id cancel 后重发需显式重新上岛
-            put("reopen", HYPER_FOCUS_REOPEN_VALUE)
+            put("enableFloat", settings.startExpanded)
+            // 与 buildHyperFocusBundle 一致：仅阶段开始时重新上岛。
+            put("reopen", if (settings.startExpanded) HYPER_FOCUS_REOPEN_VALUE else "")
+            put("islandFirstFloat", settings.startExpanded)
             put("ticker", state.title)
             put(
                 "baseInfo",
@@ -479,14 +435,6 @@ internal class XiaomiSuperIslandNotificationRenderer(private val context: Contex
         }
         return JSONObject().apply {
             put("islandProperty", 1)
-            put(
-                "islandTimeout",
-                when (state.stage) {
-                    LiveUpdateNotificationStage.BEFORE_CLASS -> settings.timeoutPre
-                    LiveUpdateNotificationStage.AFTER_CLASS -> settings.timeoutPost
-                    else -> settings.timeoutActive
-                },
-            )
             put("bigIslandArea", bigIslandArea)
             put("smallIslandArea", JSONObject())
         }

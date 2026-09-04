@@ -5521,5 +5521,8 @@
     }
   },
   "icsExportShareText": "這是來自輕屿課表的日曆檔案",
-  "icsExportShareSubject": "輕屿課表日曆"
+  "icsExportShareSubject": "輕屿課表日曆",
+  "tomorrowBriefingTitle": "早八提醒",
+  "tomorrowBriefingSubtitle": "每天 22:00 提醒第二天的課程，早八優先顯示",
+  "tomorrowBriefingTestTitle": "測試早八提醒"
 }
