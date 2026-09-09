@@ -221,6 +221,92 @@ void main() {
     expect(find.text('从网址导入'), findsOneWidget);
     expect(find.text('从备份恢复'), findsOneWidget);
   });
+
+  group('privacy-gated welcome actions', () {
+    /// The welcome page is taller than the default 800x600 test viewport, so
+    /// the action rows start off-screen; grow the surface instead of scrolling.
+    Future<void> pumpConsentGuide(
+      WidgetTester tester, {
+      required Future<bool> Function() onImportCourses,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        TestApp(
+          home: UserGuideScreen(
+            requirePrivacyConsent: true,
+            onImportCourses: onImportCourses,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tapping 导入课表 without consent asks instead of doing nothing', (
+      tester,
+    ) async {
+      var tapped = 0;
+      await pumpConsentGuide(
+        tester,
+        onImportCourses: () async {
+          tapped++;
+          return false;
+        },
+      );
+
+      await tester.tap(find.text('导入课表'));
+      await tester.pumpAndSettle();
+
+      // The action is still gated, but the tap now has a visible outcome.
+      expect(tapped, 0);
+      expect(find.text('隐私协议'), findsOneWidget);
+      expect(find.text('请先滑到底部阅读说明，并勾选同意后开始使用'), findsOneWidget);
+      expect(find.text('我已阅读并同意友盟相关隐私说明'), findsOneWidget);
+    });
+
+    testWidgets('agreeing in the consent sheet runs the tapped action', (
+      tester,
+    ) async {
+      var tapped = 0;
+      await pumpConsentGuide(
+        tester,
+        onImportCourses: () async {
+          tapped++;
+          return false;
+        },
+      );
+
+      await tester.tap(find.text('导入课表'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('我已阅读并同意友盟相关隐私说明'));
+      await tester.pumpAndSettle();
+
+      expect(tapped, 1);
+      expect(find.text('请先滑到底部阅读说明，并勾选同意后开始使用'), findsNothing);
+    });
+
+    testWidgets('cancelling the consent sheet opens the privacy page', (
+      tester,
+    ) async {
+      var tapped = 0;
+      await pumpConsentGuide(
+        tester,
+        onImportCourses: () async {
+          tapped++;
+          return false;
+        },
+      );
+
+      await tester.tap(find.text('导入课表'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+
+      expect(tapped, 0);
+      expect(find.text('2 / 4'), findsOneWidget);
+      expect(find.text('同意并开始使用'), findsNothing);
+    });
+  });
 }
 
 class _AutoOpenGuide extends StatefulWidget {
