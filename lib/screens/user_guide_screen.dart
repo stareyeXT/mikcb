@@ -428,20 +428,60 @@ class _UserGuideScreenState extends State<UserGuideScreen>
 
   Future<void> _runWelcomeAction(Future<bool> Function() action) async {
     if (widget.requirePrivacyConsent && !_privacyChecked) {
-      // Must accept privacy before import/restore can complete onboarding.
-      if (mounted && _pageController.hasClients) {
-        await _pageController.animateToPage(
-          1,
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-        );
+      // Import/restore cannot complete onboarding before consent. Ask here
+      // instead of silently doing nothing, so the tapped row always has a
+      // visible outcome.
+      final granted = await _confirmPrivacyConsentForAction();
+      if (!mounted) {
+        return;
       }
-      return;
+      if (!granted) {
+        await _goToPrivacyPage();
+        return;
+      }
     }
     final imported = await action();
     if (imported && mounted) {
       Navigator.of(context).pop(GuideAction.importCourses);
     }
+  }
+
+  /// Consent sheet shown when a welcome-page action is tapped before the
+  /// privacy checkbox was ticked. Returns true only when the user agrees.
+  Future<bool> _confirmPrivacyConsentForAction() async {
+    final l10n = AppLocalizations.of(context)!;
+    final agreed = await showHyperosDialog<bool>(
+      context: context,
+      title: l10n.guidePrivacyPageTitle,
+      message: l10n.guideRequireConsentHint,
+      actions: [
+        HyperosDialogAction(
+          label: l10n.cancelAction,
+          onPressed: () => Navigator.pop(context, false),
+        ),
+        HyperosDialogAction(
+          label: l10n.guidePrivacyConsentLabel,
+          isPrimary: true,
+          onPressed: () => Navigator.pop(context, true),
+        ),
+      ],
+    );
+    if (agreed == true && mounted) {
+      setState(() => _privacyChecked = true);
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _goToPrivacyPage() async {
+    if (!mounted || !_pageController.hasClients || _currentPage == 1) {
+      return;
+    }
+    await _pageController.animateToPage(
+      1,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<bool> _openHtmlImportScreen() async {
